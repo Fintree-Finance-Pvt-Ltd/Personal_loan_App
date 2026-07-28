@@ -1,0 +1,52 @@
+name: pl_customer_app
+description: "Production-ready Customer Mobile Application for Personal Loan Platform."
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+
+  # State Management & Routing
+  flutter_riverpod: ^2.5.1
+  go_router: ^14.2.0
+
+  # Networking & HTTP
+  dio: ^5.7.0
+  connectivity_plus: ^6.0.3
+  mime: ^1.0.5
+  http_parser: ^4.1.2
+
+  # Storage & Security
+  flutter_secure_storage: ^9.2.2
+
+  # Device, Camera & Media
+  image_picker: ^1.1.2
+  camera: ^0.11.0+2
+  permission_handler: ^11.3.1
+  geolocator: ^12.0.0
+  path_provider: ^2.1.3
+  device_info_plus: ^10.1.0
+  package_info_plus: ^8.0.0
+
+  # Web & Deep Links
+  webview_flutter: ^4.8.0
+  url_launcher: ^6.3.0
+
+  # Serialization & Utilities
+  intl: ^0.19.0
+  json_annotation: ^4.9.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+  build_runner: ^2.4.11
+  json_serializable: ^6.8.0
+
+flutter:
+  uses-material-design: true
