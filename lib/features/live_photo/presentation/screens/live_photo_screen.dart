@@ -131,8 +131,8 @@ class _LivePhotoScreenState extends ConsumerState<LivePhotoScreen> {
             children: [
               const AppStepper(
                 currentStep: 4,
-                totalSteps: 5,
-                stepTitles: ['PAN Verification', 'Personal Details', 'Profile & Income', 'Photo & Liveness', 'Submit'],
+                totalSteps: 7,
+                stepTitles: ['PAN Verification', 'Personal Details', 'Profile & Income', 'Photo & Liveness', 'DigiLocker KYC', 'Address Confirmation', 'Review & Submit'],
               ),
               const SizedBox(height: 24),
               const Text(
@@ -195,8 +195,8 @@ class _LivePhotoScreenState extends ConsumerState<LivePhotoScreen> {
                 ),
                 const SizedBox(height: 32),
                 AppButton(
-                  text: 'Proceed to Application Review',
-                  onPressed: () => context.push('/onboarding/review'),
+                  text: 'Proceed to DigiLocker KYC',
+                  onPressed: () => context.push('/onboarding/digilocker'),
                   icon: Icons.arrow_forward_rounded,
                 ),
               ] else ...[

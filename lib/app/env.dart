@@ -1,5 +1,3 @@
-import 'package:flutter/foundation.dart';
-
 enum AppEnvironment { development, uat, production }
 
 class Environment {
@@ -23,9 +21,7 @@ class Environment {
     const envString = String.fromEnvironment('APP_ENV', defaultValue: 'development');
     const baseUrl = String.fromEnvironment(
       'API_BASE_URL',
-      defaultValue: kIsWeb
-          ? 'http://localhost:3000/api'
-          : 'http://10.0.2.2:3000/api',
+      defaultValue: 'https://pl-fintree-uat.fintreelms.com/api',
     );
     const digitapEnv = String.fromEnvironment('DIGITAP_ENV', defaultValue: 'sandbox');
     const paymentReturnScheme = String.fromEnvironment('PAYMENT_RETURN_SCHEME', defaultValue: 'pldirect://payment-return');

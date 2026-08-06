@@ -78,9 +78,9 @@ class _ApplicationReviewScreenState extends ConsumerState<ApplicationReviewScree
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const AppStepper(
-                currentStep: 5,
-                totalSteps: 5,
-                stepTitles: ['PAN Verification', 'Personal Details', 'Profile & Income', 'Photo & Liveness', 'Submit'],
+                currentStep: 7,
+                totalSteps: 7,
+                stepTitles: ['PAN Verification', 'Personal Details', 'Profile & Income', 'Photo & Liveness', 'DigiLocker KYC', 'Address Confirmation', 'Review & Submit'],
               ),
               const SizedBox(height: 24),
               const Text(

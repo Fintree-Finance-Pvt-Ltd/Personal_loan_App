@@ -53,13 +53,15 @@ class AuthRepository {
       rawCustomer = Map<String, dynamic>.from(rawData);
     }
 
+    final accessToken = rawData is Map<String, dynamic> ? rawData['accessToken'] as String? : null;
+
     final customer = CustomerModel.fromJson(rawCustomer);
 
-    // Save session securely to persist login state across restarts
     if (customer.id.isNotEmpty) {
       await _storageService.saveSession(
         customerId: customer.id,
         mobileNumber: customer.mobileNumber.isNotEmpty ? customer.mobileNumber : mobileNumber,
+        token: accessToken,
       );
     }
 

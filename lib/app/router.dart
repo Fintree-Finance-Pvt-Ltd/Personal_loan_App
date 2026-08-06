@@ -51,6 +51,14 @@ final appRouter = GoRouter(
       builder: (context, state) => const LivePhotoScreen(),
     ),
     GoRoute(
+      path: '/onboarding/digilocker',
+      builder: (context, state) => const DigilockerScreen(lan: ''),
+    ),
+    GoRoute(
+      path: '/onboarding/address',
+      builder: (context, state) => const AddressScreen(lan: ''),
+    ),
+    GoRoute(
       path: '/onboarding/review',
       builder: (context, state) => const ApplicationReviewScreen(),
     ),

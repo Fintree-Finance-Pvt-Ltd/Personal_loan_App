@@ -9,9 +9,9 @@ import '../../../../core/widgets/app_text_field.dart';
 import '../../../dashboard/presentation/journey_controller.dart';
 
 class AddressScreen extends ConsumerStatefulWidget {
-  final String lan;
+  final String? lan;
 
-  const AddressScreen({super.key, required this.lan});
+  const AddressScreen({super.key, this.lan});
 
   @override
   ConsumerState<AddressScreen> createState() => _AddressScreenState();
@@ -52,8 +52,18 @@ class _AddressScreenState extends ConsumerState<AddressScreen> {
 
     try {
       final apiClient = ref.read(apiClientProvider);
+      final effectiveLan = widget.lan?.isNotEmpty == true
+          ? widget.lan
+          : ref.read(journeyControllerProvider).customer?.latestLan;
+      if (effectiveLan == null || effectiveLan.isEmpty) {
+        setState(() {
+          _errorMessage = 'Loan account not available. Please complete application first.';
+        });
+        return;
+      }
+
       await apiClient.patch(
-        '/customer/loans/${widget.lan}/address',
+        '/customer/loans/$effectiveLan/address',
         data: {
           'customerId': customerId,
           'sameAsPermanent': _sameAsPermanent,
@@ -68,7 +78,7 @@ class _AddressScreenState extends ConsumerState<AddressScreen> {
       await ref.read(journeyControllerProvider.notifier).syncCustomerState();
 
       if (mounted) {
-        context.push('/loan/${widget.lan}/bank');
+        context.push('/onboarding/review');
       }
     } catch (e) {
       setState(() {

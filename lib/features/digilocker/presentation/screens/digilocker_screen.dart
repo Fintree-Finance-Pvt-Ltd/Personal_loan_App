@@ -10,9 +10,9 @@ import '../../../../core/widgets/app_status_badge.dart';
 import '../../../dashboard/presentation/journey_controller.dart';
 
 class DigilockerScreen extends ConsumerStatefulWidget {
-  final String lan;
+  final String? lan;
 
-  const DigilockerScreen({super.key, required this.lan});
+  const DigilockerScreen({super.key, this.lan});
 
   @override
   ConsumerState<DigilockerScreen> createState() => _DigilockerScreenState();
@@ -21,11 +21,17 @@ class DigilockerScreen extends ConsumerStatefulWidget {
 class _DigilockerScreenState extends ConsumerState<DigilockerScreen> {
   bool _isInitiating = false;
   bool _isFetching = false;
+  bool _isVerified = false;
   String? _errorMessage;
 
   void _initiateDigilocker() async {
     final customerId = ref.read(journeyControllerProvider).customer?.id;
     if (customerId == null) return;
+
+    final effectiveLan = widget.lan?.isNotEmpty == true
+        ? widget.lan
+        : ref.read(journeyControllerProvider).customer?.latestLan;
+    if (effectiveLan == null || effectiveLan.isEmpty) return;
 
     setState(() {
       _isInitiating = true;
@@ -35,7 +41,7 @@ class _DigilockerScreenState extends ConsumerState<DigilockerScreen> {
     try {
       final apiClient = ref.read(apiClientProvider);
       final res = await apiClient.post(
-        '/customer/loans/${widget.lan}/digilocker/initiate',
+        '/customer/loans/$effectiveLan/digilocker/initiate',
         data: {'customerId': customerId},
       );
 
@@ -68,17 +74,31 @@ class _DigilockerScreenState extends ConsumerState<DigilockerScreen> {
 
     try {
       final apiClient = ref.read(apiClientProvider);
-      await apiClient.post(
-        '/customer/loans/${widget.lan}/digilocker/fetch-details',
+      final effectiveLan = widget.lan?.isNotEmpty == true
+          ? widget.lan
+          : ref.read(journeyControllerProvider).customer?.latestLan;
+      if (effectiveLan == null || effectiveLan.isEmpty) {
+        setState(() {
+          _errorMessage = 'Loan account not available. Please complete application first.';
+        });
+        return;
+      }
+
+      final res = await apiClient.post(
+        '/customer/loans/$effectiveLan/digilocker/fetch-details',
         data: {'customerId': customerId},
       );
 
       await ref.read(journeyControllerProvider.notifier).syncCustomerState();
 
       if (mounted) {
-        final status = ref.read(journeyControllerProvider).postApproval?.digilocker.status;
+        final data = res['data'] ?? res;
+        final status = data['status'] as String?;
         if (status == 'VERIFIED') {
-          context.push('/loan/${widget.lan}/address');
+          setState(() {
+            _isVerified = true;
+          });
+          context.push('/onboarding/address');
         } else {
           setState(() {
             _errorMessage = 'DigiLocker status is pending or not complete. Please retry after completing verification.';
@@ -97,7 +117,7 @@ class _DigilockerScreenState extends ConsumerState<DigilockerScreen> {
   @override
   Widget build(BuildContext context) {
     final digilocker = ref.watch(journeyControllerProvider).postApproval?.digilocker;
-    final isVerified = digilocker?.status == 'VERIFIED';
+    final isVerified = _isVerified || digilocker?.status == 'VERIFIED';
 
     return Scaffold(
       appBar: AppBar(
@@ -156,7 +176,7 @@ class _DigilockerScreenState extends ConsumerState<DigilockerScreen> {
               if (isVerified)
                 AppButton(
                   text: 'Confirm Aadhaar Address',
-                  onPressed: () => context.push('/loan/${widget.lan}/address'),
+                  onPressed: () => context.push('/onboarding/address'),
                   icon: Icons.arrow_forward_rounded,
                 )
               else if (_isFetching)
