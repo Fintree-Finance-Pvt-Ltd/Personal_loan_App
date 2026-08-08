@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:smart_auth/smart_auth.dart';
 
 import '../../../../app/theme.dart';
 import '../../../../core/constants/app_constants.dart';
@@ -97,6 +98,24 @@ class _OtpScreenState extends ConsumerState<OtpScreen>
         _otpFocusNode.requestFocus();
       }
     });
+
+    _listenForSms();
+  }
+
+  Future<void> _listenForSms() async {
+    try {
+      final res = await SmartAuth.instance.getSmsWithUserConsentApi();
+      if (res.hasData && res.data!.code != null) {
+        if (mounted) {
+          setState(() {
+            _otpController.text = res.data!.code!;
+          });
+          _verify();
+        }
+      }
+    } catch (_) {
+      // Ignore errors from smart_auth
+    }
   }
 
   void _startTimer() {
@@ -133,6 +152,7 @@ class _OtpScreenState extends ConsumerState<OtpScreen>
 
   @override
   void dispose() {
+    SmartAuth.instance.removeUserConsentApiListener();
     _timer?.cancel();
     _otpController.dispose();
     _otpFocusNode.dispose();
