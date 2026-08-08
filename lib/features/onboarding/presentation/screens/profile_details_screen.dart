@@ -30,11 +30,31 @@ class _ProfileDetailsScreenState extends ConsumerState<ProfileDetailsScreen> {
 
   // Self employed fields
   final _businessNameController = TextEditingController();
-  final String _businessConstitution = 'SOLE_PROPRIETORSHIP';
+  final String _businessConstitution = 'PROPRIETORSHIP';
   final _annualTurnoverController = TextEditingController();
 
   bool _isLoading = false;
   String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    final customer = ref.read(journeyControllerProvider).customer;
+    if (customer != null) {
+      _residenceStatus = customer.residenceStatus ?? 'OWNED';
+      _employmentType = customer.employmentType ?? 'SALARIED';
+      if (customer.monthlyIncome != null) {
+        _monthlyIncomeController.text = customer.monthlyIncome.toString();
+      }
+      _companyType = customer.companyType ?? 'PRIVATE_LIMITED';
+      _companyNameController.text = customer.companyName ?? '';
+      _designationController.text = customer.designation ?? '';
+      _businessNameController.text = customer.businessName ?? '';
+      if (customer.annualTurnover != null) {
+        _annualTurnoverController.text = customer.annualTurnover.toString();
+      }
+    }
+  }
 
   @override
   void dispose() {

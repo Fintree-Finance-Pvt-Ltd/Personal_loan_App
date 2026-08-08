@@ -21,7 +21,8 @@ class Environment {
     const envString = String.fromEnvironment('APP_ENV', defaultValue: 'development');
     const baseUrl = String.fromEnvironment(
       'API_BASE_URL',
-      defaultValue: 'https://pl-fintree-uat.fintreelms.com/api',
+     defaultValue: 'https://pl-fintree-uat.fintreelms.com/api',
+      // defaultValue: 'http://localhost:3000/api',
     );
     const digitapEnv = String.fromEnvironment('DIGITAP_ENV', defaultValue: 'sandbox');
     const paymentReturnScheme = String.fromEnvironment('PAYMENT_RETURN_SCHEME', defaultValue: 'pldirect://payment-return');

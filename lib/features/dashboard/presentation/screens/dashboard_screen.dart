@@ -485,6 +485,20 @@ class _DashboardScreenState
     required dynamic bank,
     required dynamic workflow,
   }) {
+    final hasActiveLoan = customer?.latestLan != null &&
+        customer.latestLan!.toString().isNotEmpty &&
+        workflow?.offerAccepted == true;
+
+    if (!hasActiveLoan) {
+      return KeyedSubtree(
+        key: const ValueKey('application'),
+        child: _buildApplicationTab(
+          journeyState: journeyState,
+          customer: customer,
+        ),
+      );
+    }
+
     return Column(
       children: [
         Container(
@@ -498,7 +512,7 @@ class _DashboardScreenState
             boxShadow: [
               BoxShadow(
                 color: const Color(0xFF033F45)
-                    .withOpacity(0.10),
+                    .withValues(alpha: 0.10),
                 blurRadius: 25,
                 offset: const Offset(0, 12),
               ),
@@ -587,6 +601,11 @@ class _DashboardScreenState
       postApproval?.loan?.lan,
       'FFPL000001',
     );
+    
+    final disbursalStatus = _readText(workflow?.disbursalStatus, 'NOT_STARTED');
+    final currentStep = _readText(workflow?.currentStep, 'APPROVAL_SUMMARY');
+    final isDisbursalProcessing = currentStep == 'DISBURSAL_PROCESSING' || disbursalStatus == 'PROCESSING' || disbursalStatus == 'INITIATED';
+    final isDisbursed = currentStep == 'DISBURSED' || disbursalStatus == 'DISBURSED' || postApproval?.loan?.disbursalCompletedAt != null;
 
     final approvedAmount =
         postApproval?.loan?.approvedAmount ?? 500000;
@@ -594,11 +613,6 @@ class _DashboardScreenState
     final lenderName = _readText(
       postApproval?.lender?.name,
       'Fintree Finance Private Limited',
-    );
-
-    final currentStep = _readText(
-      workflow?.currentStep,
-      'APPROVAL_SUMMARY',
     );
 
     final acceptedTenure =
@@ -615,15 +629,6 @@ class _DashboardScreenState
     final steps = <_JourneyStep>[
       _JourneyStep(
         number: 1,
-        title: 'Accept loan offer',
-        subtitle:
-            'Review the approved amount, tenure and repayment details.',
-        icon: Icons.thumb_up_alt_outlined,
-        isCompleted: workflow?.offerAccepted == true,
-        route: '/loan/$lan/offer',
-      ),
-      _JourneyStep(
-        number: 2,
         title: 'Verify bank account',
         subtitle:
             'Complete penny-drop verification for your disbursal account.',
@@ -632,7 +637,7 @@ class _DashboardScreenState
         route: '/loan/$lan/bank',
       ),
       _JourneyStep(
-        number: 3,
+        number: 2,
         title: 'Accept Key Fact Statement',
         subtitle:
             'Review interest, charges and repayment information.',
@@ -641,7 +646,7 @@ class _DashboardScreenState
         route: '/loan/$lan/kfs',
       ),
       _JourneyStep(
-        number: 4,
+        number: 3,
         title: 'Register e-NACH mandate',
         subtitle:
             'Set up automatic EMI repayment from your bank account.',
@@ -651,7 +656,7 @@ class _DashboardScreenState
         route: '/loan/$lan/mandate',
       ),
       _JourneyStep(
-        number: 5,
+        number: 4,
         title: 'e-Sign loan agreement',
         subtitle:
             'Digitally sign and complete your loan documentation.',
@@ -660,7 +665,7 @@ class _DashboardScreenState
         route: '/loan/$lan/esign',
       ),
       _JourneyStep(
-        number: 6,
+        number: 5,
         title: 'Disbursal',
         subtitle:
             'Track the final transfer of your approved loan amount.',
@@ -901,82 +906,84 @@ class _DashboardScreenState
           ),
         ),
         const SizedBox(height: 18),
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(18),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(22),
-            border: Border.all(
-              color: AppTheme.borderLight,
+        if (isDisbursed)
+          _buildDisbursedCard(lan)
+        else if (isDisbursalProcessing)
+          _buildCreditingSoonCard(lan)
+        else
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(
+                color: AppTheme.borderLight,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF033F45).withOpacity(0.06),
+                  blurRadius: 20,
+                  offset: const Offset(0, 8),
+                ),
+              ],
             ),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF033F45)
-                    .withOpacity(0.06),
-                blurRadius: 20,
-                offset: const Offset(0, 8),
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: AppTheme.primaryLightTeal,
-                      borderRadius: BorderRadius.circular(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: AppTheme.primaryLightTeal,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: const Icon(
+                        Icons.bolt_rounded,
+                        color: AppTheme.primaryTeal,
+                        size: 23,
+                      ),
                     ),
-                    child: const Icon(
-                      Icons.bolt_rounded,
-                      color: AppTheme.primaryTeal,
-                      size: 23,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment:
-                          CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Your next step',
-                          style: TextStyle(
-                            color: AppTheme.textDarkPrimary,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w800,
+                    const SizedBox(width: 12),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Your next step',
+                            style: TextStyle(
+                              color: AppTheme.textDarkPrimary,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
+                            ),
                           ),
-                        ),
-                        SizedBox(height: 3),
-                        Text(
-                          'Complete this step to move closer to disbursal.',
-                          style: TextStyle(
-                            color:
-                                AppTheme.textDarkSecondary,
-                            fontSize: 11.5,
-                            height: 1.4,
+                          SizedBox(height: 3),
+                          Text(
+                            'Complete this step to move closer to disbursal.',
+                            style: TextStyle(
+                              color: AppTheme.textDarkSecondary,
+                              fontSize: 11.5,
+                              height: 1.4,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 17),
-              AppButton(
-                text: _getPrimaryButtonLabel(journeyState),
-                onPressed: () {
-                  _openRoute(journeyState.targetRoute);
-                },
-                icon: Icons.arrow_forward_rounded,
-              ),
-            ],
+                  ],
+                ),
+                const SizedBox(height: 17),
+                AppButton(
+                  text: _getPrimaryButtonLabel(journeyState),
+                  onPressed: () {
+                    _openRoute(journeyState.targetRoute);
+                  },
+                  icon: Icons.arrow_forward_rounded,
+                ),
+              ],
+            ),
           ),
-        ),
         const SizedBox(height: 24),
         _SectionHeader(
           title: 'Loan journey',
@@ -1026,6 +1033,154 @@ class _DashboardScreenState
           },
         ),
       ],
+    );
+  }
+
+  Widget _buildCreditingSoonCard(String lan) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFFFFF8E6), Color(0xFFFFF3CC)],
+        ),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: const Color(0xFFE6A817), width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFE6A817).withOpacity(0.12),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFB800).withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Icon(
+                  Icons.access_time_rounded,
+                  color: Color(0xFF9E6A00),
+                  size: 28,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Your loan amount will be credited shortly!',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF7A4F00),
+                        fontSize: 15,
+                        height: 1.3,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Disbursal is being processed. Funds will arrive in your bank account soon.',
+                      style: TextStyle(
+                        color: const Color(0xFF9E6A00).withOpacity(0.85),
+                        fontSize: 12,
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          AppButton(
+            text: 'View Loan Details',
+            onPressed: () => _openRoute('/loan/$lan/loan-details'),
+            icon: Icons.receipt_long_rounded,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDisbursedCard(String lan) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFFECFDF5), Color(0xFFD1FAE5)],
+        ),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: AppTheme.successGreen, width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: AppTheme.successGreen.withOpacity(0.12),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: AppTheme.successGreen.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Icon(
+                  Icons.check_circle_rounded,
+                  color: AppTheme.successGreen,
+                  size: 28,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Loan Disbursed Successfully!',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        color: AppTheme.successDarkGreen,
+                        fontSize: 15,
+                        height: 1.3,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Funds transferred to your bank account.',
+                      style: TextStyle(
+                        color: AppTheme.successDarkGreen.withOpacity(0.85),
+                        fontSize: 12,
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          AppButton(
+            text: 'View Loan Details',
+            onPressed: () => _openRoute('/loan/$lan/loan-details'),
+            icon: Icons.receipt_long_rounded,
+          ),
+        ],
+      ),
     );
   }
 
@@ -1096,6 +1251,18 @@ class _DashboardScreenState
     final addressComplete =
         residentialPincode != 'Not provided';
 
+    final assessmentFeePaid = customer?.assessmentFeePaid == true;
+    final postApproval = journeyState.postApproval;
+    final offerAccepted = postApproval?.workflow.offerAccepted == true;
+
+    final livenessComplete = customer != null &&
+        !customer.updateReadinessReasons.contains('LIVENESS_NOT_VERIFIED');
+
+    final digilockerComplete = customer != null &&
+        (customer.aadhaarVerified == true ||
+            customer.aadhaarKycStatus == 'VERIFIED' ||
+            !customer.updateReadinessReasons.contains('DIGILOCKER_KYC_NOT_VERIFIED'));
+
     final applicationSteps = <_ApplicationStep>[
       _ApplicationStep(
         number: 1,
@@ -1117,6 +1284,15 @@ class _DashboardScreenState
       ),
       _ApplicationStep(
         number: 3,
+        title: 'Lender & Assessment fee',
+        subtitle: 'Allocated lender and processing fee payment',
+        icon: Icons.payment_rounded,
+        route: '/payment/processing-fee',
+        isCompleted:
+            applicationSubmitted || assessmentFeePaid,
+      ),
+      _ApplicationStep(
+        number: 4,
         title: 'Profile and income',
         subtitle:
             'Employment, income and organisation details',
@@ -1126,23 +1302,23 @@ class _DashboardScreenState
             applicationSubmitted || profileComplete,
       ),
       _ApplicationStep(
-        number: 4,
+        number: 5,
         title: 'Live photo',
         subtitle: 'Selfie capture and liveness verification',
         icon: Icons.face_retouching_natural_outlined,
         route: '/onboarding/live-photo',
-        isCompleted: applicationSubmitted,
+        isCompleted: applicationSubmitted || livenessComplete,
       ),
       _ApplicationStep(
-        number: 5,
+        number: 6,
         title: 'DigiLocker Aadhaar KYC',
         subtitle: 'Secure Aadhaar verification through DigiLocker',
         icon: Icons.verified_user_outlined,
         route: '/onboarding/digilocker',
-        isCompleted: applicationSubmitted,
+        isCompleted: applicationSubmitted || digilockerComplete,
       ),
       _ApplicationStep(
-        number: 6,
+        number: 7,
         title: 'Address confirmation',
         subtitle: 'Review and confirm your residence address',
         icon: Icons.home_outlined,
@@ -1151,7 +1327,15 @@ class _DashboardScreenState
             applicationSubmitted || addressComplete,
       ),
       _ApplicationStep(
-        number: 7,
+        number: 8,
+        title: 'Loan Offer Selection',
+        subtitle: 'Select loan tenure and review approved pricing',
+        icon: Icons.local_offer_outlined,
+        route: '/onboarding/offer',
+        isCompleted: applicationSubmitted || offerAccepted,
+      ),
+      _ApplicationStep(
+        number: 9,
         title: 'Review and submit',
         subtitle:
             'Confirm the application before lender submission',
@@ -1171,7 +1355,10 @@ class _DashboardScreenState
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
+
+      
       children: [
+        const SizedBox(height: 38),
         Container(
           width: double.infinity,
           padding: const EdgeInsets.all(20),
@@ -1304,15 +1491,54 @@ class _DashboardScreenState
                   ),
                 ],
               ),
-              const SizedBox(height: 17),
-              AppButton(
-                text: 'View Application Status',
-                isOutlined: true,
-                onPressed: () {
-                  context.push('/application/status');
-                },
-                icon: Icons.analytics_outlined,
-              ),
+              (() {
+                String? nextIncompleteRoute;
+                for (final step in applicationSteps) {
+                  if (!step.isCompleted) {
+                    nextIncompleteRoute = step.route;
+                    break;
+                  }
+                }
+
+                if (applicationSubmitted) {
+                  return AppButton(
+                    text: 'View Application Status',
+                    isOutlined: true,
+                    onPressed: () {
+                      context.push('/application/status');
+                    },
+                    icon: Icons.analytics_outlined,
+                  );
+                } else if (nextIncompleteRoute != null) {
+                  return Column(
+                    children: [
+                      const SizedBox(height: 17),
+                      AppButton(
+                        text: nextIncompleteRoute == '/onboarding/basic-details'
+                            ? 'Apply for Loan'
+                            : 'Resume Application',
+                        onPressed: () {
+                          context.push(nextIncompleteRoute!);
+                        },
+                        icon: Icons.arrow_forward_rounded,
+                      ),
+                    ],
+                  );
+                } else {
+                  return Column(
+                    children: [
+                      const SizedBox(height: 17),
+                      AppButton(
+                        text: 'Review & Submit Application',
+                        onPressed: () {
+                          context.push('/onboarding/review');
+                        },
+                        icon: Icons.arrow_forward_rounded,
+                      ),
+                    ],
+                  );
+                }
+              })(),
             ],
           ),
         ),

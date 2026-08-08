@@ -40,6 +40,14 @@ class CustomerModel {
   final String? latestLan;
   final String? latestLoanStatus;
   final bool assessmentFeePaid;
+  final String? allocatedLenderName;
+  final String? allocatedLenderCode;
+  final Map<String, dynamic>? assessmentFee;
+  final bool aadhaarVerified;
+  final String? aadhaarKycStatus;
+  final String? maskedAadhaar;
+  final String? aadhaarVerifiedAt;
+  final List<String> updateReadinessReasons;
 
   const CustomerModel({
     required this.id,
@@ -83,6 +91,14 @@ class CustomerModel {
     this.latestLan,
     this.latestLoanStatus,
     this.assessmentFeePaid = false,
+    this.allocatedLenderName,
+    this.allocatedLenderCode,
+    this.assessmentFee,
+    this.aadhaarVerified = false,
+    this.aadhaarKycStatus,
+    this.maskedAadhaar,
+    this.aadhaarVerifiedAt,
+    this.updateReadinessReasons = const [],
   });
 
   factory CustomerModel.fromJson(Map<String, dynamic> json) {
@@ -127,7 +143,20 @@ class CustomerModel {
       latestApplicationStatus: json['latestApplicationStatus'],
       latestLan: json['latestLan'],
       latestLoanStatus: json['latestLoanStatus'],
-      assessmentFeePaid: json['assessmentFeePaid'] == true,
+      assessmentFeePaid: json['assessmentFeePaid'] == true ||
+          json['latestPaymentStatus']?.toString().toUpperCase() == 'SUCCESS' ||
+          (json['latestPayment'] is Map && (json['latestPayment']['status']?.toString().toUpperCase() == 'SUCCESS' || json['latestPayment']['status']?.toString().toUpperCase() == 'PAID')) ||
+          (json['plPaymentLinks'] is List && (json['plPaymentLinks'] as List).any((p) => p is Map && (p['status']?.toString().toUpperCase() == 'SUCCESS' || p['status']?.toString().toUpperCase() == 'PAID'))),
+      allocatedLenderName: json['allocatedLenderName'],
+      allocatedLenderCode: json['allocatedLenderCode'],
+      assessmentFee: json['assessmentFee'] is Map<String, dynamic> ? json['assessmentFee'] : null,
+      aadhaarVerified: json['aadhaarVerified'] == true,
+      aadhaarKycStatus: json['aadhaarKycStatus'],
+      maskedAadhaar: json['maskedAadhaar'],
+      aadhaarVerifiedAt: json['aadhaarVerifiedAt'],
+      updateReadinessReasons: (json['journey']?['updateReadiness']?['reasons'] is List)
+          ? List<String>.from(json['journey']['updateReadiness']['reasons'])
+          : [],
     );
   }
 }

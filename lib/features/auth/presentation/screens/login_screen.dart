@@ -314,7 +314,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                       ],
                     ),
                     child: Image.asset(
-                      'assets/images/Logo.png',
+                      'lib/assets/images/Logo.png',
                       fit: BoxFit.contain,
                       errorBuilder: (_, __, ___) {
                         return const Icon(

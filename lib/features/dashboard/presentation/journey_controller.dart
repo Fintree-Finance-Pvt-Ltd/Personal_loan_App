@@ -69,13 +69,13 @@ class JourneyController extends StateNotifier<JourneyState> {
       String nextRoute = '/dashboard';
 
       if (!customer.panVerified) {
-        nextRoute = '/onboarding/pan';
+        nextRoute = '/dashboard';
       } else if (customer.fullName == null || customer.residentialPincode == null) {
         nextRoute = '/onboarding/basic-details';
       } else if (customer.employmentType == null) {
-        nextRoute = '/onboarding/profile';
+        nextRoute = '/dashboard';
       } else if (customer.latestApplicationStatus == null || customer.latestApplicationStatus == 'DRAFT') {
-        nextRoute = '/onboarding/live-photo';
+        nextRoute = '/dashboard';
       } else if (customer.latestApplicationStatus == 'SUBMITTED') {
         nextRoute = '/application/status';
       } else if (customer.latestApplicationStatus == 'LENDER_APPROVED' && customer.latestLan != null) {
@@ -126,9 +126,10 @@ class JourneyController extends StateNotifier<JourneyState> {
       case 'ESIGN':
         return '/loan/$lan/esign';
       case 'READY_FOR_DISBURSAL':
+        return '/loan/$lan/disbursal';
       case 'DISBURSAL_PROCESSING':
       case 'DISBURSED':
-        return '/loan/$lan/disbursal';
+        return '/loan/$lan/loan-details';
       default:
         return '/dashboard';
     }

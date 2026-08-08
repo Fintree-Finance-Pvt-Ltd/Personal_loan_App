@@ -10,9 +10,10 @@ import '../../../../core/widgets/app_status_badge.dart';
 import '../../../dashboard/presentation/journey_controller.dart';
 
 class LoanOfferScreen extends ConsumerStatefulWidget {
-  final String lan;
+  final String? lan;
+  final bool isOnboarding;
 
-  const LoanOfferScreen({super.key, required this.lan});
+  const LoanOfferScreen({super.key, this.lan, this.isOnboarding = false});
 
   @override
   ConsumerState<LoanOfferScreen> createState() => _LoanOfferScreenState();
@@ -40,6 +41,16 @@ class _LoanOfferScreenState extends ConsumerState<LoanOfferScreen> {
     final customerId = ref.read(journeyControllerProvider).customer?.id;
     if (customerId == null) return;
 
+    final effectiveLan = widget.lan?.isNotEmpty == true
+        ? widget.lan
+        : ref.read(journeyControllerProvider).customer?.latestLan;
+    if (effectiveLan == null || effectiveLan.isEmpty) {
+      setState(() {
+        _errorMessage = 'Loan account LAN is missing.';
+      });
+      return;
+    }
+
     setState(() {
       _isAccepting = true;
       _errorMessage = null;
@@ -48,7 +59,7 @@ class _LoanOfferScreenState extends ConsumerState<LoanOfferScreen> {
     try {
       final apiClient = ref.read(apiClientProvider);
       await apiClient.post(
-        '/customer/loans/${widget.lan}/offer/accept',
+        '/customer/loans/$effectiveLan/offer/accept',
         data: {
           'customerId': customerId,
           'tenureDays': _selectedTenureDays,
@@ -58,7 +69,11 @@ class _LoanOfferScreenState extends ConsumerState<LoanOfferScreen> {
       await ref.read(journeyControllerProvider.notifier).syncCustomerState();
 
       if (mounted) {
-        context.push('/loan/${widget.lan}/digilocker');
+        if (widget.isOnboarding) {
+          context.push('/onboarding/review');
+        } else {
+          context.push('/loan/$effectiveLan/digilocker');
+        }
       }
     } catch (e) {
       setState(() {
@@ -74,6 +89,10 @@ class _LoanOfferScreenState extends ConsumerState<LoanOfferScreen> {
     final journey = ref.watch(journeyControllerProvider).postApproval;
     final offer = journey?.offer;
     final isAccepted = offer?.acceptedTenureDays != null;
+
+    final effectiveLan = widget.lan?.isNotEmpty == true
+        ? widget.lan
+        : ref.watch(journeyControllerProvider).customer?.latestLan;
 
     if (journey == null || offer == null) {
       return Scaffold(
@@ -182,8 +201,16 @@ class _LoanOfferScreenState extends ConsumerState<LoanOfferScreen> {
               const SizedBox(height: 32),
               if (isAccepted)
                 AppButton(
-                  text: 'Offer Accepted - Continue to KYC',
-                  onPressed: () => context.push('/loan/${widget.lan}/digilocker'),
+                  text: widget.isOnboarding
+                      ? 'Offer Accepted - Continue to Review'
+                      : 'Offer Accepted - Continue to KYC',
+                  onPressed: () {
+                    if (widget.isOnboarding) {
+                      context.push('/onboarding/review');
+                    } else {
+                      context.push('/loan/$effectiveLan/digilocker');
+                    }
+                  },
                   icon: Icons.arrow_forward_rounded,
                 )
               else

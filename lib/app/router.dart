@@ -16,6 +16,7 @@ import '../features/kfs/presentation/screens/kfs_screen.dart';
 import '../features/mandate/presentation/screens/mandate_screen.dart';
 import '../features/esign/presentation/screens/esign_screen.dart';
 import '../features/disbursal/presentation/screens/disbursal_screen.dart';
+import '../features/loan_details/presentation/screens/loan_details_screen.dart';
 import '../features/dashboard/presentation/screens/dashboard_screen.dart';
 import '../features/dashboard/presentation/screens/splash_screen.dart';
 
@@ -59,6 +60,10 @@ final appRouter = GoRouter(
       builder: (context, state) => const AddressScreen(lan: ''),
     ),
     GoRoute(
+      path: '/onboarding/offer',
+      builder: (context, state) => const LoanOfferScreen(lan: '', isOnboarding: true),
+    ),
+    GoRoute(
       path: '/onboarding/review',
       builder: (context, state) => const ApplicationReviewScreen(),
     ),
@@ -68,11 +73,13 @@ final appRouter = GoRouter(
     ),
     GoRoute(
       path: '/payment/processing-fee',
-      builder: (context, state) => const ProcessingFeeScreen(),
+      builder: (context, state) => ProcessingFeeScreen(
+        eligibilityData: state.extra as Map<String, dynamic>?,
+      ),
     ),
     GoRoute(
       path: '/loan/:lan/offer',
-      builder: (context, state) => LoanOfferScreen(lan: state.pathParameters['lan'] ?? ''),
+      builder: (context, state) => LoanOfferScreen(lan: state.pathParameters['lan'] ?? '', isOnboarding: false),
     ),
     GoRoute(
       path: '/loan/:lan/digilocker',
@@ -101,6 +108,11 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/loan/:lan/disbursal',
       builder: (context, state) => DisbursalScreen(lan: state.pathParameters['lan'] ?? ''),
+    ),
+    GoRoute(
+      path: '/loan/:lan/loan-details',
+      builder: (context, state) =>
+          LoanDetailsScreen(lan: state.pathParameters['lan'] ?? ''),
     ),
     GoRoute(
       path: '/dashboard',

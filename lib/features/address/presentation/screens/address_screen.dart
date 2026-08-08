@@ -29,6 +29,53 @@ class _AddressScreenState extends ConsumerState<AddressScreen> {
 
   bool _isSaving = false;
   String? _errorMessage;
+  String? _aadhaarAddress;
+  bool _isLoadingAddress = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchAadhaarAddress();
+  }
+
+  void _fetchAadhaarAddress() async {
+    setState(() {
+      _isLoadingAddress = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final apiClient = ref.read(apiClientProvider);
+      final res = await apiClient.get('/customer/aadhaar-kyc/digilocker/status');
+      
+      Map<String, dynamic> innerData = {};
+      if (res['data'] is Map) {
+        final d1 = res['data'];
+        if (d1['data'] is Map) {
+          innerData = Map<String, dynamic>.from(d1['data']);
+        } else {
+          innerData = Map<String, dynamic>.from(d1);
+        }
+      } else {
+        innerData = Map<String, dynamic>.from(res);
+      }
+
+      final permanentAddress = innerData['permanentAddress'];
+      if (permanentAddress != null) {
+        setState(() {
+          _aadhaarAddress = permanentAddress['formattedAddress'];
+        });
+      }
+    } catch (e) {
+      // Ignored
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingAddress = false;
+        });
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -52,28 +99,29 @@ class _AddressScreenState extends ConsumerState<AddressScreen> {
 
     try {
       final apiClient = ref.read(apiClientProvider);
-      final effectiveLan = widget.lan?.isNotEmpty == true
-          ? widget.lan
-          : ref.read(journeyControllerProvider).customer?.latestLan;
-      if (effectiveLan == null || effectiveLan.isEmpty) {
-        setState(() {
-          _errorMessage = 'Loan account not available. Please complete application first.';
-        });
-        return;
-      }
 
-      await apiClient.patch(
-        '/customer/loans/$effectiveLan/address',
-        data: {
-          'customerId': customerId,
-          'sameAsPermanent': _sameAsPermanent,
-          'currentAddrLine1': _sameAsPermanent ? null : _line1Controller.text.trim(),
-          'currentAddrLine2': _sameAsPermanent ? null : _line2Controller.text.trim(),
-          'currentAddrPincode': _sameAsPermanent ? null : _pincodeController.text.trim(),
-          'currentAddrCity': _sameAsPermanent ? null : _cityController.text.trim(),
-          'currentAddrState': _sameAsPermanent ? null : _stateController.text.trim(),
-        },
-      );
+      if (_sameAsPermanent) {
+        await apiClient.patch(
+          '/customer/application/address',
+          data: {
+            'addressType': 'CURRENT',
+            'sameAsPermanent': true,
+          },
+        );
+      } else {
+        await apiClient.patch(
+          '/customer/application/address',
+          data: {
+            'addressType': 'CURRENT',
+            'sameAsPermanent': false,
+            'addressLine1': _line1Controller.text.trim(),
+            'addressLine2': _line2Controller.text.trim(),
+            'pincode': _pincodeController.text.trim(),
+            'city': _cityController.text.trim(),
+            'state': _stateController.text.trim(),
+          },
+        );
+      }
 
       await ref.read(journeyControllerProvider.notifier).syncCustomerState();
 
@@ -114,24 +162,32 @@ class _AddressScreenState extends ConsumerState<AddressScreen> {
                   style: TextStyle(fontSize: 14, color: AppTheme.textDarkSecondary),
                 ),
                 const SizedBox(height: 24),
-                const Card(
+                Card(
                   child: Padding(
-                    padding: EdgeInsets.all(16.0),
+                    padding: const EdgeInsets.all(16.0),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(
+                        const Row(
                           children: [
                             Icon(Icons.home_outlined, color: AppTheme.primaryTeal),
                             SizedBox(width: 8),
                             Text('Permanent Address (Aadhaar Verified)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                           ],
                         ),
-                        Divider(height: 20),
-                        Text(
-                          '123, Green Avenue, MG Road, Sector 14, New Delhi - 110001, India',
-                          style: TextStyle(fontSize: 13, color: AppTheme.textDarkPrimary, height: 1.4),
-                        ),
+                        const Divider(height: 20),
+                        if (_isLoadingAddress)
+                          const Center(
+                            child: Padding(
+                              padding: EdgeInsets.all(8.0),
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          )
+                        else
+                          Text(
+                            _aadhaarAddress ?? 'Address details missing from Aadhaar profile.',
+                            style: const TextStyle(fontSize: 13, color: AppTheme.textDarkPrimary, height: 1.4),
+                          ),
                       ],
                     ),
                   ),

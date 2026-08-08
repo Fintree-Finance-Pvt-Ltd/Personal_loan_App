@@ -1,8 +1,14 @@
+import 'dart:convert';
 import 'dart:io';
+import 'dart:ui' as ui;
+import 'package:camera/camera.dart';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
+import 'package:http_parser/http_parser.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../../app/theme.dart';
@@ -21,38 +27,167 @@ class LivePhotoScreen extends ConsumerStatefulWidget {
 }
 
 class _LivePhotoScreenState extends ConsumerState<LivePhotoScreen> {
-  File? _imageFile;
+  XFile? _imageFile;
   bool _isUploading = false;
   bool _isLivenessChecking = false;
   bool _isCompleted = false;
   String? _errorMessage;
   final ImagePicker _picker = ImagePicker();
 
+  CameraController? _cameraController;
+  List<CameraDescription> _cameras = [];
+  bool _isCameraInitialized = false;
+
+  @override
+  void dispose() {
+    _cameraController?.dispose();
+    super.dispose();
+  }
+
   Future<void> _capturePhoto() async {
+    setState(() {
+      _errorMessage = null;
+    });
+
     try {
-      final XFile? photo = await _picker.pickImage(
-        source: ImageSource.camera,
-        preferredCameraDevice: CameraDevice.front,
-        imageQuality: 85,
+      _cameras = await availableCameras();
+      if (_cameras.isEmpty) {
+        throw Exception('No camera available on this device.');
+      }
+
+      final frontCamera = _cameras.firstWhere(
+        (cam) => cam.lensDirection == CameraLensDirection.front,
+        orElse: () => _cameras.first,
       );
 
+      _cameraController = CameraController(
+        frontCamera,
+        ResolutionPreset.medium,
+        enableAudio: false,
+      );
+
+      await _cameraController!.initialize();
+      setState(() {
+        _isCameraInitialized = true;
+      });
+    } catch (e) {
+      print('Camera initialization failed: $e');
+      setState(() {
+        _errorMessage = 'Failed to open camera: $e. \n\n'
+            'Note: Web browsers require a secure context (localhost or HTTPS) to access the camera.';
+      });
+      _pickFromGallery();
+    }
+  }
+
+  Future<void> _pickFromGallery() async {
+    try {
+      final XFile? photo = await _picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 85,
+      );
       if (photo != null) {
         setState(() {
-          _imageFile = File(photo.path);
+          _imageFile = photo;
+          _isCameraInitialized = false;
           _errorMessage = null;
         });
       }
+    } catch (ex) {
+      print('Gallery fallback failed: $ex');
+    }
+  }
+
+  Future<void> _takePhoto() async {
+    if (_cameraController == null || !_cameraController!.value.isInitialized) return;
+    try {
+      final XFile photo = await _cameraController!.takePicture();
+      setState(() {
+        _imageFile = photo;
+        _isCameraInitialized = false;
+      });
+      await _cameraController!.dispose();
+      _cameraController = null;
     } catch (e) {
       setState(() {
-        _errorMessage = 'Failed to access camera: $e';
+        _errorMessage = 'Failed to capture photograph: $e';
       });
     }
+  }
+
+  Future<Uint8List> _addWatermark({
+    required Uint8List imageBytes,
+    required String latitude,
+    required String longitude,
+    required String address,
+    required String time,
+  }) async {
+    final codec = await ui.instantiateImageCodec(imageBytes);
+    final frameInfo = await codec.getNextFrame();
+    final image = frameInfo.image;
+
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+
+    canvas.drawImage(image, Offset.zero, Paint());
+
+    final watermarkText = 'Lat: $latitude, Lon: $longitude\nAddress: $address\nTime: $time';
+    final double fontSize = (image.width / 35).clamp(10.0, 24.0);
+
+    final textPainter = TextPainter(
+      textDirection: TextDirection.ltr,
+    );
+    
+    textPainter.text = TextSpan(
+      text: watermarkText,
+      style: TextStyle(
+        color: Colors.yellowAccent,
+        fontSize: fontSize,
+        fontWeight: FontWeight.bold,
+        shadows: const [
+          Shadow(
+            offset: Offset(1.0, 1.0),
+            blurRadius: 2.0,
+            color: Colors.black,
+          ),
+        ],
+      ),
+    );
+
+    textPainter.layout(maxWidth: image.width - 20.0);
+    
+    final rectHeight = textPainter.height + 12.0;
+    final paint = Paint()
+      ..color = Colors.black.withOpacity(0.5)
+      ..style = PaintingStyle.fill;
+    
+    canvas.drawRect(
+      Rect.fromLTWH(0, image.height - rectHeight, image.width.toDouble(), rectHeight),
+      paint,
+    );
+
+    textPainter.paint(
+      canvas,
+      Offset(10.0, image.height - rectHeight + 6.0),
+    );
+
+    final picture = recorder.endRecording();
+    final watermarkedImage = await picture.toImage(image.width, image.height);
+    final byteData = await watermarkedImage.toByteData(format: ui.ImageByteFormat.png);
+    
+    return byteData!.buffer.asUint8List();
   }
 
   Future<void> _uploadAndCheckLiveness() async {
     if (_imageFile == null) return;
     final customerId = ref.read(journeyControllerProvider).customer?.id;
-    if (customerId == null) return;
+    final applicationId = ref.read(journeyControllerProvider).customer?.latestApplicationId;
+    if (customerId == null || applicationId == null) {
+      setState(() {
+        _errorMessage = 'Session missing Customer ID or Application ID.';
+      });
+      return;
+    }
 
     setState(() {
       _isUploading = true;
@@ -61,16 +196,53 @@ class _LivePhotoScreenState extends ConsumerState<LivePhotoScreen> {
 
     try {
       final apiClient = ref.read(apiClientProvider);
+      final customerApi = ref.read(customerApiProvider);
 
-      // 1. Upload live photo
-      final formData = FormData.fromMap({
-        'customerId': customerId,
-        'file': await MultipartFile.fromFile(_imageFile!.path, filename: 'live_photo.jpg'),
-      });
+      // 1. Get current geolocation details
+      double lat = 19.0760;
+      double lon = 72.8777;
+      double accuracy = 10.0;
+      String formattedAddress = 'Mumbai, Maharashtra';
+      String city = 'Mumbai';
+      String state = 'Maharashtra';
+      String country = 'India';
+      String postalCode = '400001';
 
-      final uploadRes = await apiClient.post(
-        '/documents/customer-live-photo',
-        data: formData,
+      try {
+        LocationPermission permission = await Geolocator.checkPermission();
+        if (permission == LocationPermission.denied) {
+          permission = await Geolocator.requestPermission();
+        }
+        final position = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.high,
+          timeLimit: const Duration(seconds: 8),
+        );
+        lat = position.latitude;
+        lon = position.longitude;
+        accuracy = position.accuracy;
+
+        final geocodeRes = await customerApi.reverseGeocode(lat, lon);
+        final gd = geocodeRes['data'] ?? geocodeRes;
+        if (gd != null) {
+          formattedAddress = gd['formattedAddress'] ?? formattedAddress;
+          city = gd['city'] ?? city;
+          state = gd['state'] ?? state;
+          country = gd['country'] ?? country;
+          postalCode = gd['postalCode'] ?? postalCode;
+        }
+      } catch (ge) {
+        print('Geolocation fetch failed: $ge');
+      }
+
+      // 2. Load bytes and apply watermark
+      final originalBytes = await _imageFile!.readAsBytes();
+      final timeStr = DateTime.now().toLocal().toString().split('.')[0];
+      final watermarkedBytes = await _addWatermark(
+        imageBytes: originalBytes,
+        latitude: lat.toStringAsFixed(6),
+        longitude: lon.toStringAsFixed(6),
+        address: formattedAddress,
+        time: timeStr,
       );
 
       setState(() {
@@ -78,34 +250,94 @@ class _LivePhotoScreenState extends ConsumerState<LivePhotoScreen> {
         _isLivenessChecking = true;
       });
 
-      // 2. Call face liveness verification
+      // 3. Verify face liveness via base64 data URL
+      final base64Image = 'data:image/jpeg;base64,${base64.encode(watermarkedBytes)}';
       final livenessRes = await apiClient.post(
         '/external-api/face-liveness',
         data: {
-          'customerId': customerId,
-          'documentId': uploadRes['data']?['id'] ?? uploadRes['id'],
+          'applicationId': applicationId.toString(),
+          'inputImage': base64Image,
         },
       );
 
-      final passed = livenessRes['success'] == true || livenessRes['status'] == 'SUCCESS' || livenessRes['passed'] == true;
-
-      if (passed) {
-        setState(() {
-          _isCompleted = true;
-        });
-        // Delete temporary image file after successful upload
-        if (await _imageFile!.exists()) {
-          await _imageFile!.delete();
+      Map<String, dynamic> innerData = {};
+      if (livenessRes['data'] is Map) {
+        final d1 = livenessRes['data'];
+        if (d1['data'] is Map) {
+          innerData = Map<String, dynamic>.from(d1['data']);
+        } else {
+          innerData = Map<String, dynamic>.from(d1);
         }
-        await ref.read(journeyControllerProvider.notifier).syncCustomerState();
       } else {
-        setState(() {
-          _errorMessage = livenessRes['message'] ?? 'Face liveness check failed. Please ensure proper lighting and retry.';
-        });
+        innerData = Map<String, dynamic>.from(livenessRes);
       }
-    } catch (e) {
+
+      final livenessResult = innerData['livenessResult'] ?? innerData;
+      final livenessVerificationId = innerData['livenessVerificationId'] ?? '';
+
+      final passed = livenessRes['success'] == true || 
+                     innerData['success'] == true || 
+                     livenessResult['is_live'] == true || 
+                     livenessResult['passed'] == true;
+
+      if (!passed || livenessVerificationId.toString().isEmpty) {
+        throw Exception('Face liveness verification failed. Please retake photo in clear lighting.');
+      }
+
       setState(() {
-        _errorMessage = e.toString();
+        _isLivenessChecking = false;
+        _isUploading = true;
+      });
+
+      // 4. Upload watermarked file to the documents endpoint
+      final multipartFile = MultipartFile.fromBytes(
+        watermarkedBytes,
+        filename: 'live_photo.jpg',
+        contentType: MediaType('image', 'jpeg'),
+      );
+
+      final formData = FormData.fromMap({
+        'file': multipartFile,
+        'applicationId': applicationId.toString(),
+        'livenessVerificationId': livenessVerificationId.toString(),
+        'latitude': lat.toString(),
+        'longitude': lon.toString(),
+        'accuracy': accuracy.toString(),
+        'formattedAddress': formattedAddress,
+        'city': city,
+        'state': state,
+        'country': country,
+        'postalCode': postalCode,
+        'capturedAt': DateTime.now().toUtc().toIso8601String(),
+        'documentType': 'CUSTOMER_LIVE_PHOTO',
+        'source': 'PROFILE_DETAILS',
+        'applicantType': 'BORROWER',
+      });
+
+      await apiClient.post(
+        '/documents/customer-live-photo',
+        data: formData,
+      );
+
+      setState(() {
+        _isCompleted = true;
+      });
+
+      if (!kIsWeb) {
+        try {
+          final file = File(_imageFile!.path);
+          if (await file.exists()) {
+            await file.delete();
+          }
+        } catch (_) {}
+      }
+
+      await ref.read(journeyControllerProvider.notifier).syncCustomerState();
+
+    } catch (e) {
+      print('Liveness & Upload failed: $e');
+      setState(() {
+        _errorMessage = e.toString().replaceAll('Exception: ', '');
       });
     } finally {
       if (mounted) {
@@ -165,16 +397,20 @@ class _LivePhotoScreenState extends ConsumerState<LivePhotoScreen> {
                   ),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(120),
-                    child: _imageFile != null
-                        ? Image.file(_imageFile!, fit: BoxFit.cover)
-                        : const Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.face_retouching_natural_outlined, size: 64, color: AppTheme.primaryTeal),
-                              SizedBox(height: 12),
-                              Text('Position Face Here', style: TextStyle(fontSize: 13, color: AppTheme.textMuted)),
-                            ],
-                          ),
+                    child: _isCameraInitialized && _cameraController != null
+                        ? CameraPreview(_cameraController!)
+                        : _imageFile != null
+                            ? (kIsWeb 
+                                ? Image.network(_imageFile!.path, fit: BoxFit.cover)
+                                : Image.file(File(_imageFile!.path), fit: BoxFit.cover))
+                            : const Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.face_retouching_natural_outlined, size: 64, color: AppTheme.primaryTeal),
+                                  SizedBox(height: 12),
+                                  Text('Position Face Here', style: TextStyle(fontSize: 13, color: AppTheme.textMuted)),
+                                ],
+                              ),
                   ),
                 ),
               ),
@@ -222,13 +458,46 @@ class _LivePhotoScreenState extends ConsumerState<LivePhotoScreen> {
                   ),
                   const SizedBox(height: 16),
                 ],
-                AppButton(
-                  text: _imageFile == null ? 'Open Camera & Capture' : 'Retake Selfie',
-                  isOutlined: _imageFile != null,
-                  onPressed: _capturePhoto,
-                  icon: Icons.camera_alt_outlined,
-                ),
-                if (_imageFile != null) ...[
+                if (_isCameraInitialized) ...[
+                  AppButton(
+                    text: 'Capture Photograph',
+                    onPressed: _takePhoto,
+                    icon: Icons.camera_rounded,
+                  ),
+                  const SizedBox(height: 12),
+                  AppButton(
+                    text: 'Cancel & Choose File',
+                    isOutlined: true,
+                    onPressed: () async {
+                      if (_cameraController != null) {
+                        await _cameraController!.dispose();
+                        _cameraController = null;
+                      }
+                      setState(() {
+                        _isCameraInitialized = false;
+                      });
+                      _pickFromGallery();
+                    },
+                    icon: Icons.photo_library_outlined,
+                  ),
+                ] else ...[
+                  AppButton(
+                    text: _imageFile == null ? 'Open Camera & Capture' : 'Retake Selfie',
+                    isOutlined: _imageFile != null,
+                    onPressed: _capturePhoto,
+                    icon: Icons.camera_alt_outlined,
+                  ),
+                  if (_imageFile == null) ...[
+                    const SizedBox(height: 12),
+                    AppButton(
+                      text: 'Choose File from Computer',
+                      isOutlined: true,
+                      onPressed: _pickFromGallery,
+                      icon: Icons.upload_file_outlined,
+                    ),
+                  ],
+                ],
+                if (_imageFile != null && !_isCameraInitialized) ...[
                   const SizedBox(height: 12),
                   AppButton(
                     text: 'Upload & Verify Photo',

@@ -38,6 +38,12 @@ class LoanSummaryModel {
   final String applicationNumber;
   final num? approvedAmount;
   final String? approvedAt;
+  final String? disbursalRequestedAt;
+  final String? disbursalCompletedAt;
+  final String? disbursalUtr;
+  final num? disbursalAmount;
+  final String? disbursalDate;
+  final String? disbursalStatus;
 
   const LoanSummaryModel({
     required this.id,
@@ -47,6 +53,12 @@ class LoanSummaryModel {
     required this.applicationNumber,
     this.approvedAmount,
     this.approvedAt,
+    this.disbursalRequestedAt,
+    this.disbursalCompletedAt,
+    this.disbursalUtr,
+    this.disbursalAmount,
+    this.disbursalDate,
+    this.disbursalStatus,
   });
 
   factory LoanSummaryModel.fromJson(Map<String, dynamic> json) {
@@ -58,6 +70,12 @@ class LoanSummaryModel {
       applicationNumber: json['applicationNumber'] ?? '',
       approvedAmount: json['approvedAmount'] != null ? num.tryParse(json['approvedAmount'].toString()) : null,
       approvedAt: json['approvedAt']?.toString(),
+      disbursalRequestedAt: json['disbursalRequestedAt']?.toString(),
+      disbursalCompletedAt: json['disbursalCompletedAt']?.toString(),
+      disbursalUtr: json['disbursalUtr']?.toString(),
+      disbursalAmount: json['disbursalAmount'] != null ? num.tryParse(json['disbursalAmount'].toString()) : null,
+      disbursalDate: json['disbursalDate']?.toString(),
+      disbursalStatus: json['disbursalStatus']?.toString(),
     );
   }
 }

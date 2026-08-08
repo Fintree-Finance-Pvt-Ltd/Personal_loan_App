@@ -466,7 +466,7 @@ class _OtpScreenState extends ConsumerState<OtpScreen>
                     ],
                   ),
                   child: Image.asset(
-                    'lib/assets/images/fintree_logo.png',
+                    'lib/assets/images/Logo.png',
                     fit: BoxFit.contain,
                     errorBuilder: (_, __, ___) {
                       return const Icon(

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:webview_flutter/webview_flutter.dart';
 import '../../../../app/theme.dart';
 import '../../../../core/providers/providers.dart';
 import '../../../../core/widgets/app_button.dart';
@@ -23,15 +23,14 @@ class _DigilockerScreenState extends ConsumerState<DigilockerScreen> {
   bool _isFetching = false;
   bool _isVerified = false;
   String? _errorMessage;
+  String? _verificationUrl;
+  WebViewController? _webViewController;
 
   void _initiateDigilocker() async {
-    final customerId = ref.read(journeyControllerProvider).customer?.id;
-    if (customerId == null) return;
+    final customer = ref.read(journeyControllerProvider).customer;
+    if (customer == null) return;
 
-    final effectiveLan = widget.lan?.isNotEmpty == true
-        ? widget.lan
-        : ref.read(journeyControllerProvider).customer?.latestLan;
-    if (effectiveLan == null || effectiveLan.isEmpty) return;
+    final isOnboarding = widget.lan == null || widget.lan!.isEmpty;
 
     setState(() {
       _isInitiating = true;
@@ -40,19 +39,58 @@ class _DigilockerScreenState extends ConsumerState<DigilockerScreen> {
 
     try {
       final apiClient = ref.read(apiClientProvider);
-      final res = await apiClient.post(
-        '/customer/loans/$effectiveLan/digilocker/initiate',
-        data: {'customerId': customerId},
-      );
+      final String initiateUrl;
+      final Map<String, dynamic> body;
 
-      final data = res['data'] ?? res;
-      final redirectUrl = data['redirectUrl'] ?? data['url'];
+      if (isOnboarding) {
+        initiateUrl = '/customer/aadhaar-kyc/digilocker/initiate';
+        body = {'consentGiven': true};
+      } else {
+        final effectiveLan = widget.lan?.isNotEmpty == true
+            ? widget.lan
+            : customer.latestLan;
+        if (effectiveLan == null || effectiveLan.isEmpty) {
+          setState(() {
+            _errorMessage = 'Loan account LAN is missing.';
+          });
+          return;
+        }
+        initiateUrl = '/customer/loans/$effectiveLan/digilocker/initiate';
+        body = {'customerId': customer.id};
+      }
+
+      final res = await apiClient.post(initiateUrl, data: body);
+      
+      Map<String, dynamic> innerData = {};
+      if (res['data'] is Map) {
+        final d1 = res['data'];
+        if (d1['data'] is Map) {
+          innerData = Map<String, dynamic>.from(d1['data']);
+        } else {
+          innerData = Map<String, dynamic>.from(d1);
+        }
+      } else {
+        innerData = Map<String, dynamic>.from(res);
+      }
+
+      final redirectUrl = innerData['verificationUrl'] ?? innerData['redirectUrl'] ?? innerData['url'];
 
       if (redirectUrl != null) {
-        final uri = Uri.parse(redirectUrl);
-        if (await canLaunchUrl(uri)) {
-          await launchUrl(uri, mode: LaunchMode.externalApplication);
-        }
+        setState(() {
+          _verificationUrl = redirectUrl;
+          _webViewController = WebViewController()
+            ..setJavaScriptMode(JavaScriptMode.unrestricted)
+            ..setNavigationDelegate(
+              NavigationDelegate(
+                onPageFinished: (url) {
+                  if (url.contains('callback') || url.contains('success') || url.contains('webhook')) {
+                    _fetchDigilockerDetails();
+                  }
+                },
+              ),
+            )
+            ..loadRequest(Uri.parse(_verificationUrl!));
+        });
       }
     } catch (e) {
       setState(() {
@@ -64,45 +102,76 @@ class _DigilockerScreenState extends ConsumerState<DigilockerScreen> {
   }
 
   void _fetchDigilockerDetails() async {
-    final customerId = ref.read(journeyControllerProvider).customer?.id;
-    if (customerId == null) return;
+    final customer = ref.read(journeyControllerProvider).customer;
+    if (customer == null) return;
 
     setState(() {
       _isFetching = true;
       _errorMessage = null;
     });
 
+    final isOnboarding = widget.lan == null || widget.lan!.isEmpty;
+
     try {
       final apiClient = ref.read(apiClientProvider);
-      final effectiveLan = widget.lan?.isNotEmpty == true
-          ? widget.lan
-          : ref.read(journeyControllerProvider).customer?.latestLan;
-      if (effectiveLan == null || effectiveLan.isEmpty) {
-        setState(() {
-          _errorMessage = 'Loan account not available. Please complete application first.';
-        });
-        return;
-      }
 
-      final res = await apiClient.post(
-        '/customer/loans/$effectiveLan/digilocker/fetch-details',
-        data: {'customerId': customerId},
-      );
-
-      await ref.read(journeyControllerProvider.notifier).syncCustomerState();
-
-      if (mounted) {
+      if (isOnboarding) {
+        final res = await apiClient.get('/customer/aadhaar-kyc/digilocker/status');
+        
+        await ref.read(journeyControllerProvider.notifier).syncCustomerState();
+        
+        final updatedCustomer = ref.read(journeyControllerProvider).customer;
         final data = res['data'] ?? res;
-        final status = data['status'] as String?;
-        if (status == 'VERIFIED') {
+        final isKycDone = updatedCustomer?.aadhaarVerified == true || 
+                          updatedCustomer?.aadhaarKycStatus == 'VERIFIED' || 
+                          data['aadhaarVerified'] == true || 
+                          data['status'] == 'VERIFIED';
+
+        if (isKycDone && mounted) {
           setState(() {
             _isVerified = true;
+            _verificationUrl = null;
+            _webViewController = null;
           });
           context.push('/onboarding/address');
         } else {
           setState(() {
             _errorMessage = 'DigiLocker status is pending or not complete. Please retry after completing verification.';
           });
+        }
+      } else {
+        final effectiveLan = widget.lan?.isNotEmpty == true
+            ? widget.lan
+            : customer.latestLan;
+        if (effectiveLan == null || effectiveLan.isEmpty) {
+          setState(() {
+            _errorMessage = 'Loan account not available. Please complete application first.';
+          });
+          return;
+        }
+
+        final res = await apiClient.post(
+          '/customer/loans/$effectiveLan/digilocker/fetch-details',
+          data: {'customerId': customer.id},
+        );
+
+        await ref.read(journeyControllerProvider.notifier).syncCustomerState();
+
+        if (mounted) {
+          final data = res['data'] ?? res;
+          final status = data['status'] as String?;
+          if (status == 'VERIFIED') {
+            setState(() {
+              _isVerified = true;
+              _verificationUrl = null;
+              _webViewController = null;
+            });
+            context.push('/onboarding/address');
+          } else {
+            setState(() {
+              _errorMessage = 'DigiLocker status is pending or not complete. Please retry after completing verification.';
+            });
+          }
         }
       }
     } catch (e) {
@@ -116,8 +185,45 @@ class _DigilockerScreenState extends ConsumerState<DigilockerScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final customer = ref.watch(journeyControllerProvider).customer;
     final digilocker = ref.watch(journeyControllerProvider).postApproval?.digilocker;
-    final isVerified = _isVerified || digilocker?.status == 'VERIFIED';
+    
+    final isOnboarding = widget.lan == null || widget.lan!.isEmpty;
+
+    final isVerified = _isVerified || 
+                       (isOnboarding 
+                           ? (customer?.aadhaarVerified == true || customer?.aadhaarKycStatus == 'VERIFIED')
+                           : digilocker?.status == 'VERIFIED');
+
+    if (_verificationUrl != null && !isVerified) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('DigiLocker Verification'),
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: () {
+              setState(() {
+                _verificationUrl = null;
+                _webViewController = null;
+              });
+            },
+          ),
+        ),
+        body: WebViewWidget(controller: _webViewController!),
+      );
+    }
+
+    final statusString = isOnboarding 
+        ? (customer?.aadhaarKycStatus ?? 'NOT_STARTED') 
+        : (digilocker?.status ?? 'NOT_STARTED');
+
+    final maskedAadhaarString = isOnboarding 
+        ? (customer?.maskedAadhaar ?? 'XXXX-XXXX-XXXX') 
+        : (digilocker?.maskedAadhaar ?? 'XXXX-XXXX-1234');
+
+    final verifiedAtString = isOnboarding 
+        ? (customer?.aadhaarVerifiedAt ?? 'Just now') 
+        : (digilocker?.verifiedAt ?? 'Just now');
 
     return Scaffold(
       appBar: AppBar(
@@ -149,13 +255,13 @@ class _DigilockerScreenState extends ConsumerState<DigilockerScreen> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           const Text('DigiLocker Status', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                          AppStatusBadge(status: digilocker?.status ?? 'NOT_STARTED'),
+                          AppStatusBadge(status: statusString),
                         ],
                       ),
                       if (isVerified) ...[
                         const Divider(height: 20),
-                        _row('Masked Aadhaar', digilocker?.maskedAadhaar ?? 'XXXX-XXXX-1234'),
-                        _row('Verified At', digilocker?.verifiedAt ?? 'Just now'),
+                        _row('Masked Aadhaar', maskedAadhaarString),
+                        _row('Verified At', verifiedAtString),
                       ],
                     ],
                   ),

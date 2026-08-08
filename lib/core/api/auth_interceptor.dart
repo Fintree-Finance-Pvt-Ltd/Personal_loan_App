@@ -1,5 +1,7 @@
 import 'package:dio/dio.dart';
 import '../storage/secure_storage_service.dart';
+import '../../app/router.dart';
+import 'package:flutter/foundation.dart';
 
 class AuthInterceptor extends Interceptor {
   final SecureStorageService _storageService;
@@ -11,9 +13,14 @@ class AuthInterceptor extends Interceptor {
     RequestOptions options,
     RequestInterceptorHandler handler,
   ) async {
-    options.headers['Content-Type'] = 'application/json';
+    if (options.headers['Content-Type'] == null && options.data is! FormData) {
+      options.headers['Content-Type'] = 'application/json';
+    }
     options.headers['Accept'] = 'application/json';
-    options.headers['X-Request-ID'] = DateTime.now().millisecondsSinceEpoch.toString();
+    if (!kIsWeb) {
+      options.headers['X-Request-ID'] = DateTime.now().millisecondsSinceEpoch.toString();
+      options.headers['x-api-key'] = 'Fintree@2026';
+    }
 
     final token = await _storageService.getAuthToken();
     if (token != null && token.isNotEmpty) {
@@ -26,7 +33,8 @@ class AuthInterceptor extends Interceptor {
   @override
   void onError(DioException err, ErrorInterceptorHandler handler) {
     if (err.response?.statusCode == 401) {
-      // Session expired handling
+      _storageService.clearSession();
+      appRouter.go('/login');
     }
     return handler.next(err);
   }
