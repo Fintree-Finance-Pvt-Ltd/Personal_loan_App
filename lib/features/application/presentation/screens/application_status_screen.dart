@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../app/theme.dart';
-import '../../../../core/providers/providers.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_loader.dart';
 import '../../../../core/widgets/app_status_badge.dart';
 import '../../../dashboard/presentation/journey_controller.dart';
+
 
 class ApplicationStatusScreen extends ConsumerStatefulWidget {
   const ApplicationStatusScreen({super.key});
@@ -16,41 +16,89 @@ class ApplicationStatusScreen extends ConsumerStatefulWidget {
 }
 
 class _ApplicationStatusScreenState extends ConsumerState<ApplicationStatusScreen> {
-  bool _isSimulating = false;
+  bool _isAutoPolling = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Start polling if we're in decision processing state
+    Future.microtask(() => _maybeStartPolling());
+  }
 
   void _refresh() async {
     await ref.read(journeyControllerProvider.notifier).syncCustomerState();
+    _maybeStartPolling();
   }
 
-  void _simulateApproval() async {
-    final customerId = ref.read(journeyControllerProvider).customer?.id;
-    if (customerId == null) return;
-
-    setState(() => _isSimulating = true);
-    try {
-      final apiClient = ref.read(apiClientProvider);
-      await apiClient.post(
-        '/customer/$customerId/simulate-lender-approval',
-        data: {'customerId': customerId, 'amount': 50000},
-      );
-      await ref.read(journeyControllerProvider.notifier).syncCustomerState();
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Simulation error: $e')),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isSimulating = false);
+  void _maybeStartPolling() {
+    final customer = ref.read(journeyControllerProvider).customer;
+    final nextStep = customer?.nextPermittedStep;
+    // If backend says "lender is deciding", auto-poll until resolved
+    if (nextStep == 'LENDER_DECISION_PROCESSING' ||
+        nextStep == 'LENDER_CREATE_PROCESSING' ||
+        nextStep == 'LENDER_UPDATE_PROCESSING' ||
+        nextStep == 'APPROVAL_PROCESSING') {
+      if (!_isAutoPolling) _startAutoPolling();
     }
+  }
+
+  void _startAutoPolling() async {
+    if (!mounted) return;
+    setState(() => _isAutoPolling = true);
+
+    const maxAttempts = 30; // 30 * 5s = 150 seconds
+    int attempts = 0;
+
+    while (attempts < maxAttempts && mounted) {
+      await Future.delayed(const Duration(seconds: 5));
+      if (!mounted) break;
+      attempts++;
+
+      await ref.read(journeyControllerProvider.notifier).syncCustomerState();
+      if (!mounted) break;
+
+      final customer = ref.read(journeyControllerProvider).customer;
+      final nextStep = customer?.nextPermittedStep;
+      final appStatus = customer?.latestApplicationStatus;
+      final lan = customer?.latestLan ?? customer?.platformLan;
+
+      // Resolved to pre-approved — go to offer page
+      if (nextStep == 'PRE_APPROVAL_OFFER_SELECTION' ||
+          appStatus == 'LENDER_PRE_APPROVED') {
+        if (mounted && lan != null) {
+          context.go('/loan/$lan/offer?isPreApproval=true');
+        }
+        break;
+      }
+
+      // Resolved to another terminal step — stop polling (UI will update)
+      if (nextStep == 'INTEGRATION_SUPPORT' ||
+          appStatus == 'LENDER_REJECTED' ||
+          appStatus == 'LENDER_APPROVED') {
+        break;
+      }
+
+      // Still processing — keep looping
+      final isStillProcessing = nextStep == 'LENDER_DECISION_PROCESSING' ||
+          nextStep == 'LENDER_CREATE_PROCESSING' ||
+          nextStep == 'LENDER_UPDATE_PROCESSING' ||
+          nextStep == 'APPROVAL_PROCESSING';
+      if (!isStillProcessing) break; // Unknown step — stop
+    }
+
+    if (mounted) setState(() => _isAutoPolling = false);
   }
 
   @override
   Widget build(BuildContext context) {
     final journeyState = ref.watch(journeyControllerProvider);
     final customer = journeyState.customer;
-    final appStatus = customer?.latestApplicationStatus ?? 'SUBMITTED';
-    final lan = customer?.latestLan;
+    
+    String appStatus = customer?.latestApplicationStatus ?? 'SUBMITTED';
+    final nextStep = customer?.nextPermittedStep;
+    final lan = customer?.latestLan ?? customer?.platformLan;
+
+
 
     if (journeyState.isLoading) {
       return const Scaffold(body: AppLoader(message: 'Checking application status...'));
@@ -79,29 +127,29 @@ class _ApplicationStatusScreenState extends ConsumerState<ApplicationStatusScree
                   ],
                 ),
                 child: Icon(
-                  appStatus == 'LENDER_APPROVED'
-                      ? Icons.check_circle_rounded
-                      : (appStatus == 'REJECTED' ? Icons.cancel_rounded : Icons.hourglass_top_rounded),
+                  _isAutoPolling || nextStep == 'LENDER_DECISION_PROCESSING' ||
+                      nextStep == 'LENDER_CREATE_PROCESSING' ||
+                      nextStep == 'APPROVAL_PROCESSING'
+                      ? Icons.sync_rounded
+                      : (appStatus == 'LENDER_APPROVED'
+                          ? Icons.check_circle_rounded
+                          : (appStatus == 'REJECTED' ? Icons.cancel_rounded : Icons.hourglass_top_rounded)),
                   size: 64,
-                  color: appStatus == 'LENDER_APPROVED'
-                      ? AppTheme.successGreen
-                      : (appStatus == 'REJECTED' ? AppTheme.errorRed : AppTheme.warningOrange),
+                  color: _isAutoPolling
+                      ? AppTheme.primaryTeal
+                      : (appStatus == 'LENDER_APPROVED'
+                          ? AppTheme.successGreen
+                          : (appStatus == 'REJECTED' ? AppTheme.errorRed : AppTheme.warningOrange)),
                 ),
               ),
               const SizedBox(height: 20),
               Text(
-                appStatus == 'LENDER_APPROVED'
-                    ? 'Application Approved!'
-                    : (appStatus == 'REJECTED' ? 'Application Decision' : 'Application Under Review'),
+                _getStatusTitle(appStatus),
                 style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AppTheme.textDarkPrimary),
               ),
               const SizedBox(height: 8),
               Text(
-                appStatus == 'LENDER_APPROVED'
-                    ? 'Congratulations! Fintree Finance has approved your loan application.'
-                    : (appStatus == 'REJECTED'
-                        ? 'Unfortunately your application does not meet current lender eligibility criteria.'
-                        : 'Your application has been submitted to lender Fintree Finance for review.'),
+                _getStatusDescription(appStatus),
                 style: const TextStyle(fontSize: 14, color: AppTheme.textDarkSecondary),
                 textAlign: TextAlign.center,
               ),
@@ -123,44 +171,91 @@ class _ApplicationStatusScreenState extends ConsumerState<ApplicationStatusScree
                 ),
               ),
               const Spacer(),
-              if (appStatus == 'LENDER_APPROVED' && lan != null)
-                AppButton(
-                  text: 'View Loan Offer',
-                  onPressed: () => context.push('/loan/$lan/offer'),
-                  icon: Icons.arrow_forward_rounded,
-                )
-              else if (appStatus == 'LENDER_APPROVED' && lan == null)
-                const Card(
-                  color: AppTheme.warningBg,
-                  child: Padding(
-                    padding: EdgeInsets.all(12.0),
-                    child: Text(
-                      'Your application is approved. Your loan account number is being generated.',
-                      style: TextStyle(color: AppTheme.warningOrange, fontSize: 13),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                )
-              else if (appStatus == 'SUBMITTED') ...[
-                AppButton(
-                  text: 'Simulate Lender Approval (UAT Test)',
-                  isLoading: _isSimulating,
-                  isOutlined: true,
-                  onPressed: _simulateApproval,
-                  icon: Icons.flash_on_rounded,
-                ),
-                const SizedBox(height: 12),
-                AppButton(
-                  text: 'Refresh Status',
-                  onPressed: _refresh,
-                  icon: Icons.refresh_rounded,
-                ),
-              ],
+              _buildActionButtons(appStatus, nextStep, lan, context),
             ],
           ),
         ),
       ),
     );
+  }
+
+  String _getStatusTitle(String status) {
+    if (status == 'LENDER_APPROVED') return 'Application Approved!';
+    if (status == 'REJECTED') return 'Application Decision';
+    if (status == 'LENDER_PRE_APPROVED') return 'Pre-Approved!';
+    if (status == 'PENDING_CREDIT_REVIEW') return 'Final Credit Review';
+    if (status == 'LENDER_REVIEW') return 'Under Lender Review';
+    if (status == 'SUBMITTED') return 'Application Processing';
+    return 'Application Submitted';
+  }
+
+  String _getStatusDescription(String status) {
+    if (status == 'LENDER_APPROVED') return 'Congratulations! Fintree Finance has approved your loan application.';
+    if (status == 'REJECTED') return 'Unfortunately your application does not meet current lender eligibility criteria.';
+    if (status == 'LENDER_PRE_APPROVED') return 'Great news! You have been pre-approved. Please review and select your offer.';
+    if (status == 'PENDING_CREDIT_REVIEW') return 'Your selected offer is undergoing final credit review by the lender.';
+    if (status == 'LENDER_REVIEW') return 'Your application is currently being reviewed by the lender.';
+    if (status == 'SUBMITTED') return 'Your application has been submitted. We are processing your lender decision. This may take a moment…';
+    return 'Your application has been successfully submitted and is awaiting lender review.';
+  }
+
+  Widget _buildActionButtons(String appStatus, String? nextStep, String? lan, BuildContext context) {
+    // If backend is still processing lender decision - show auto-polling indicator
+    if (_isAutoPolling ||
+        nextStep == 'LENDER_DECISION_PROCESSING' ||
+        nextStep == 'LENDER_CREATE_PROCESSING' ||
+        nextStep == 'APPROVAL_PROCESSING') {
+      return Column(
+        children: [
+          const LinearProgressIndicator(color: AppTheme.primaryTeal),
+          const SizedBox(height: 12),
+          Text(
+            _isAutoPolling
+                ? 'Checking lender decision automatically…'
+                : 'Your application is with the lender for decision.',
+            style: const TextStyle(fontSize: 13, color: AppTheme.textDarkSecondary),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 12),
+          AppButton(
+            text: 'Refresh Now',
+            isOutlined: true,
+            onPressed: _refresh,
+            icon: Icons.refresh_rounded,
+          ),
+        ],
+      );
+    } else if (appStatus == 'LENDER_APPROVED' && lan != null) {
+      return AppButton(
+        text: 'View Post-Approval Journey',
+        onPressed: () => context.push('/dashboard'),
+        icon: Icons.arrow_forward_rounded,
+      );
+    } else if (appStatus == 'LENDER_APPROVED' && lan == null) {
+      return const Card(
+        color: AppTheme.warningBg,
+        child: Padding(
+          padding: EdgeInsets.all(12.0),
+          child: Text(
+            'Your application is approved. Your loan account number is being generated.',
+            style: TextStyle(color: AppTheme.warningOrange, fontSize: 13),
+            textAlign: TextAlign.center,
+          ),
+        ),
+      );
+    } else if (appStatus == 'LENDER_PRE_APPROVED' && lan != null) {
+      return AppButton(
+        text: 'View Pre-Approved Offer',
+        onPressed: () => context.push('/loan/$lan/offer?isPreApproval=true'),
+        icon: Icons.local_offer_rounded,
+      );
+    } else {
+      return AppButton(
+        text: 'Refresh Status',
+        onPressed: _refresh,
+        icon: Icons.refresh_rounded,
+      );
+    }
   }
 
   Widget _infoRow(String label, String val, {bool isBadge = false}) {

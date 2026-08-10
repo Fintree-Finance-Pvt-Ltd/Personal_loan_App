@@ -23,27 +23,77 @@ class _LoanOfferScreenState extends ConsumerState<LoanOfferScreen> {
   int _selectedTenureDays = 60;
   bool _isAccepting = false;
   String? _errorMessage;
+  bool _isLoadingPreApproval = false;
+  Map<String, dynamic>? _preApprovalOffer;
 
   @override
   void initState() {
     super.initState();
     Future.microtask(() {
+      _loadOfferData();
+    });
+  }
+
+  void _loadOfferData() async {
+    final customer = ref.read(journeyControllerProvider).customer;
+    final isPreApproval = customer?.nextPermittedStep == 'PRE_APPROVAL_OFFER_SELECTION' ||
+        customer?.latestApplicationStatus == 'LENDER_PRE_APPROVED';
+
+    final effectiveLan = widget.lan?.isNotEmpty == true
+        ? widget.lan
+        : (customer?.latestLan ?? customer?.platformLan);
+
+    if (isPreApproval) {
+      // Fetch pre-approval offer
+      if (effectiveLan != null && effectiveLan.isNotEmpty) {
+        setState(() => _isLoadingPreApproval = true);
+        try {
+          final apiClient = ref.read(apiClientProvider);
+          final res = await apiClient.get('/customer/loans/$effectiveLan/pre-approval-offer');
+          
+          dynamic rawData = res;
+          if (rawData is Map<String, dynamic> && rawData['data'] != null) {
+            rawData = rawData['data'];
+          }
+          if (rawData is Map<String, dynamic> && rawData['data'] != null) {
+            rawData = rawData['data'];
+          }
+          
+          setState(() {
+            _preApprovalOffer = rawData is Map<String, dynamic> ? rawData : {};
+            final allowedTenures = List<int>.from(_preApprovalOffer?['allowedTenures'] ?? []);
+            if (allowedTenures.isNotEmpty) {
+              _selectedTenureDays = _preApprovalOffer?['selectedTenure'] ?? allowedTenures.first;
+            }
+          });
+        } catch (e) {
+          setState(() {
+            _errorMessage = 'Failed to load pre-approval offer: $e';
+          });
+        } finally {
+          if (mounted) setState(() => _isLoadingPreApproval = false);
+        }
+      }
+    } else {
+      // Regular post-approval offer
       final offer = ref.read(journeyControllerProvider).postApproval?.offer;
       if (offer != null && offer.allowedTenures.isNotEmpty) {
         setState(() {
           _selectedTenureDays = offer.acceptedTenureDays ?? offer.allowedTenures.first;
         });
       }
-    });
+    }
   }
 
   void _acceptOffer() async {
-    final customerId = ref.read(journeyControllerProvider).customer?.id;
+    final customer = ref.read(journeyControllerProvider).customer;
+    final customerId = customer?.id;
     if (customerId == null) return;
 
     final effectiveLan = widget.lan?.isNotEmpty == true
         ? widget.lan
-        : ref.read(journeyControllerProvider).customer?.latestLan;
+        : (customer?.latestLan ?? customer?.platformLan);
+
     if (effectiveLan == null || effectiveLan.isEmpty) {
       setState(() {
         _errorMessage = 'Loan account LAN is missing.';
@@ -58,21 +108,41 @@ class _LoanOfferScreenState extends ConsumerState<LoanOfferScreen> {
 
     try {
       final apiClient = ref.read(apiClientProvider);
-      await apiClient.post(
-        '/customer/loans/$effectiveLan/offer/accept',
-        data: {
-          'customerId': customerId,
-          'tenureDays': _selectedTenureDays,
-        },
-      );
+      final isPreApproval = customer?.nextPermittedStep == 'PRE_APPROVAL_OFFER_SELECTION' ||
+          customer?.latestApplicationStatus == 'LENDER_PRE_APPROVED';
+      
+      if (isPreApproval) {
+        // Pre-approval accept flow
+        await apiClient.post(
+          '/customer/loans/$effectiveLan/pre-approval-offer/select',
+          data: {
+            'customerId': customerId,
+            'tenureDays': _selectedTenureDays,
+          },
+        );
+        
+        await ref.read(journeyControllerProvider.notifier).syncCustomerState();
+        if (mounted) {
+          context.go('/application/status');
+        }
+      } else {
+        // Post-approval accept flow
+        await apiClient.post(
+          '/customer/loans/$effectiveLan/offer/accept',
+          data: {
+            'customerId': customerId,
+            'tenureDays': _selectedTenureDays,
+          },
+        );
 
-      await ref.read(journeyControllerProvider.notifier).syncCustomerState();
+        await ref.read(journeyControllerProvider.notifier).syncCustomerState();
 
-      if (mounted) {
-        if (widget.isOnboarding) {
-          context.push('/onboarding/review');
-        } else {
-          context.push('/loan/$effectiveLan/digilocker');
+        if (mounted) {
+          if (widget.isOnboarding) {
+            context.push('/onboarding/review');
+          } else {
+            context.push('/loan/$effectiveLan/digilocker');
+          }
         }
       }
     } catch (e) {
@@ -86,27 +156,64 @@ class _LoanOfferScreenState extends ConsumerState<LoanOfferScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final journey = ref.watch(journeyControllerProvider).postApproval;
-    final offer = journey?.offer;
-    final isAccepted = offer?.acceptedTenureDays != null;
+    final journeyState = ref.watch(journeyControllerProvider);
+    final customer = journeyState.customer;
+    final isPreApproval = customer?.nextPermittedStep == 'PRE_APPROVAL_OFFER_SELECTION' ||
+        customer?.latestApplicationStatus == 'LENDER_PRE_APPROVED';
 
     final effectiveLan = widget.lan?.isNotEmpty == true
         ? widget.lan
-        : ref.watch(journeyControllerProvider).customer?.latestLan;
+        : (customer?.latestLan ?? customer?.platformLan);
 
-    if (journey == null || offer == null) {
+    if (_isLoadingPreApproval || journeyState.isLoading) {
       return Scaffold(
         appBar: AppBar(title: const Text('Loan Offer')),
-        body: const AppLoader(message: 'Loading approved loan offer...'),
+        body: const AppLoader(message: 'Loading loan offer...'),
       );
     }
 
-    final amount = offer.approvedAmount ?? 50000;
-    final interestRate = offer.acceptedInterestRate ?? 18.0;
-    final processingFee = offer.acceptedProcessingFee ?? (amount * 0.02);
+    double amount = 0;
+    double interestRate = 18.0;
+    double processingFee = 0;
+    List<int> allowedTenures = [];
+    bool isAccepted = false;
+    double totalRepayment = 0;
+    String lenderName = 'Fintree Finance Private Limited';
+
+    if (isPreApproval) {
+      if (_preApprovalOffer == null) {
+        return Scaffold(
+          appBar: AppBar(title: const Text('Loan Offer')),
+          body: const Center(child: Text('Offer not available.')),
+        );
+      }
+      amount = (_preApprovalOffer!['amount'] ?? 0).toDouble();
+      allowedTenures = List<int>.from(_preApprovalOffer!['allowedTenures'] ?? []);
+      isAccepted = _preApprovalOffer!['alreadySelected'] == true;
+      processingFee = amount * 0.02; // Approximation, usually from config
+      totalRepayment = amount + (amount * (interestRate / 100) * (_selectedTenureDays / 365));
+    } else {
+      final journey = journeyState.postApproval;
+      final offer = journey?.offer;
+      
+      if (journey == null || offer == null) {
+        return Scaffold(
+          appBar: AppBar(title: const Text('Loan Offer')),
+          body: const AppLoader(message: 'Loading approved loan offer...'),
+        );
+      }
+      
+      amount = (offer.approvedAmount ?? 50000).toDouble();
+      interestRate = (offer.acceptedInterestRate ?? 18.0).toDouble();
+      allowedTenures = offer.allowedTenures;
+      isAccepted = offer.acceptedTenureDays != null;
+      processingFee = (offer.acceptedProcessingFee ?? (amount * 0.02)).toDouble();
+      totalRepayment = (offer.acceptedTotalRepayment ?? (amount + (amount * (interestRate / 100) * (_selectedTenureDays / 365)))).toDouble();
+      lenderName = journey.lender.name;
+    }
+
     final gst = processingFee * 0.18;
     final netDisbursal = amount - (processingFee + gst);
-    final totalRepayment = offer.acceptedTotalRepayment ?? (amount + (amount * (interestRate / 100) * (_selectedTenureDays / 365)));
 
     return Scaffold(
       appBar: AppBar(
@@ -124,11 +231,11 @@ class _LoanOfferScreenState extends ConsumerState<LoanOfferScreen> {
                   padding: const EdgeInsets.all(20.0),
                   child: Column(
                     children: [
-                      const Row(
+                      Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text('Sanctioned Loan Amount', style: TextStyle(fontSize: 13, color: AppTheme.textDarkSecondary)),
-                          AppStatusBadge(status: 'APPROVED', label: 'Offer Available'),
+                          const Text('Sanctioned Loan Amount', style: TextStyle(fontSize: 13, color: AppTheme.textDarkSecondary)),
+                          AppStatusBadge(status: 'APPROVED', label: isPreApproval ? 'Pre-Approved' : 'Offer Available'),
                         ],
                       ),
                       const SizedBox(height: 8),
@@ -141,7 +248,7 @@ class _LoanOfferScreenState extends ConsumerState<LoanOfferScreen> {
                         ),
                       ),
                       const SizedBox(height: 4),
-                      Text('Lender: ${journey.lender.name}', style: const TextStyle(fontSize: 12, color: AppTheme.textDarkSecondary)),
+                      Text('Lender: $lenderName', style: const TextStyle(fontSize: 12, color: AppTheme.textDarkSecondary)),
                     ],
                   ),
                 ),
@@ -151,7 +258,7 @@ class _LoanOfferScreenState extends ConsumerState<LoanOfferScreen> {
               const SizedBox(height: 12),
               Wrap(
                 spacing: 12,
-                children: offer.allowedTenures.map((tenure) {
+                children: allowedTenures.map((tenure) {
                   final isSelected = _selectedTenureDays == tenure;
                   return ChoiceChip(
                     label: Text('$tenure Days'),
@@ -201,11 +308,13 @@ class _LoanOfferScreenState extends ConsumerState<LoanOfferScreen> {
               const SizedBox(height: 32),
               if (isAccepted)
                 AppButton(
-                  text: widget.isOnboarding
-                      ? 'Offer Accepted - Continue to Review'
-                      : 'Offer Accepted - Continue to KYC',
+                  text: isPreApproval 
+                      ? 'Offer Selected - Return' 
+                      : (widget.isOnboarding ? 'Offer Accepted - Continue to Review' : 'Offer Accepted - Continue to KYC'),
                   onPressed: () {
-                    if (widget.isOnboarding) {
+                    if (isPreApproval) {
+                      context.pop();
+                    } else if (widget.isOnboarding) {
                       context.push('/onboarding/review');
                     } else {
                       context.push('/loan/$effectiveLan/digilocker');
@@ -215,7 +324,7 @@ class _LoanOfferScreenState extends ConsumerState<LoanOfferScreen> {
                 )
               else
                 AppButton(
-                  text: 'Accept Loan Offer',
+                  text: isPreApproval ? 'Select Pre-Approved Offer' : 'Accept Loan Offer',
                   isLoading: _isAccepting,
                   onPressed: _acceptOffer,
                   icon: Icons.check_circle_outline,

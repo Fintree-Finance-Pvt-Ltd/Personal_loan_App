@@ -78,11 +78,16 @@ class CustomerApi {
   Future<Map<String, dynamic>> processPanOcr(dynamic fileOrData) async {
     late final dynamic body;
     late final Map<String, dynamic> headers;
+    const maxSizeBytes = 15 * 1024 * 1024; // 15 MB
 
     if (fileOrData is FormData) {
       body = fileOrData;
       headers = {'Content-Type': 'multipart/form-data'};
     } else if (fileOrData is File) {
+      final fileSize = await fileOrData.length();
+      if (fileSize > maxSizeBytes) {
+        throw Exception('Image size is too large. Maximum allowed size is 15 MB.');
+      }
       final formData = FormData.fromMap({
         'file': await MultipartFile.fromFile(
           fileOrData.path,

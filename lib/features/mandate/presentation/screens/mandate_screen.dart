@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import '../../../../app/theme.dart';
 import '../../../../core/providers/providers.dart';
@@ -26,6 +27,73 @@ class _MandateScreenState extends ConsumerState<MandateScreen> {
   String? _mandateUrl;
   WebViewController? _webViewController;
 
+  String _convertIntentToUri(String url) {
+    if (!url.startsWith('intent://')) return url;
+
+    final intentIndex = url.indexOf('#Intent;');
+    String pathAndQuery = '';
+    String fragment = '';
+
+    if (intentIndex != -1) {
+      pathAndQuery = url.substring('intent://'.length, intentIndex);
+      fragment = url.substring(intentIndex);
+    } else {
+      pathAndQuery = url.substring('intent://'.length);
+    }
+
+    String scheme = 'upi';
+    final schemeMatch = RegExp(r'scheme=([^;]+)').firstMatch(fragment);
+    if (schemeMatch != null && schemeMatch.group(1) != null && schemeMatch.group(1)!.isNotEmpty) {
+      scheme = schemeMatch.group(1)!;
+    }
+
+    return '$scheme://$pathAndQuery';
+  }
+
+  Future<void> _launchExternalAppUrl(String originalUrl) async {
+    try {
+      final targetUrl = _convertIntentToUri(originalUrl);
+      debugPrint('[MandateWebView] Intercepted deep link URL: $originalUrl -> Launching: $targetUrl');
+      final uri = Uri.parse(targetUrl);
+
+      bool launched = false;
+      try {
+        launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } catch (e) {
+        debugPrint('[MandateWebView] External application launch failed: $e');
+      }
+
+      if (!launched) {
+        try {
+          launched = await launchUrl(uri, mode: LaunchMode.externalNonBrowserApplication);
+        } catch (e) {
+          debugPrint('[MandateWebView] ExternalNonBrowser launch failed: $e');
+        }
+      }
+
+      if (!launched && originalUrl != targetUrl) {
+        try {
+          final origUri = Uri.parse(originalUrl);
+          launched = await launchUrl(origUri, mode: LaunchMode.externalApplication);
+        } catch (_) {}
+      }
+
+      if (!launched && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Could not launch UPI app. Please ensure a UPI app (Google Pay, PhonePe, Paytm) is installed.',
+            ),
+            backgroundColor: AppTheme.warningOrange,
+            duration: Duration(seconds: 5),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('[MandateWebView] Error launching deep link: $e');
+    }
+  }
+
   /// Builds a fully-configured WebViewController for the Easebuzz payment portal.
   ///
   /// Why each setting matters:
@@ -33,9 +101,7 @@ class _MandateScreenState extends ConsumerState<MandateScreen> {
   ///    redirect or block it. A Chrome mobile UA bypasses this.
   ///  - setJavaScriptMode(unrestricted): The payment page is a JS SPA.
   ///  - DOM storage (via platform config): Easebuzz stores session/state in localStorage.
-  ///  - onNavigationRequest: UPI deep links (upi://, phonepe://, etc.) would crash
-  ///    if the WebView tries to navigate to them. We block them — Easebuzz's
-  ///    collect_request flow sends the UPI request directly to the customer's UPI app.
+  ///  - onNavigationRequest: UPI deep links (upi://, phonepe://, etc.) launch the UPI app directly.
   ///  - onWebResourceError: Only surface main-frame failures; sub-resource errors
   ///    (fonts, analytics, etc.) are expected and should not block the user.
   WebViewController _buildWebViewController(String url) {
@@ -77,6 +143,9 @@ class _MandateScreenState extends ConsumerState<MandateScreen> {
               '[MandateWebView] Error ${error.errorCode}: '
               '${error.description} @ ${error.url}',
             );
+            if (error.errorCode == -10 || error.description.contains('ERR_UNKNOWN_URL_SCHEME')) {
+              return;
+            }
             // Only report main-frame errors — sub-resource errors are normal
             if (error.isForMainFrame == true && mounted) {
               setState(() {
@@ -89,16 +158,15 @@ class _MandateScreenState extends ConsumerState<MandateScreen> {
             }
           },
 
-          // Block UPI / payment-app deep links — the Easebuzz collect_request
-          // flow sends a UPI collect request directly to the customer's UPI app.
           onNavigationRequest: (request) {
             final uri = Uri.tryParse(request.url);
             if (uri != null) {
               final scheme = uri.scheme.toLowerCase();
-              if (scheme == 'https' || scheme == 'http') {
+              if (scheme == 'https' || scheme == 'http' || scheme == 'about' || scheme == 'data') {
                 return NavigationDecision.navigate;
               }
-              debugPrint('[MandateWebView] Blocked deep link: ${request.url}');
+              debugPrint('[MandateWebView] Intercepted deep link: ${request.url}');
+              _launchExternalAppUrl(request.url);
               return NavigationDecision.prevent;
             }
             return NavigationDecision.navigate;

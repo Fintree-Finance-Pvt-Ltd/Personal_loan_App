@@ -102,13 +102,22 @@ class _BasicDetailsScreenState extends ConsumerState<BasicDetailsScreen> {
 
       if (photo == null) return;
 
+      final bytes = await photo.readAsBytes();
+      const maxSizeBytes = 15 * 1024 * 1024; // 15 MB
+
+      if (bytes.length > maxSizeBytes) {
+        setState(() {
+          _errorMessage = 'Image size is too large. Maximum allowed size is 15 MB.';
+          _panOcrResult = null;
+        });
+        return;
+      }
+
       setState(() {
         _isScanningPan = true;
         _errorMessage = null;
         _panOcrResult = null;
       });
-
-      final bytes = await photo.readAsBytes();
       final apiClient = ref.read(apiClientProvider);
       final formData = FormData.fromMap({
         'file': MultipartFile.fromBytes(

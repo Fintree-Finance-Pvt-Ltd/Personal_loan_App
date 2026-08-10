@@ -28,15 +28,50 @@ class LivePhotoScreen extends ConsumerStatefulWidget {
 
 class _LivePhotoScreenState extends ConsumerState<LivePhotoScreen> {
   XFile? _imageFile;
+  String? _imageUrl;
   bool _isUploading = false;
   bool _isLivenessChecking = false;
   bool _isCompleted = false;
+  bool _isLoadingInitial = true;
   String? _errorMessage;
   final ImagePicker _picker = ImagePicker();
 
   CameraController? _cameraController;
   List<CameraDescription> _cameras = [];
   bool _isCameraInitialized = false;
+
+  @override
+  void initState() {
+    super.initState();
+    Future.microtask(() => _checkExistingPhoto());
+  }
+
+  Future<void> _checkExistingPhoto() async {
+    try {
+      final customer = ref.read(journeyControllerProvider).customer;
+      if (customer != null && !customer.updateReadinessReasons.contains('LIVENESS_NOT_VERIFIED')) {
+        final customerApi = ref.read(customerApiProvider);
+        final res = await customerApi.getCustomerLivePhoto(customer.id);
+        if (res != null) {
+          final url = res['documentUrl'] ?? res['url'];
+          if (url != null) {
+            setState(() {
+              _imageUrl = url;
+              _isCompleted = true;
+            });
+          }
+        }
+      }
+    } catch (e) {
+      print('Failed to check existing photo: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingInitial = false;
+        });
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -397,20 +432,24 @@ class _LivePhotoScreenState extends ConsumerState<LivePhotoScreen> {
                   ),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(120),
-                    child: _isCameraInitialized && _cameraController != null
-                        ? CameraPreview(_cameraController!)
-                        : _imageFile != null
-                            ? (kIsWeb 
-                                ? Image.network(_imageFile!.path, fit: BoxFit.cover)
-                                : Image.file(File(_imageFile!.path), fit: BoxFit.cover))
-                            : const Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(Icons.face_retouching_natural_outlined, size: 64, color: AppTheme.primaryTeal),
-                                  SizedBox(height: 12),
-                                  Text('Position Face Here', style: TextStyle(fontSize: 13, color: AppTheme.textMuted)),
-                                ],
-                              ),
+                    child: _isLoadingInitial
+                        ? const Center(child: CircularProgressIndicator(color: AppTheme.primaryTeal))
+                        : _isCameraInitialized && _cameraController != null
+                            ? CameraPreview(_cameraController!)
+                            : _imageFile != null
+                                ? (kIsWeb 
+                                    ? Image.network(_imageFile!.path, fit: BoxFit.cover)
+                                    : Image.file(File(_imageFile!.path), fit: BoxFit.cover))
+                                : _imageUrl != null
+                                    ? Image.network(_imageUrl!, fit: BoxFit.cover)
+                                    : const Column(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Icon(Icons.face_retouching_natural_outlined, size: 64, color: AppTheme.primaryTeal),
+                                          SizedBox(height: 12),
+                                          Text('Position Face Here', style: TextStyle(fontSize: 13, color: AppTheme.textMuted)),
+                                        ],
+                                      ),
                   ),
                 ),
               ),

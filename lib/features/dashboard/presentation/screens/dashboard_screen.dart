@@ -501,6 +501,7 @@ class _DashboardScreenState
 
     return Column(
       children: [
+        const SizedBox(height: 33),
         Container(
           padding: const EdgeInsets.all(6),
           decoration: BoxDecoration(
@@ -1012,7 +1013,7 @@ class _DashboardScreenState
           ),
         ),
         const SizedBox(height: 16),
-        ...steps.asMap().entries.map(
+        ...steps.sublist(0, (completedCount + 1).clamp(0, steps.length)).asMap().entries.map(
           (entry) {
             final index = entry.key;
             final step = entry.value;
@@ -1020,7 +1021,8 @@ class _DashboardScreenState
             final isCurrent =
                 journeyState.targetRoute == step.route;
 
-            final isLast = index == steps.length - 1;
+            final visibleStepsCount = (completedCount + 1).clamp(0, steps.length);
+            final isLast = index == visibleStepsCount - 1;
 
             return _JourneyStepTile(
               step: step,
@@ -1630,7 +1632,7 @@ class _DashboardScreenState
           subtitle: 'Manage and review your application steps',
         ),
         const SizedBox(height: 13),
-        ...applicationSteps.map(
+        ...applicationSteps.sublist(0, (completedSteps + 1).clamp(0, applicationSteps.length)).map(
           (step) {
             final isCurrent =
                 journeyState.targetRoute == step.route;

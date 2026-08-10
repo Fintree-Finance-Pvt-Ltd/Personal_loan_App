@@ -160,7 +160,8 @@ class _ProfileDetailsScreenState extends ConsumerState<ProfileDetailsScreen> {
                   items: const [
                     DropdownMenuItem(value: 'OWNED', child: Text('Owned by Self / Parents')),
                     DropdownMenuItem(value: 'RENTED', child: Text('Rented')),
-                    DropdownMenuItem(value: 'PROVIDED_BY_EMPLOYER', child: Text('Company Provided')),
+                    DropdownMenuItem(value: 'FAMILY_OWNED', child: Text('Family Owned')),
+                    DropdownMenuItem(value: 'COMPANY_PROVIDED', child: Text('Company Provided')),
                   ],
                   onChanged: (val) {
                     if (val != null) setState(() => _residenceStatus = val);

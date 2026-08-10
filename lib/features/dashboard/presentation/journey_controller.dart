@@ -76,7 +76,9 @@ class JourneyController extends StateNotifier<JourneyState> {
         nextRoute = '/dashboard';
       } else if (customer.latestApplicationStatus == null || customer.latestApplicationStatus == 'DRAFT') {
         nextRoute = '/dashboard';
-      } else if (customer.latestApplicationStatus == 'SUBMITTED') {
+      } else if (customer.latestApplicationStatus == 'SUBMITTED' ||
+                 customer.latestApplicationStatus == 'PENDING_CREDIT_REVIEW' ||
+                 customer.latestApplicationStatus == 'LENDER_PRE_APPROVED') {
         nextRoute = '/application/status';
       } else if (customer.latestApplicationStatus == 'LENDER_APPROVED' && customer.latestLan != null) {
         final lan = customer.latestLan!;

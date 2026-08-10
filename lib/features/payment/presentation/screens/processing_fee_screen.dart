@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import '../../../../app/theme.dart';
 import '../../../../core/providers/providers.dart';
@@ -52,6 +53,82 @@ class _ProcessingFeeScreenState extends ConsumerState<ProcessingFeeScreen> {
       return 'Partner Lender ($lenderId)';
     }
     return 'Partner Lender';
+  }
+
+  String _convertIntentToUri(String url) {
+    if (!url.startsWith('intent://')) return url;
+
+    final intentIndex = url.indexOf('#Intent;');
+    String pathAndQuery = '';
+    String fragment = '';
+
+    if (intentIndex != -1) {
+      pathAndQuery = url.substring('intent://'.length, intentIndex);
+      fragment = url.substring(intentIndex);
+    } else {
+      pathAndQuery = url.substring('intent://'.length);
+    }
+
+    String scheme = 'upi';
+    final schemeMatch = RegExp(r'scheme=([^;]+)').firstMatch(fragment);
+    if (schemeMatch != null && schemeMatch.group(1) != null && schemeMatch.group(1)!.isNotEmpty) {
+      scheme = schemeMatch.group(1)!;
+    }
+
+    return '$scheme://$pathAndQuery';
+  }
+
+  Future<void> _launchExternalAppUrl(String originalUrl) async {
+    try {
+      final targetUrl = _convertIntentToUri(originalUrl);
+      debugPrint('[ProcessingFeeWebView] Intercepted deep link URL: $originalUrl -> Launching: $targetUrl');
+      final uri = Uri.parse(targetUrl);
+
+      bool launched = false;
+      try {
+        launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } catch (e) {
+        debugPrint('[ProcessingFeeWebView] External application launch failed: $e');
+      }
+
+      if (!launched) {
+        try {
+          launched = await launchUrl(uri, mode: LaunchMode.externalNonBrowserApplication);
+        } catch (e) {
+          debugPrint('[ProcessingFeeWebView] ExternalNonBrowser launch failed: $e');
+        }
+      }
+
+      if (!launched && originalUrl != targetUrl) {
+        try {
+          final origUri = Uri.parse(originalUrl);
+          launched = await launchUrl(origUri, mode: LaunchMode.externalApplication);
+        } catch (_) {}
+      }
+
+      if (!launched && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Could not open UPI app. Please ensure Google Pay, PhonePe, or Paytm is installed, or use "Pay by QR".',
+            ),
+            backgroundColor: AppTheme.warningOrange,
+            duration: Duration(seconds: 5),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('[ProcessingFeeWebView] Error launching deep link: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Unable to open payment app: $e'),
+            backgroundColor: AppTheme.errorRed,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    }
   }
 
   void _initiatePayment() async {
@@ -119,6 +196,11 @@ class _ProcessingFeeScreenState extends ConsumerState<ProcessingFeeScreen> {
         setState(() {
           _webViewController = WebViewController()
             ..setJavaScriptMode(JavaScriptMode.unrestricted)
+            ..setUserAgent(
+              'Mozilla/5.0 (Linux; Android 12; Pixel 6) '
+              'AppleWebKit/537.36 (KHTML, like Gecko) '
+              'Chrome/124.0.0.0 Mobile Safari/537.36',
+            )
             ..setNavigationDelegate(
               NavigationDelegate(
                 onPageFinished: (String url) {
@@ -132,18 +214,36 @@ class _ProcessingFeeScreenState extends ConsumerState<ProcessingFeeScreen> {
                   }
                 },
                 onNavigationRequest: (NavigationRequest request) {
-                  final url = request.url.toLowerCase();
-                  if (url.contains('success') || 
-                      url.contains('failure') || 
-                      url.contains('status') || 
-                      url.contains('result') || 
-                      url.contains('processing-fee') ||
-                      url.contains('details') ||
-                      url.contains('webhook')) {
+                  final url = request.url;
+                  final lowerUrl = url.toLowerCase();
+
+                  if (lowerUrl.contains('success') || 
+                      lowerUrl.contains('failure') || 
+                      lowerUrl.contains('status') || 
+                      lowerUrl.contains('result') || 
+                      lowerUrl.contains('processing-fee') ||
+                      lowerUrl.contains('details') ||
+                      lowerUrl.contains('webhook')) {
                     _verifyPaymentStatus();
                     return NavigationDecision.prevent;
                   }
+
+                  final uri = Uri.tryParse(url);
+                  if (uri != null) {
+                    final scheme = uri.scheme.toLowerCase();
+                    if (scheme != 'http' && scheme != 'https' && scheme != 'about' && scheme != 'data') {
+                      _launchExternalAppUrl(url);
+                      return NavigationDecision.prevent;
+                    }
+                  }
+
                   return NavigationDecision.navigate;
+                },
+                onWebResourceError: (WebResourceError error) {
+                  debugPrint('[ProcessingFeeWebView] Error ${error.errorCode}: ${error.description} @ ${error.url}');
+                  if (error.errorCode == -10 || error.description.contains('ERR_UNKNOWN_URL_SCHEME')) {
+                    return;
+                  }
                 },
               ),
             )

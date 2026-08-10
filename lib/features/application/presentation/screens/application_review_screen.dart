@@ -20,6 +20,7 @@ class ApplicationReviewScreen extends ConsumerStatefulWidget {
 class _ApplicationReviewScreenState extends ConsumerState<ApplicationReviewScreen> {
   bool _consent = true;
   bool _isSubmitting = false;
+  bool _isPolling = false;
   String? _errorMessage;
 
   void _submitApplication() async {
@@ -40,14 +41,66 @@ class _ApplicationReviewScreenState extends ConsumerState<ApplicationReviewScree
 
     try {
       final apiClient = ref.read(apiClientProvider);
+      
+      // 1. Submit the application
       await apiClient.post(
         '/customer/$customerId/submit-application',
         data: {'customerId': customerId},
       );
 
-      await ref.read(journeyControllerProvider.notifier).syncCustomerState();
-
+      // 2. Backend processes the lender decision asynchronously.
+      // Poll customer state until nextPermittedStep becomes PRE_APPROVAL_OFFER_SELECTION
+      // (meaning the lender pre-approved), or until timeout.
       if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+          _isPolling = true;
+        });
+      }
+
+      bool resolved = false;
+      const maxAttempts = 30; // 30 * 3s = 90 seconds max
+      int attempts = 0;
+
+      while (attempts < maxAttempts && mounted) {
+        await Future.delayed(const Duration(seconds: 3));
+        attempts++;
+
+        await ref.read(journeyControllerProvider.notifier).syncCustomerState();
+
+        if (!mounted) break;
+
+        final customer = ref.read(journeyControllerProvider).customer;
+        final nextStep = customer?.nextPermittedStep;
+        final appStatus = customer?.latestApplicationStatus;
+        final effectiveLan = customer?.latestLan ?? customer?.platformLan;
+
+        // Check for pre-approval offer selection step
+        if (nextStep == 'PRE_APPROVAL_OFFER_SELECTION' ||
+            appStatus == 'LENDER_PRE_APPROVED') {
+          resolved = true;
+          if (mounted) {
+            if (effectiveLan != null) {
+              context.go('/loan/$effectiveLan/offer?isPreApproval=true');
+            } else {
+              context.go('/application/status');
+            }
+          }
+          break;
+        }
+
+        // If it reaches a terminal state like rejected or lender approved without pre-approval
+        if (appStatus == 'LENDER_REJECTED' ||
+            appStatus == 'LENDER_APPROVED' ||
+            nextStep == 'INTEGRATION_SUPPORT') {
+          resolved = true;
+          if (mounted) context.go('/application/status');
+          break;
+        }
+      }
+
+      // Timed out - go to status screen anyway
+      if (!resolved && mounted) {
         context.go('/application/status');
       }
     } catch (e) {
@@ -55,17 +108,44 @@ class _ApplicationReviewScreenState extends ConsumerState<ApplicationReviewScree
         _errorMessage = e.toString();
       });
     } finally {
-      if (mounted) {
-        setState(() {
-          _isSubmitting = false;
-        });
-      }
+      if (mounted) setState(() => _isPolling = false);
     }
   }
+
 
   @override
   Widget build(BuildContext context) {
     final customer = ref.watch(journeyControllerProvider).customer;
+
+    // Show processing screen while waiting for lender decision
+    if (_isPolling) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Submitting Application')),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(32.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const CircularProgressIndicator(color: AppTheme.primaryTeal),
+                const SizedBox(height: 24),
+                const Text(
+                  'Your application is being processed',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppTheme.textDarkPrimary),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'We are securely completing your lender integration. This may take up to 90 seconds. Please do not close this screen.',
+                  style: TextStyle(fontSize: 14, color: AppTheme.textDarkSecondary),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -77,6 +157,7 @@ class _ApplicationReviewScreenState extends ConsumerState<ApplicationReviewScree
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+
               const AppStepper(
                 currentStep: 7,
                 totalSteps: 7,

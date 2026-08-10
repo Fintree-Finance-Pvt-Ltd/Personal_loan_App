@@ -48,6 +48,8 @@ class CustomerModel {
   final String? maskedAadhaar;
   final String? aadhaarVerifiedAt;
   final List<String> updateReadinessReasons;
+  final String? nextPermittedStep;
+  final String? platformLan;
 
   const CustomerModel({
     required this.id,
@@ -99,6 +101,8 @@ class CustomerModel {
     this.maskedAadhaar,
     this.aadhaarVerifiedAt,
     this.updateReadinessReasons = const [],
+    this.nextPermittedStep,
+    this.platformLan,
   });
 
   factory CustomerModel.fromJson(Map<String, dynamic> json) {
@@ -157,6 +161,8 @@ class CustomerModel {
       updateReadinessReasons: (json['journey']?['updateReadiness']?['reasons'] is List)
           ? List<String>.from(json['journey']['updateReadiness']['reasons'])
           : [],
+      nextPermittedStep: json['journey']?['nextPermittedStep'] as String?,
+      platformLan: json['journey']?['platformLan'] as String? ?? json['latestLan'] as String?,
     );
   }
 }

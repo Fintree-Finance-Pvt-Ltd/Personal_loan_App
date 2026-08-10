@@ -48,6 +48,17 @@ class _PanVerificationScreenState extends ConsumerState<PanVerificationScreen> {
       if (photo == null) return;
 
       final file = File(photo.path);
+      final fileSize = await file.length();
+      const maxSizeBytes = 15 * 1024 * 1024; // 15 MB
+
+      if (fileSize > maxSizeBytes) {
+        setState(() {
+          _panImageFile = null;
+          _errorMessage = 'Image size is too large. Maximum allowed size is 15 MB.';
+        });
+        return;
+      }
+
       setState(() {
         _panImageFile = file;
         _errorMessage = null;
@@ -62,6 +73,16 @@ class _PanVerificationScreenState extends ConsumerState<PanVerificationScreen> {
   }
 
   Future<void> _processPanOcr(File file) async {
+    final fileSize = await file.length();
+    const maxSizeBytes = 15 * 1024 * 1024; // 15 MB
+    if (fileSize > maxSizeBytes) {
+      setState(() {
+        _panImageFile = null;
+        _errorMessage = 'Image size is too large. Maximum allowed size is 15 MB.';
+      });
+      return;
+    }
+
     setState(() {
       _isOcrLoading = true;
       _errorMessage = null;
@@ -218,7 +239,7 @@ class _PanVerificationScreenState extends ConsumerState<PanVerificationScreen> {
                         ),
                         const SizedBox(height: 6),
                         const Text(
-                          'Scan your PAN card to auto-fill the field below, or enter details manually.',
+                          'Take a photo or upload a PAN card image (up to 15 MB) to auto-fill details, or enter manually.',
                           style: TextStyle(fontSize: 12, color: AppTheme.textDarkSecondary),
                         ),
                         const SizedBox(height: 16),
