@@ -8,6 +8,7 @@ import '../../../../core/utils/formatters.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_status_badge.dart';
 import '../../../../core/widgets/app_stepper.dart';
+import '../../../../core/widgets/app_header.dart';
 import '../../../dashboard/presentation/journey_controller.dart';
 
 class ApplicationReviewScreen extends ConsumerStatefulWidget {
@@ -120,7 +121,10 @@ class _ApplicationReviewScreenState extends ConsumerState<ApplicationReviewScree
     // Show processing screen while waiting for lender decision
     if (_isPolling) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Submitting Application')),
+        appBar: const AppHeader(
+          title: 'Submitting Application',
+          showBackButton: false,
+        ),
         body: Center(
           child: Padding(
             padding: const EdgeInsets.all(32.0),
@@ -148,8 +152,9 @@ class _ApplicationReviewScreenState extends ConsumerState<ApplicationReviewScree
     }
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Review Application'),
+      appBar: const AppHeader(
+        title: 'Review Application',
+        fallbackRoute: '/onboarding/address',
       ),
       body: SafeArea(
         child: SingleChildScrollView(

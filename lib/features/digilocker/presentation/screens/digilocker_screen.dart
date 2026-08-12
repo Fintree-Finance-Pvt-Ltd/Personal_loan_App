@@ -7,6 +7,7 @@ import '../../../../core/providers/providers.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_loader.dart';
 import '../../../../core/widgets/app_status_badge.dart';
+import '../../../../core/widgets/app_header.dart';
 import '../../../dashboard/presentation/journey_controller.dart';
 
 class DigilockerScreen extends ConsumerStatefulWidget {
@@ -197,17 +198,14 @@ class _DigilockerScreenState extends ConsumerState<DigilockerScreen> {
 
     if (_verificationUrl != null && !isVerified) {
       return Scaffold(
-        appBar: AppBar(
-          title: const Text('DigiLocker Verification'),
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back),
-            onPressed: () {
-              setState(() {
-                _verificationUrl = null;
-                _webViewController = null;
-              });
-            },
-          ),
+        appBar: AppHeader(
+          title: 'DigiLocker Verification',
+          onBackPressed: () {
+            setState(() {
+              _verificationUrl = null;
+              _webViewController = null;
+            });
+          },
         ),
         body: WebViewWidget(controller: _webViewController!),
       );
@@ -226,8 +224,9 @@ class _DigilockerScreenState extends ConsumerState<DigilockerScreen> {
         : (digilocker?.verifiedAt ?? 'Just now');
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('DigiLocker Aadhaar KYC'),
+      appBar: const AppHeader(
+        title: 'DigiLocker Aadhaar KYC',
+        fallbackRoute: '/onboarding/live-photo',
       ),
       body: SafeArea(
         child: SingleChildScrollView(

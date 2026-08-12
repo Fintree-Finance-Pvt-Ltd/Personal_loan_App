@@ -6,6 +6,7 @@ import '../../../../core/providers/providers.dart';
 import '../../../../core/utils/currency_utils.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_loader.dart';
+import '../../../../core/widgets/app_header.dart';
 import '../../../dashboard/presentation/journey_controller.dart';
 
 class DisbursalScreen extends ConsumerStatefulWidget {
@@ -61,7 +62,7 @@ class _DisbursalScreenState extends ConsumerState<DisbursalScreen> {
         (offer?.acceptedProcessingFee?.toDouble() ?? 0);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF3F8F8),
+      backgroundColor: AppTheme.backgroundLight,
       body: CustomScrollView(
         slivers: [
           // ── Header ──────────────────────────────────────────────────────
@@ -76,9 +77,9 @@ class _DisbursalScreenState extends ConsumerState<DisbursalScreen> {
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                     colors: [
-                      Color(0xFF033F45),
-                      Color(0xFF007C73),
-                      Color(0xFF13AA9B),
+                      AppTheme.primaryDeepTeal,
+                      AppTheme.primaryDarkTeal,
+                      AppTheme.primaryTeal,
                     ],
                   ),
                 ),
@@ -149,10 +150,8 @@ class _DisbursalScreenState extends ConsumerState<DisbursalScreen> {
                 ),
               ),
             ),
-            leading: IconButton(
-              icon: const Icon(Icons.arrow_back, color: Colors.white),
-              onPressed: () => context.pop(),
-            ),
+            leadingWidth: 56,
+            leading: const AppBackButton(isDark: true),
           ),
 
           // ── Body ────────────────────────────────────────────────────────

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../app/theme.dart';
 
+/// Custom primary & outlined button widget adhering to [AppTheme].
 class AppButton extends StatelessWidget {
   final String text;
   final VoidCallback? onPressed;

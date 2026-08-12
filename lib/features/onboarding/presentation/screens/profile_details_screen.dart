@@ -7,6 +7,7 @@ import '../../../../core/utils/validators.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_stepper.dart';
 import '../../../../core/widgets/app_text_field.dart';
+import '../../../../core/widgets/app_header.dart';
 import '../../../dashboard/presentation/journey_controller.dart';
 
 class ProfileDetailsScreen extends ConsumerStatefulWidget {
@@ -121,8 +122,9 @@ class _ProfileDetailsScreenState extends ConsumerState<ProfileDetailsScreen> {
     final isSalaried = _employmentType == 'SALARIED';
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Profile & Employment'),
+      appBar: const AppHeader(
+        title: 'Profile & Employment',
+        fallbackRoute: '/onboarding/basic-details',
       ),
       body: SafeArea(
         child: SingleChildScrollView(

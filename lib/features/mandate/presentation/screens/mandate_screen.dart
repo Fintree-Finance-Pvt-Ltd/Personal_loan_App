@@ -8,6 +8,7 @@ import '../../../../core/providers/providers.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_loader.dart';
 import '../../../../core/widgets/app_status_badge.dart';
+import '../../../../core/widgets/app_header.dart';
 import '../../../dashboard/presentation/journey_controller.dart';
 
 class MandateScreen extends ConsumerStatefulWidget {
@@ -295,19 +296,16 @@ class _MandateScreenState extends ConsumerState<MandateScreen> {
     // ── WebView Screen ────────────────────────────────────────────────────
     if (_mandateUrl != null && _webViewController != null && !isCompleted) {
       return Scaffold(
-        appBar: AppBar(
-          title: const Text('Mandate Authorization'),
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back),
-            onPressed: () {
-              setState(() {
-                _mandateUrl = null;
-                _webViewController = null;
-                _isWebViewLoading = false;
-                _errorMessage = null;
-              });
-            },
-          ),
+        appBar: AppHeader(
+          title: 'Mandate Authorization',
+          onBackPressed: () {
+            setState(() {
+              _mandateUrl = null;
+              _webViewController = null;
+              _isWebViewLoading = false;
+              _errorMessage = null;
+            });
+          },
           actions: [
             if (_isChecking)
               const Padding(
@@ -398,8 +396,9 @@ class _MandateScreenState extends ConsumerState<MandateScreen> {
 
     // ── Setup Screen ──────────────────────────────────────────────────────
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Mandate Setup'),
+      appBar: AppHeader(
+        title: 'Mandate Setup',
+        fallbackRoute: widget.lan.isNotEmpty ? '/loan/${widget.lan}/kfs' : '/dashboard',
       ),
       body: SafeArea(
         child: Padding(

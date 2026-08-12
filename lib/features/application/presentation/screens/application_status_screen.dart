@@ -5,6 +5,7 @@ import '../../../../app/theme.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_loader.dart';
 import '../../../../core/widgets/app_status_badge.dart';
+import '../../../../core/widgets/app_header.dart';
 import '../../../dashboard/presentation/journey_controller.dart';
 
 
@@ -105,8 +106,8 @@ class _ApplicationStatusScreenState extends ConsumerState<ApplicationStatusScree
     }
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Application Status'),
+      appBar: AppHeader(
+        title: 'Application Status',
         actions: [
           IconButton(icon: const Icon(Icons.refresh), onPressed: _refresh),
         ],

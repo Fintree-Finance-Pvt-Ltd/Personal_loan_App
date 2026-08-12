@@ -3,12 +3,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:webview_flutter/webview_flutter.dart';
 import '../../../../app/env.dart';
 import '../../../../app/theme.dart';
 import '../../../../core/providers/providers.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_loader.dart';
 import '../../../../core/widgets/app_status_badge.dart';
+import '../../../../core/widgets/app_header.dart';
 import '../../../dashboard/presentation/journey_controller.dart';
 
 class EsignScreen extends ConsumerStatefulWidget {
@@ -96,6 +98,51 @@ class _EsignScreenState extends ConsumerState<EsignScreen> {
     }
   }
 
+  void _showDocumentPreviewModal(String docUrl) {
+    final controller = WebViewController()
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..loadRequest(Uri.parse(docUrl));
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        height: MediaQuery.of(context).size.height * 0.85,
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: const BoxDecoration(
+                border: Border(bottom: BorderSide(color: AppTheme.borderLight)),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Loan Agreement Document',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded),
+                    onPressed: () => Navigator.of(ctx).pop(),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: WebViewWidget(controller: controller),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _viewDocument() async {
     setState(() {
       _errorMessage = null;
@@ -110,15 +157,26 @@ class _EsignScreenState extends ConsumerState<EsignScreen> {
         data: {},
       );
 
-      // 2. Resolve token & open document URL
+      // 2. Resolve token & construct document URL
       final storage = ref.read(secureStorageProvider);
       final token = await storage.getAuthToken();
       final baseUrl = currentEnvironment.apiBaseUrl;
       final docUrl = '$baseUrl/customer/loans/${widget.lan}/electronic-sign/document?token=${Uri.encodeComponent(token ?? '')}';
 
       final uri = Uri.parse(docUrl);
-      if (await canLaunchUrl(uri)) {
+
+      // Launch URL directly (bypassing canLaunchUrl which fails on Android 11+)
+      try {
         await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } catch (_) {
+        try {
+          await launchUrl(uri, mode: LaunchMode.inAppBrowserView);
+        } catch (_) {}
+      }
+
+      // Also show in-app preview modal
+      if (mounted) {
+        _showDocumentPreviewModal(docUrl);
       }
 
       if (mounted) {
@@ -259,8 +317,12 @@ class _EsignScreenState extends ConsumerState<EsignScreen> {
       final downloadUrl = '$baseUrl/customer/loans/${widget.lan}/electronic-sign/$endpoint?token=${Uri.encodeComponent(token ?? '')}';
 
       final uri = Uri.parse(downloadUrl);
-      if (await canLaunchUrl(uri)) {
+      try {
         await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } catch (_) {
+        try {
+          await launchUrl(uri, mode: LaunchMode.inAppBrowserView);
+        } catch (_) {}
       }
     } catch (e) {
       if (mounted) {
@@ -278,14 +340,15 @@ class _EsignScreenState extends ConsumerState<EsignScreen> {
 
     if (_isCheckingStatus) {
       return Scaffold(
-        appBar: AppBar(title: const Text('e-Sign Loan Agreement')),
+        appBar: const AppHeader(title: 'e-Sign Loan Agreement'),
         body: const AppLoader(message: 'Checking agreement e-Sign status...'),
       );
     }
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('e-Sign Loan Agreement'),
+      appBar: AppHeader(
+        title: 'e-Sign Loan Agreement',
+        fallbackRoute: widget.lan.isNotEmpty ? '/loan/${widget.lan}/mandate' : '/dashboard',
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -354,6 +417,9 @@ class _EsignScreenState extends ConsumerState<EsignScreen> {
                         onPressed: () => _downloadDocument('accepted-document'),
                         icon: const Icon(Icons.download_rounded, size: 18),
                         label: const Text('Accepted Agreement', style: TextStyle(fontSize: 12)),
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size(0, 44),
+                        ),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -362,6 +428,9 @@ class _EsignScreenState extends ConsumerState<EsignScreen> {
                         onPressed: () => _downloadDocument('audit-certificate'),
                         icon: const Icon(Icons.verified_user_rounded, size: 18),
                         label: const Text('Audit Certificate', style: TextStyle(fontSize: 12)),
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size(0, 44),
+                        ),
                       ),
                     ),
                   ],
@@ -393,7 +462,10 @@ class _EsignScreenState extends ConsumerState<EsignScreen> {
                         ),
                         const SizedBox(height: 16),
 
-                        Row(
+                        Wrap(
+                          spacing: 12,
+                          runSpacing: 12,
+                          crossAxisAlignment: WrapCrossAlignment.center,
                           children: [
                             OutlinedButton.icon(
                               onPressed: _viewDocument,
@@ -402,9 +474,9 @@ class _EsignScreenState extends ConsumerState<EsignScreen> {
                               style: OutlinedButton.styleFrom(
                                 foregroundColor: AppTheme.primaryTeal,
                                 side: const BorderSide(color: AppTheme.primaryTeal),
+                                minimumSize: const Size(0, 44),
                               ),
                             ),
-                            const SizedBox(width: 12),
                             if (_documentViewed)
                               const AppStatusBadge(
                                 status: 'VERIFIED',

@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
@@ -12,6 +13,7 @@ import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_status_badge.dart';
 import '../../../../core/widgets/app_stepper.dart';
 import '../../../../core/widgets/app_text_field.dart';
+import '../../../../core/widgets/app_header.dart';
 import '../../../dashboard/presentation/journey_controller.dart';
 
 class PanVerificationScreen extends ConsumerStatefulWidget {
@@ -24,6 +26,7 @@ class PanVerificationScreen extends ConsumerStatefulWidget {
 class _PanVerificationScreenState extends ConsumerState<PanVerificationScreen> {
   final _formKey = GlobalKey<FormState>();
   final _panController = TextEditingController();
+  final _fullNameController = TextEditingController();
   bool _isLoading = false;
   String? _errorMessage;
   Map<String, dynamic>? _verifiedResult;
@@ -32,23 +35,67 @@ class _PanVerificationScreenState extends ConsumerState<PanVerificationScreen> {
   final ImagePicker _imagePicker = ImagePicker();
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final cust = ref.read(journeyControllerProvider).customer;
+      if (cust?.panNumber != null && cust!.panNumber!.isNotEmpty) {
+        _panController.text = cust.panNumber!.toUpperCase();
+      }
+      if (cust?.fullName != null && cust!.fullName!.isNotEmpty) {
+        _fullNameController.text = cust.fullName!;
+      }
+    });
+  }
+
+  @override
   void dispose() {
     _panController.dispose();
+    _fullNameController.dispose();
     super.dispose();
+  }
+
+  String _extractErrorMessage(dynamic e) {
+    if (e is DioException) {
+      if (e.response?.data != null) {
+        final data = e.response!.data;
+        if (data is Map) {
+          if (data['error'] is Map && data['error']['message'] != null) {
+            return data['error']['message'].toString();
+          }
+          if (data['message'] != null) {
+            return data['message'].toString();
+          }
+        }
+      }
+      if (e.message != null && e.message!.isNotEmpty) {
+        return e.message!;
+      }
+    }
+    final str = e.toString();
+    if (str.startsWith('Exception: ')) {
+      return str.substring(11);
+    }
+    return str;
   }
 
   Future<void> _pickPanImage(ImageSource source) async {
     try {
+      // Compress image on pick/capture (70% quality, max 1280x1280)
       final XFile? photo = await _imagePicker.pickImage(
         source: source,
         preferredCameraDevice: CameraDevice.rear,
-        imageQuality: 85,
+        imageQuality: 70,
+        maxWidth: 1280,
+        maxHeight: 1280,
       );
 
       if (photo == null) return;
 
       final file = File(photo.path);
       final fileSize = await file.length();
+      debugPrint('[PanOCR] Compressed image size: ${(fileSize / 1024).toStringAsFixed(1)} KB');
+
       const maxSizeBytes = 15 * 1024 * 1024; // 15 MB
 
       if (fileSize > maxSizeBytes) {
@@ -67,7 +114,7 @@ class _PanVerificationScreenState extends ConsumerState<PanVerificationScreen> {
       await _processPanOcr(file);
     } catch (e) {
       setState(() {
-        _errorMessage = 'Failed to select image: $e';
+        _errorMessage = _extractErrorMessage(e);
       });
     }
   }
@@ -102,18 +149,23 @@ class _PanVerificationScreenState extends ConsumerState<PanVerificationScreen> {
 
       final data = res['data'] ?? res;
       final extractedPan = data['panNumber'] as String?;
+      final extractedName = data['fullName'] ?? data['registeredName'] ?? data['name'] ?? data['panName'];
+
       if (extractedPan != null && extractedPan.isNotEmpty) {
         setState(() {
           _panController.text = extractedPan.toUpperCase();
+          if (extractedName != null && extractedName.toString().isNotEmpty) {
+            _fullNameController.text = extractedName.toString();
+          }
         });
       } else {
         setState(() {
-          _errorMessage = 'Could not extract PAN number. Please verify or type it manually.';
+          _errorMessage = 'Could not extract PAN number from image. Please enter your PAN number manually.';
         });
       }
     } catch (e) {
       setState(() {
-        _errorMessage = 'OCR extraction failed: $e. You can still enter your PAN details manually.';
+        _errorMessage = 'PAN OCR Failed: ${_extractErrorMessage(e)}';
       });
     } finally {
       if (mounted) {
@@ -141,18 +193,36 @@ class _PanVerificationScreenState extends ConsumerState<PanVerificationScreen> {
           data: {
             'customerId': customerId,
             'panNumber': _panController.text.trim().toUpperCase(),
+            if (_fullNameController.text.trim().isNotEmpty)
+              'fullName': _fullNameController.text.trim(),
           },
         );
 
+        final resData = res['data'] ?? res;
+        final nestedData = (resData is Map<String, dynamic> && resData['data'] is Map<String, dynamic>)
+            ? resData['data']
+            : resData;
+        final verification = (nestedData is Map<String, dynamic> && nestedData['verification'] is Map<String, dynamic>)
+            ? nestedData['verification']
+            : null;
+
+        final verifiedName = verification?['fullName'] ??
+            nestedData?['fullName'] ??
+            resData?['fullName'] ??
+            verification?['name'];
+
         setState(() {
-          _verifiedResult = res['data'] ?? res;
+          _verifiedResult = resData is Map<String, dynamic> ? resData : null;
+          if (verifiedName != null && verifiedName.toString().isNotEmpty) {
+            _fullNameController.text = verifiedName.toString();
+          }
         });
 
         await ref.read(journeyControllerProvider.notifier).syncCustomerState();
       }
     } catch (e) {
       setState(() {
-        _errorMessage = e.toString();
+        _errorMessage = 'PAN Verification Failed: ${_extractErrorMessage(e)}';
       });
     } finally {
       if (mounted) {
@@ -173,8 +243,8 @@ class _PanVerificationScreenState extends ConsumerState<PanVerificationScreen> {
     final isAlreadyVerified = customer?.panVerified == true || _verifiedResult != null;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('PAN Verification'),
+      appBar: const AppHeader(
+        title: 'PAN Verification',
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -389,6 +459,18 @@ class _PanVerificationScreenState extends ConsumerState<PanVerificationScreen> {
                   textCapitalization: TextCapitalization.characters,
                   readOnly: isAlreadyVerified,
                   prefix: const Icon(Icons.badge_outlined, size: 20),
+                  inputFormatters: [
+                    UpperCaseTextFormatter(),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                AppTextField(
+                  label: 'Full Name (as per PAN)',
+                  hint: 'Enter full name as per PAN card',
+                  controller: _fullNameController,
+                  textCapitalization: TextCapitalization.words,
+                  readOnly: isAlreadyVerified,
+                  prefix: const Icon(Icons.person_outline_rounded, size: 20),
                 ),
                 if (_errorMessage != null) ...[
                   const SizedBox(height: 16),
@@ -432,9 +514,14 @@ class _PanVerificationScreenState extends ConsumerState<PanVerificationScreen> {
                           ),
                           const Divider(height: 24),
                           _buildDetailRow('Masked PAN', Formatters.maskPan(customer?.panNumber ?? _panController.text)),
-                          _buildDetailRow('Verified Name', customer?.fullName ?? _verifiedResult?['fullName'] ?? 'N/A'),
-                          _buildDetailRow('Date of Birth', customer?.dateOfBirth ?? _verifiedResult?['dateOfBirth'] ?? 'N/A'),
-                          _buildDetailRow('Gender', customer?.gender ?? _verifiedResult?['gender'] ?? 'N/A'),
+                          _buildDetailRow(
+                            'Verified Name',
+                            _fullNameController.text.trim().isNotEmpty
+                                ? _fullNameController.text.trim()
+                                : (customer?.fullName ?? _getVerifiedField('fullName') ?? 'N/A'),
+                          ),
+                          _buildDetailRow('Date of Birth', customer?.dateOfBirth ?? _getVerifiedField('dateOfBirth') ?? 'N/A'),
+                          _buildDetailRow('Gender', customer?.gender ?? _getVerifiedField('gender') ?? 'N/A'),
                         ],
                       ),
                     ),
@@ -460,6 +547,23 @@ class _PanVerificationScreenState extends ConsumerState<PanVerificationScreen> {
         ),
       ),
     );
+  }
+
+  String? _getVerifiedField(String field) {
+    if (_verifiedResult == null) return null;
+    final resData = _verifiedResult!['data'] ?? _verifiedResult;
+    final nestedData = (resData is Map<String, dynamic> && resData['data'] is Map<String, dynamic>)
+        ? resData['data']
+        : resData;
+    final verification = (nestedData is Map<String, dynamic> && nestedData['verification'] is Map<String, dynamic>)
+        ? nestedData['verification']
+        : null;
+
+    final val = verification?[field] ??
+        (nestedData is Map<String, dynamic> ? nestedData[field] : null) ??
+        (_verifiedResult?[field]);
+
+    return val?.toString();
   }
 
   Widget _buildDetailRow(String label, String value) {

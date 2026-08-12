@@ -6,10 +6,12 @@ import 'package:dio/dio.dart';
 import 'package:http_parser/http_parser.dart';
 import '../../../../app/theme.dart';
 import '../../../../core/providers/providers.dart';
+import '../../../../core/utils/formatters.dart';
 import '../../../../core/utils/validators.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_stepper.dart';
 import '../../../../core/widgets/app_text_field.dart';
+import '../../../../core/widgets/app_header.dart';
 import '../../../dashboard/presentation/journey_controller.dart';
 
 class BasicDetailsScreen extends ConsumerStatefulWidget {
@@ -409,8 +411,9 @@ class _BasicDetailsScreenState extends ConsumerState<BasicDetailsScreen> {
     final isPanVerified = customer?.panVerified == true;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Personal Details'),
+      appBar: const AppHeader(
+        title: 'Personal Details',
+        fallbackRoute: '/onboarding/pan',
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -455,6 +458,9 @@ class _BasicDetailsScreenState extends ConsumerState<BasicDetailsScreen> {
                   textCapitalization: TextCapitalization.characters,
                   prefix: const Icon(Icons.credit_card_outlined, size: 20),
                   validator: Validators.validatePan,
+                  inputFormatters: [
+                    UpperCaseTextFormatter(),
+                  ],
                 ),
                 const SizedBox(height: 16),
                 if (!isPanVerified) ...[

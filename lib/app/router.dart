@@ -17,6 +17,7 @@ import '../features/mandate/presentation/screens/mandate_screen.dart';
 import '../features/esign/presentation/screens/esign_screen.dart';
 import '../features/disbursal/presentation/screens/disbursal_screen.dart';
 import '../features/loan_details/presentation/screens/loan_details_screen.dart';
+import '../features/repayment/presentation/screens/repayment_screen.dart';
 import '../features/dashboard/presentation/screens/dashboard_screen.dart';
 import '../features/dashboard/presentation/screens/splash_screen.dart';
 
@@ -113,6 +114,10 @@ final appRouter = GoRouter(
       path: '/loan/:lan/loan-details',
       builder: (context, state) =>
           LoanDetailsScreen(lan: state.pathParameters['lan'] ?? ''),
+    ),
+    GoRoute(
+      path: '/loan/:lan/repay',
+      builder: (context, state) => RepaymentScreen(lan: state.pathParameters['lan'] ?? ''),
     ),
     GoRoute(
       path: '/dashboard',

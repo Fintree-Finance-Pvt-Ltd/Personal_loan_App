@@ -6,6 +6,7 @@ import '../../../../core/providers/providers.dart';
 import '../../../../core/utils/validators.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_text_field.dart';
+import '../../../../core/widgets/app_header.dart';
 import '../../../dashboard/presentation/journey_controller.dart';
 
 class AddressScreen extends ConsumerStatefulWidget {
@@ -140,8 +141,9 @@ class _AddressScreenState extends ConsumerState<AddressScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Address Confirmation'),
+      appBar: const AppHeader(
+        title: 'Address Confirmation',
+        fallbackRoute: '/onboarding/digilocker',
       ),
       body: SafeArea(
         child: SingleChildScrollView(

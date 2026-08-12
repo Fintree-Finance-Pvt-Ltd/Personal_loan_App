@@ -7,6 +7,7 @@ import '../../../../core/utils/currency_utils.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_loader.dart';
 import '../../../../core/widgets/app_status_badge.dart';
+import '../../../../core/widgets/app_header.dart';
 import '../../../dashboard/presentation/journey_controller.dart';
 
 class LoanOfferScreen extends ConsumerStatefulWidget {
@@ -167,7 +168,7 @@ class _LoanOfferScreenState extends ConsumerState<LoanOfferScreen> {
 
     if (_isLoadingPreApproval || journeyState.isLoading) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Loan Offer')),
+        appBar: const AppHeader(title: 'Loan Offer'),
         body: const AppLoader(message: 'Loading loan offer...'),
       );
     }
@@ -183,7 +184,7 @@ class _LoanOfferScreenState extends ConsumerState<LoanOfferScreen> {
     if (isPreApproval) {
       if (_preApprovalOffer == null) {
         return Scaffold(
-          appBar: AppBar(title: const Text('Loan Offer')),
+          appBar: const AppHeader(title: 'Loan Offer'),
           body: const Center(child: Text('Offer not available.')),
         );
       }
@@ -198,7 +199,7 @@ class _LoanOfferScreenState extends ConsumerState<LoanOfferScreen> {
       
       if (journey == null || offer == null) {
         return Scaffold(
-          appBar: AppBar(title: const Text('Loan Offer')),
+          appBar: const AppHeader(title: 'Loan Offer'),
           body: const AppLoader(message: 'Loading approved loan offer...'),
         );
       }
@@ -216,8 +217,8 @@ class _LoanOfferScreenState extends ConsumerState<LoanOfferScreen> {
     final netDisbursal = amount - (processingFee + gst);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Loan Offer Summary'),
+      appBar: const AppHeader(
+        title: 'Loan Offer Summary',
       ),
       body: SafeArea(
         child: SingleChildScrollView(

@@ -9,6 +9,7 @@ import '../../../../core/providers/providers.dart';
 import '../../../../core/utils/currency_utils.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_loader.dart';
+import '../../../../core/widgets/app_header.dart';
 import '../../../dashboard/presentation/journey_controller.dart';
 
 class ProcessingFeeScreen extends ConsumerStatefulWidget {
@@ -134,6 +135,17 @@ class _ProcessingFeeScreenState extends ConsumerState<ProcessingFeeScreen> {
   void _initiatePayment() async {
     final customer = ref.read(journeyControllerProvider).customer;
     if (customer == null) return;
+
+    final isPanVerified = customer.panVerified == true;
+    final isBasicDetailsDone = customer.fullName != null &&
+        customer.fullName!.trim().isNotEmpty &&
+        customer.residentialPincode != null &&
+        customer.residentialPincode!.trim().isNotEmpty;
+    
+    if (!isPanVerified || !isBasicDetailsDone) {
+      debugPrint('[ProcessingFee] Blocked: Basic information is incomplete.');
+      return;
+    }
 
     if (customer.assessmentFeePaid) {
       if (mounted) {
@@ -321,6 +333,95 @@ class _ProcessingFeeScreenState extends ConsumerState<ProcessingFeeScreen> {
   @override
   Widget build(BuildContext context) {
     final customer = ref.watch(journeyControllerProvider).customer;
+
+    final isPanVerified = customer?.panVerified == true;
+    final isBasicDetailsDone = customer?.fullName != null &&
+        customer!.fullName!.trim().isNotEmpty &&
+        customer.residentialPincode != null &&
+        customer.residentialPincode!.trim().isNotEmpty;
+    final isProfileDone = customer?.employmentType != null &&
+        customer!.employmentType!.trim().isNotEmpty;
+
+    final isBasicInfoComplete = isPanVerified && isBasicDetailsDone && isProfileDone;
+
+    if (!isBasicInfoComplete) {
+      return Scaffold(
+        appBar: const AppHeader(
+          title: 'Assessment Fee Payment',
+        ),
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: AppTheme.warningOrange.withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.lock_outline_rounded,
+                    size: 60,
+                    color: AppTheme.warningOrange,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                const Text(
+                  'Basic Information Incomplete',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.textDarkPrimary,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                const Text(
+                  'Please complete your PAN verification, personal basic details, and profile information before accessing the assessment fee payment page.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: AppTheme.textDarkSecondary,
+                    height: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 32),
+                SizedBox(
+                  width: double.infinity,
+                  child: AppButton(
+                    text: 'Complete Basic Information',
+                    onPressed: () {
+                      if (!isPanVerified) {
+                        context.go('/onboarding/pan');
+                      } else if (!isBasicDetailsDone) {
+                        context.go('/onboarding/basic-details');
+                      } else {
+                        context.go('/onboarding/profile');
+                      }
+                    },
+                    icon: Icons.arrow_forward_rounded,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextButton(
+                  onPressed: () => context.go('/dashboard'),
+                  child: const Text(
+                    'Return to Dashboard',
+                    style: TextStyle(
+                      color: AppTheme.primaryTeal,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     final eligibility = widget.eligibilityData;
     final assessmentFee = eligibility?['data']?['assessmentFee'] ?? eligibility?['assessmentFee'] ?? customer?.assessmentFee;
     
@@ -403,8 +504,8 @@ class _ProcessingFeeScreenState extends ConsumerState<ProcessingFeeScreen> {
     }
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Processing Fee Payment'),
+      appBar: const AppHeader(
+        title: 'Processing Fee Payment',
       ),
       body: SafeArea(
         child: _paymentUrl != null && _webViewController != null

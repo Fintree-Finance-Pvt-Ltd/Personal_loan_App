@@ -17,6 +17,7 @@ import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_loader.dart';
 import '../../../../core/widgets/app_status_badge.dart';
 import '../../../../core/widgets/app_stepper.dart';
+import '../../../../core/widgets/app_header.dart';
 import '../../../dashboard/presentation/journey_controller.dart';
 
 class LivePhotoScreen extends ConsumerStatefulWidget {
@@ -387,8 +388,9 @@ class _LivePhotoScreenState extends ConsumerState<LivePhotoScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Live Photograph'),
+      appBar: const AppHeader(
+        title: 'Live Photograph',
+        fallbackRoute: '/onboarding/profile',
       ),
       body: SafeArea(
         child: SingleChildScrollView(

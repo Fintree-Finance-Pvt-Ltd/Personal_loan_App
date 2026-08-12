@@ -162,7 +162,7 @@ class _DashboardScreenState
     );
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF3F8F8),
+      backgroundColor: AppTheme.backgroundLight,
       body: RefreshIndicator(
         color: AppTheme.primaryTeal,
         backgroundColor: Colors.white,
@@ -190,7 +190,7 @@ class _DashboardScreenState
                 delegate: SliverChildListDelegate(
                   [
                     Transform.translate(
-                      offset: const Offset(0, -30),
+                      offset: const Offset(0, -20),
                       child: _buildDashboardBody(
                         journeyState: journeyState,
                         customer: customer,
@@ -220,19 +220,19 @@ class _DashboardScreenState
         : 'C';
 
     return Container(
-      height: 285,
+      height: 225,
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            Color(0xFF033F45),
-            Color(0xFF007C73),
-            Color(0xFF13AA9B),
+            AppTheme.primaryDeepTeal,
+            AppTheme.primaryDarkTeal,
+            AppTheme.primaryTeal,
           ],
         ),
         borderRadius: BorderRadius.vertical(
-          bottom: Radius.circular(38),
+          bottom: Radius.circular(34),
         ),
       ),
       child: Stack(
@@ -246,7 +246,7 @@ class _DashboardScreenState
             ),
           ),
           Positioned(
-            top: 135,
+            top: 100,
             left: -70,
             child: _BackgroundCircle(
               size: 160,
@@ -254,7 +254,7 @@ class _DashboardScreenState
             ),
           ),
           Positioned(
-            top: 90,
+            top: 70,
             right: 70,
             child: _BackgroundCircle(
               size: 32,
@@ -265,32 +265,30 @@ class _DashboardScreenState
             bottom: false,
             child: Padding(
               padding: const EdgeInsets.fromLTRB(
-                20,
-                12,
-                20,
-                48,
+                18,
+                8,
+                18,
+                38,
               ),
               child: Column(
                 children: [
                   Row(
                     children: [
+                      // Prominent Large Logo Box
                       Container(
-                        height: 48,
-                        constraints: const BoxConstraints(
-                          minWidth: 54,
-                        ),
+                        height: 52,
+                        width: 145,
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
+                          horizontal: 14,
                           vertical: 8,
                         ),
                         decoration: BoxDecoration(
                           color: Colors.white,
-                          borderRadius: BorderRadius.circular(15),
+                          borderRadius: BorderRadius.circular(16),
                           boxShadow: [
                             BoxShadow(
-                              color:
-                                  Colors.black.withOpacity(0.13),
-                              blurRadius: 18,
+                              color: Colors.black.withOpacity(0.12),
+                              blurRadius: 20,
                               offset: const Offset(0, 8),
                             ),
                           ],
@@ -1177,7 +1175,14 @@ class _DashboardScreenState
           ),
           const SizedBox(height: 16),
           AppButton(
-            text: 'View Loan Details',
+            text: 'Pay EMI / Repay Loan',
+            onPressed: () => _openRoute('/loan/$lan/repay'),
+            icon: Icons.account_balance_wallet_rounded,
+          ),
+          const SizedBox(height: 10),
+          AppButton(
+            text: 'View Loan Details & RPS',
+            isOutlined: true,
             onPressed: () => _openRoute('/loan/$lan/loan-details'),
             icon: Icons.receipt_long_rounded,
           ),
@@ -1286,15 +1291,6 @@ class _DashboardScreenState
       ),
       _ApplicationStep(
         number: 3,
-        title: 'Lender & Assessment fee',
-        subtitle: 'Allocated lender and processing fee payment',
-        icon: Icons.payment_rounded,
-        route: '/payment/processing-fee',
-        isCompleted:
-            applicationSubmitted || assessmentFeePaid,
-      ),
-      _ApplicationStep(
-        number: 4,
         title: 'Profile and income',
         subtitle:
             'Employment, income and organisation details',
@@ -1302,6 +1298,15 @@ class _DashboardScreenState
         route: '/onboarding/profile',
         isCompleted:
             applicationSubmitted || profileComplete,
+      ),
+      _ApplicationStep(
+        number: 4,
+        title: 'Lender & Assessment fee',
+        subtitle: 'Allocated lender and processing fee payment',
+        icon: Icons.payment_rounded,
+        route: '/payment/processing-fee',
+        isCompleted:
+            applicationSubmitted || assessmentFeePaid,
       ),
       _ApplicationStep(
         number: 5,

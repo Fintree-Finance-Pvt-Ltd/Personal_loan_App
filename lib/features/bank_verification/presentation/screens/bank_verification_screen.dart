@@ -8,6 +8,7 @@ import '../../../../core/utils/validators.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_status_badge.dart';
 import '../../../../core/widgets/app_text_field.dart';
+import '../../../../core/widgets/app_header.dart';
 import '../../../dashboard/presentation/journey_controller.dart';
 
 class BankVerificationScreen extends ConsumerStatefulWidget {
@@ -98,8 +99,9 @@ class _BankVerificationScreenState extends ConsumerState<BankVerificationScreen>
     final isVerified = bank?.verified == true;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Bank Account Verification'),
+      appBar: AppHeader(
+        title: 'Bank Account Verification',
+        fallbackRoute: widget.lan.isNotEmpty ? '/loan/${widget.lan}/address' : '/dashboard',
       ),
       body: SafeArea(
         child: SingleChildScrollView(
