@@ -20,6 +20,7 @@ import '../features/loan_details/presentation/screens/loan_details_screen.dart';
 import '../features/repayment/presentation/screens/repayment_screen.dart';
 import '../features/dashboard/presentation/screens/dashboard_screen.dart';
 import '../features/dashboard/presentation/screens/splash_screen.dart';
+import '../features/account_aggregator/presentation/screens/account_aggregator_screen.dart';
 
 final appRouter = GoRouter(
   initialLocation: '/splash',
@@ -61,6 +62,10 @@ final appRouter = GoRouter(
       builder: (context, state) => const AddressScreen(lan: ''),
     ),
     GoRoute(
+      path: '/onboarding/account-aggregator',
+      builder: (context, state) => const AccountAggregatorScreen(lan: ''),
+    ),
+    GoRoute(
       path: '/onboarding/offer',
       builder: (context, state) => const LoanOfferScreen(lan: '', isOnboarding: true),
     ),
@@ -89,6 +94,10 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/loan/:lan/address',
       builder: (context, state) => AddressScreen(lan: state.pathParameters['lan'] ?? ''),
+    ),
+    GoRoute(
+      path: '/loan/:lan/account-aggregator',
+      builder: (context, state) => AccountAggregatorScreen(lan: state.pathParameters['lan'] ?? ''),
     ),
     GoRoute(
       path: '/loan/:lan/bank',

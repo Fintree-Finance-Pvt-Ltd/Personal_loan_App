@@ -399,9 +399,9 @@ class _LivePhotoScreenState extends ConsumerState<LivePhotoScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const AppStepper(
-                currentStep: 4,
+                currentStep: 5,
                 totalSteps: 7,
-                stepTitles: ['PAN Verification', 'Personal Details', 'Profile & Income', 'Photo & Liveness', 'DigiLocker KYC', 'Address Confirmation', 'Review & Submit'],
+                stepTitles: ['PAN Verification', 'Personal Details', 'Assessment Fee', 'Profile & Income', 'Photo & Liveness', 'DigiLocker KYC', 'Account Aggregator'],
               ),
               const SizedBox(height: 24),
               const Text(

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:dio/dio.dart';
 import 'api_client.dart';
+import '../constants/api_endpoints.dart';
 import '../storage/secure_storage_service.dart';
 
 class CustomerApi {
@@ -531,6 +532,30 @@ class CustomerApi {
       '/customer/loans/$lan/repay/confirm',
       data: payload,
     );
+    return _extractData(res);
+  }
+
+  Future<Map<String, dynamic>> initiateAccountAggregator(String lan) async {
+    print('[AA CLIENT] [CALL] initiateAccountAggregator - endpoint for lan: $lan');
+    final endpoint = ApiEndpoints.initiateAccountAggregator(lan);
+    final res = await _apiClient.post(endpoint, data: const {});
+    print('[AA CLIENT] [RESPONSE] initiateAccountAggregator - response: $res');
+    return _extractData(res);
+  }
+
+  Future<Map<String, dynamic>> getAccountAggregatorStatus(String lan) async {
+    print('[AA CLIENT] [CALL] getAccountAggregatorStatus - endpoint for lan: $lan');
+    final endpoint = ApiEndpoints.accountAggregatorStatus(lan);
+    final res = await _apiClient.get(endpoint);
+    print('[AA CLIENT] [RESPONSE] getAccountAggregatorStatus - response: $res');
+    return _extractData(res);
+  }
+
+  Future<Map<String, dynamic>> refreshAccountAggregatorStatus(String lan) async {
+    print('[AA CLIENT] [CALL] refreshAccountAggregatorStatus - endpoint for lan: $lan');
+    final endpoint = ApiEndpoints.refreshAccountAggregatorStatus(lan);
+    final res = await _apiClient.post(endpoint, data: const {});
+    print('[AA CLIENT] [RESPONSE] refreshAccountAggregatorStatus - response: $res');
     return _extractData(res);
   }
 

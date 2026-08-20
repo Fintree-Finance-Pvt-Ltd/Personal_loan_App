@@ -34,11 +34,16 @@ class _ApplicationStatusScreenState extends ConsumerState<ApplicationStatusScree
   void _maybeStartPolling() {
     final customer = ref.read(journeyControllerProvider).customer;
     final nextStep = customer?.nextPermittedStep;
-    // If backend says "lender is deciding", auto-poll until resolved
+    final appStatus = customer?.latestApplicationStatus;
+    
+    // Auto-poll if lender decision is processing or pending credit review
     if (nextStep == 'LENDER_DECISION_PROCESSING' ||
         nextStep == 'LENDER_CREATE_PROCESSING' ||
         nextStep == 'LENDER_UPDATE_PROCESSING' ||
-        nextStep == 'APPROVAL_PROCESSING') {
+        nextStep == 'APPROVAL_PROCESSING' ||
+        appStatus == 'SUBMITTED' ||
+        appStatus == 'PENDING_CREDIT_REVIEW' ||
+        appStatus == 'LENDER_REVIEW') {
       if (!_isAutoPolling) _startAutoPolling();
     }
   }
@@ -47,7 +52,7 @@ class _ApplicationStatusScreenState extends ConsumerState<ApplicationStatusScree
     if (!mounted) return;
     setState(() => _isAutoPolling = true);
 
-    const maxAttempts = 30; // 30 * 5s = 150 seconds
+    const maxAttempts = 36; // 36 * 5s = 180 seconds (3 mins max)
     int attempts = 0;
 
     while (attempts < maxAttempts && mounted) {
@@ -66,16 +71,25 @@ class _ApplicationStatusScreenState extends ConsumerState<ApplicationStatusScree
       // Resolved to pre-approved — go to offer page
       if (nextStep == 'PRE_APPROVAL_OFFER_SELECTION' ||
           appStatus == 'LENDER_PRE_APPROVED') {
-        if (mounted && lan != null) {
-          context.go('/loan/$lan/offer?isPreApproval=true');
+        if (mounted) {
+          if (lan != null && lan.isNotEmpty) {
+            context.go('/loan/$lan/offer?isPreApproval=true');
+          } else {
+            context.go('/onboarding/offer');
+          }
         }
         break;
       }
 
-      // Resolved to another terminal step — stop polling (UI will update)
+      // Resolved to Lender Approved — stop polling (UI will present post-approval start button)
+      if (appStatus == 'LENDER_APPROVED') {
+        break;
+      }
+
+      // Terminal rejection or support step
       if (nextStep == 'INTEGRATION_SUPPORT' ||
           appStatus == 'LENDER_REJECTED' ||
-          appStatus == 'LENDER_APPROVED') {
+          appStatus == 'REJECTED') {
         break;
       }
 
@@ -83,8 +97,12 @@ class _ApplicationStatusScreenState extends ConsumerState<ApplicationStatusScree
       final isStillProcessing = nextStep == 'LENDER_DECISION_PROCESSING' ||
           nextStep == 'LENDER_CREATE_PROCESSING' ||
           nextStep == 'LENDER_UPDATE_PROCESSING' ||
-          nextStep == 'APPROVAL_PROCESSING';
-      if (!isStillProcessing) break; // Unknown step — stop
+          nextStep == 'APPROVAL_PROCESSING' ||
+          appStatus == 'SUBMITTED' ||
+          appStatus == 'PENDING_CREDIT_REVIEW' ||
+          appStatus == 'LENDER_REVIEW';
+          
+      if (!isStillProcessing) break;
     }
 
     if (mounted) setState(() => _isAutoPolling = false);

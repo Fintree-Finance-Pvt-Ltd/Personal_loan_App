@@ -228,6 +228,7 @@ class WorkflowInfoModel {
   final bool offerAccepted;
   final bool digilockerVerified;
   final bool addressConfirmed;
+  final bool aaCompleted;
   final bool bankVerified;
   final bool kfsAccepted;
   final bool mandateCompleted;
@@ -241,6 +242,7 @@ class WorkflowInfoModel {
     required this.offerAccepted,
     required this.digilockerVerified,
     required this.addressConfirmed,
+    this.aaCompleted = false,
     required this.bankVerified,
     required this.kfsAccepted,
     required this.mandateCompleted,
@@ -256,6 +258,10 @@ class WorkflowInfoModel {
       offerAccepted: json['offerAccepted'] == true,
       digilockerVerified: json['digilockerVerified'] == true,
       addressConfirmed: json['addressConfirmed'] == true,
+      aaCompleted: json['aaCompleted'] == true ||
+          json['accountAggregatorCompleted'] == true ||
+          json['bankStatementVerified'] == true ||
+          json['aaVerified'] == true,
       bankVerified: json['bankVerified'] == true,
       kfsAccepted: json['kfsAccepted'] == true,
       mandateCompleted: json['mandateCompleted'] == true,

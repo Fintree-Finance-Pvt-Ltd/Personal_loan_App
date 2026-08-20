@@ -78,10 +78,14 @@ class _OtpScreenState extends ConsumerState<OtpScreen>
       final res = await SmartAuth.instance.getSmsWithUserConsentApi();
       if (res.hasData && res.data!.code != null) {
         if (mounted) {
-          setState(() {
-            _otpController.text = res.data!.code!;
-          });
-          _verify();
+          final code = res.data!.code!.replaceAll(RegExp(r'\D'), '');
+          if (code.length == 6) {
+            setState(() {
+              _otpController.text = code;
+            });
+            TextInput.finishAutofillContext();
+            _verify();
+          }
         }
       }
     } catch (_) {
@@ -697,7 +701,7 @@ class _OtpScreenState extends ConsumerState<OtpScreen>
   }
 }
 
-class _OtpCodeField extends StatelessWidget {
+class _OtpCodeField extends StatefulWidget {
   final TextEditingController controller;
   final FocusNode focusNode;
   final bool enabled;
@@ -715,10 +719,51 @@ class _OtpCodeField extends StatelessWidget {
   });
 
   @override
+  State<_OtpCodeField> createState() => _OtpCodeFieldState();
+}
+
+class _OtpCodeFieldState extends State<_OtpCodeField> {
+  @override
+  void initState() {
+    super.initState();
+    widget.controller.addListener(_onControllerChanged);
+    widget.focusNode.addListener(_onFocusChanged);
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_onControllerChanged);
+    widget.focusNode.removeListener(_onFocusChanged);
+    super.dispose();
+  }
+
+  void _onControllerChanged() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  void _onFocusChanged() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return FormField<String>(
-      validator: validator,
+      validator: (_) => widget.validator(widget.controller.text),
+      initialValue: widget.controller.text,
       builder: (fieldState) {
+        // Keep FormField value synced with controller on programmatic text changes / autofill
+        if (fieldState.value != widget.controller.text) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (fieldState.mounted) {
+              fieldState.didChange(widget.controller.text);
+            }
+          });
+        }
+
         final hasError = fieldState.hasError;
 
         return Column(
@@ -732,9 +777,9 @@ class _OtpCodeField extends StatelessWidget {
                   child: SizedBox(
                     height: 52,
                     child: TextField(
-                      controller: controller,
-                      focusNode: focusNode,
-                      enabled: enabled,
+                      controller: widget.controller,
+                      focusNode: widget.focusNode,
+                      enabled: widget.enabled,
                       keyboardType: TextInputType.number,
                       textInputAction: TextInputAction.done,
                       maxLength: 6,
@@ -745,9 +790,9 @@ class _OtpCodeField extends StatelessWidget {
                       ],
                       onChanged: (val) {
                         fieldState.didChange(val);
-                        onChanged(val);
+                        widget.onChanged(val);
                       },
-                      onSubmitted: onSubmitted,
+                      onSubmitted: widget.onSubmitted,
                     ),
                   ),
                 ),
@@ -755,58 +800,62 @@ class _OtpCodeField extends StatelessWidget {
                 // Custom 6-Box Visual Grid
                 GestureDetector(
                   onTap: () {
-                    if (enabled) {
-                      focusNode.requestFocus();
+                    if (widget.enabled) {
+                      widget.focusNode.requestFocus();
                     }
                   },
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: List.generate(6, (index) {
-                      final code = controller.text;
+                      final code = widget.controller.text;
                       final isFilled = index < code.length;
-                      final isFocused = focusNode.hasFocus &&
+                      final isFocused = widget.focusNode.hasFocus &&
                           (index == code.length ||
                               (index == 5 && code.length == 6));
 
                       final char = isFilled ? code[index] : '';
 
-                      return AnimatedContainer(
-                        duration: const Duration(milliseconds: 180),
-                        width: 44,
-                        height: 52,
-                        decoration: BoxDecoration(
-                          color: isFilled
-                              ? AppTheme.primaryLightTeal.withValues(alpha: 0.5)
-                              : AppTheme.surfaceLight,
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(
-                            color: hasError
-                                ? AppTheme.errorRed
-                                : isFocused
-                                    ? AppTheme.primaryTeal
-                                    : isFilled
-                                        ? AppTheme.primaryTeal.withValues(alpha: 0.4)
-                                        : AppTheme.borderLight,
-                            width: isFocused ? 2 : 1.2,
+                      return Expanded(
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 180),
+                          margin: EdgeInsets.symmetric(
+                            horizontal: index == 0 || index == 5 ? 2 : 3,
                           ),
-                          boxShadow: isFocused
-                              ? [
-                                  BoxShadow(
-                                    color: AppTheme.primaryTeal
-                                        .withValues(alpha: 0.15),
-                                    blurRadius: 10,
-                                    offset: const Offset(0, 4),
-                                  ),
-                                ]
-                              : null,
-                        ),
-                        child: Center(
-                          child: Text(
-                            char,
-                            style: const TextStyle(
-                              color: AppTheme.textDarkPrimary,
-                              fontSize: 22,
-                              fontWeight: FontWeight.w800,
+                          height: 52,
+                          decoration: BoxDecoration(
+                            color: isFilled
+                                ? AppTheme.primaryLightTeal.withValues(alpha: 0.5)
+                                : AppTheme.surfaceLight,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: hasError
+                                  ? AppTheme.errorRed
+                                  : isFocused
+                                      ? AppTheme.primaryTeal
+                                      : isFilled
+                                          ? AppTheme.primaryTeal.withValues(alpha: 0.4)
+                                          : AppTheme.borderLight,
+                              width: isFocused ? 2 : 1.2,
+                            ),
+                            boxShadow: isFocused
+                                ? [
+                                    BoxShadow(
+                                      color: AppTheme.primaryTeal
+                                          .withValues(alpha: 0.15),
+                                      blurRadius: 10,
+                                      offset: const Offset(0, 4),
+                                    ),
+                                  ]
+                                : null,
+                          ),
+                          child: Center(
+                            child: Text(
+                              char,
+                              style: const TextStyle(
+                                color: AppTheme.textDarkPrimary,
+                                fontSize: 22,
+                                fontWeight: FontWeight.w800,
+                              ),
                             ),
                           ),
                         ),

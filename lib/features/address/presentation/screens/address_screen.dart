@@ -127,7 +127,11 @@ class _AddressScreenState extends ConsumerState<AddressScreen> {
       await ref.read(journeyControllerProvider.notifier).syncCustomerState();
 
       if (mounted) {
-        context.push('/onboarding/review');
+        if (widget.lan != null && widget.lan!.isNotEmpty) {
+          context.push('/loan/${widget.lan}/account-aggregator');
+        } else {
+          context.push('/onboarding/account-aggregator');
+        }
       }
     } catch (e) {
       setState(() {

@@ -483,9 +483,17 @@ class _DashboardScreenState
     required dynamic bank,
     required dynamic workflow,
   }) {
+    final disbursalStatus = _readText(workflow?.disbursalStatus, 'NOT_STARTED');
+    final currentStep = _readText(workflow?.currentStep, 'APPROVAL_SUMMARY');
+    final isDisbursed = currentStep == 'DISBURSED' ||
+        disbursalStatus == 'DISBURSED' ||
+        postApproval?.loan?.disbursalCompletedAt != null ||
+        customer?.latestLoanStatus == 'DISBURSED' ||
+        customer?.latestLoanStatus == 'FULLY_PAID';
+
     final hasActiveLoan = customer?.latestLan != null &&
         customer.latestLan!.toString().isNotEmpty &&
-        workflow?.offerAccepted == true;
+        (workflow?.offerAccepted == true || customer?.latestApplicationStatus == 'LENDER_APPROVED');
 
     if (!hasActiveLoan) {
       return KeyedSubtree(
@@ -521,9 +529,11 @@ class _DashboardScreenState
             children: [
               Expanded(
                 child: _DashboardTabButton(
-                  title: 'Loan Journey',
-                  subtitle: 'Post-approval',
-                  icon: Icons.account_balance_wallet_outlined,
+                  title: isDisbursed ? 'Loan Overview' : 'Loan Journey',
+                  subtitle: isDisbursed ? 'Status & Account' : 'Post-approval',
+                  icon: isDisbursed
+                      ? Icons.account_balance_wallet_rounded
+                      : Icons.account_balance_wallet_outlined,
                   isSelected: _selectedTab == 0,
                   onTap: () {
                     setState(() {
@@ -535,9 +545,11 @@ class _DashboardScreenState
               const SizedBox(width: 6),
               Expanded(
                 child: _DashboardTabButton(
-                  title: 'Application',
-                  subtitle: 'Profile & KYC',
-                  icon: Icons.description_outlined,
+                  title: isDisbursed ? 'My Loans' : 'Application',
+                  subtitle: isDisbursed ? 'Active & History' : 'Profile & KYC',
+                  icon: isDisbursed
+                      ? Icons.receipt_long_rounded
+                      : Icons.description_outlined,
                   isSelected: _selectedTab == 1,
                   onTap: () {
                     setState(() {
@@ -578,11 +590,17 @@ class _DashboardScreenState
                   ),
                 )
               : KeyedSubtree(
-                  key: const ValueKey('application'),
-                  child: _buildApplicationTab(
-                    journeyState: journeyState,
-                    customer: customer,
-                  ),
+                  key: ValueKey(isDisbursed ? 'my-loans' : 'application'),
+                  child: isDisbursed
+                      ? _buildMyLoansTab(
+                          journeyState: journeyState,
+                          customer: customer,
+                          postApproval: postApproval,
+                        )
+                      : _buildApplicationTab(
+                          journeyState: journeyState,
+                          customer: customer,
+                        ),
                 ),
         ),
       ],
@@ -983,55 +1001,57 @@ class _DashboardScreenState
               ],
             ),
           ),
-        const SizedBox(height: 24),
-        _SectionHeader(
-          title: 'Loan journey',
-          subtitle:
-              '$completedCount of ${steps.length} steps completed',
-          trailing: Text(
-            '${(progress * 100).round()}%',
-            style: const TextStyle(
-              color: AppTheme.primaryTeal,
-              fontSize: 13,
-              fontWeight: FontWeight.w800,
+        if (!isDisbursed) ...[
+          const SizedBox(height: 24),
+          _SectionHeader(
+            title: 'Loan journey',
+            subtitle:
+                '$completedCount of ${steps.length} steps completed',
+            trailing: Text(
+              '${(progress * 100).round()}%',
+              style: const TextStyle(
+                color: AppTheme.primaryTeal,
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+              ),
             ),
           ),
-        ),
-        const SizedBox(height: 12),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(20),
-          child: LinearProgressIndicator(
-            value: progress,
-            minHeight: 7,
-            backgroundColor: AppTheme.primaryLightTeal,
-            valueColor:
-                const AlwaysStoppedAnimation<Color>(
-              AppTheme.primaryTeal,
+          const SizedBox(height: 12),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(20),
+            child: LinearProgressIndicator(
+              value: progress,
+              minHeight: 7,
+              backgroundColor: AppTheme.primaryLightTeal,
+              valueColor:
+                  const AlwaysStoppedAnimation<Color>(
+                AppTheme.primaryTeal,
+              ),
             ),
           ),
-        ),
-        const SizedBox(height: 16),
-        ...steps.sublist(0, (completedCount + 1).clamp(0, steps.length)).asMap().entries.map(
-          (entry) {
-            final index = entry.key;
-            final step = entry.value;
+          const SizedBox(height: 16),
+          ...steps.sublist(0, (completedCount + 1).clamp(0, steps.length)).asMap().entries.map(
+            (entry) {
+              final index = entry.key;
+              final step = entry.value;
 
-            final isCurrent =
-                journeyState.targetRoute == step.route;
+              final isCurrent =
+                  journeyState.targetRoute == step.route;
 
-            final visibleStepsCount = (completedCount + 1).clamp(0, steps.length);
-            final isLast = index == visibleStepsCount - 1;
+              final visibleStepsCount = (completedCount + 1).clamp(0, steps.length);
+              final isLast = index == visibleStepsCount - 1;
 
-            return _JourneyStepTile(
-              step: step,
-              isCurrent: isCurrent,
-              isLast: isLast,
-              onTap: () {
-                _openRoute(step.route);
-              },
-            );
-          },
-        ),
+              return _JourneyStepTile(
+                step: step,
+                isCurrent: isCurrent,
+                isLast: isLast,
+                onTap: () {
+                  _openRoute(step.route);
+                },
+              );
+            },
+          ),
+        ],
       ],
     );
   }
@@ -1191,6 +1211,298 @@ class _DashboardScreenState
     );
   }
 
+  Widget _buildMyLoansTab({
+    required JourneyState journeyState,
+    required dynamic customer,
+    required dynamic postApproval,
+  }) {
+    final loan = postApproval?.loan;
+    final offer = postApproval?.offer;
+    final bank = postApproval?.bank;
+    final lender = postApproval?.lender;
+
+    final lan = _readText(loan?.lan ?? customer?.latestLan, 'FFPL000001');
+    final status = _readText(loan?.status ?? customer?.latestLoanStatus, 'DISBURSED').toUpperCase();
+    final approvedAmount = (loan?.approvedAmount ?? offer?.approvedAmount ?? 50000).toDouble();
+    final lenderName = _readText(lender?.name, 'Fintree Finance Private Limited');
+    final utr = _readText(loan?.disbursalUtr, 'UTR984729104');
+    final isFullyPaid = status == 'FULLY_PAID' || status == 'CLOSED';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // ── Pre-Approval Repeat Loan Banner (If Fully Paid) ──────────────────
+        if (isFullyPaid) ...[
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Color(0xFF065F46),
+                  Color(0xFF047857),
+                  Color(0xFF059669),
+                ],
+              ),
+              borderRadius: BorderRadius.circular(22),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF059669).withValues(alpha: 0.25),
+                  blurRadius: 16,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: const Icon(
+                        Icons.workspace_premium_rounded,
+                        color: Colors.amberAccent,
+                        size: 28,
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '🎉 Pre-Approved for New Loan!',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 17,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          SizedBox(height: 2),
+                          Text(
+                            'Great repayment history unlocked higher limit',
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Text(
+                    'You are now approved to take an instant new loan up to ₹10,000 with zero hassle!',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      height: 1.4,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      _openRoute('/onboarding/basic-details');
+                    },
+                    icon: const Icon(Icons.add_circle_outline_rounded, color: AppTheme.primaryDeepTeal),
+                    label: const Text(
+                      'Apply for New Loan Now',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        color: AppTheme.primaryDeepTeal,
+                      ),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+        ],
+
+        // ── Section Header ───────────────────────────────────────────────
+        const _SectionHeader(
+          title: 'My Loans',
+          subtitle: 'All active and past disbursed loans',
+        ),
+        const SizedBox(height: 14),
+
+        // ── Loan Card 1 ──────────────────────────────────────────────────
+        GestureDetector(
+          onTap: () => _openRoute('/loan/$lan/loan-details'),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: AppTheme.borderLight),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF033F45).withValues(alpha: 0.06),
+                  blurRadius: 18,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: AppTheme.primaryLightTeal,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Icon(
+                            Icons.receipt_long_rounded,
+                            color: AppTheme.primaryTeal,
+                            size: 22,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              lan,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 15,
+                                color: AppTheme.textDarkPrimary,
+                              ),
+                            ),
+                            Text(
+                              lenderName,
+                              style: const TextStyle(
+                                fontSize: 11,
+                                color: AppTheme.textDarkSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                    AppStatusBadge(
+                      status: isFullyPaid ? 'FULLY_PAID' : 'DISBURSED',
+                      label: isFullyPaid ? 'Fully Paid' : 'Disbursed',
+                    ),
+                  ],
+                ),
+                const Divider(height: 24),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Approved Loan Amount',
+                          style: TextStyle(fontSize: 11.5, color: AppTheme.textDarkSecondary),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          CurrencyUtils.formatAmount(approvedAmount),
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                            color: AppTheme.primaryTeal,
+                          ),
+                        ),
+                      ],
+                    ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        const Text(
+                          'Destination Account',
+                          style: TextStyle(fontSize: 11.5, color: AppTheme.textDarkSecondary),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          bank?.bankName ?? 'Bank Account',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: AppTheme.textDarkPrimary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: AppTheme.backgroundLight,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.tag_rounded, size: 14, color: AppTheme.textDarkSecondary),
+                          const SizedBox(width: 4),
+                          Text(
+                            'UTR: $utr',
+                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppTheme.textDarkSecondary),
+                          ),
+                        ],
+                      ),
+                      Row(
+                        children: const [
+                          Text(
+                            'View Loan Details',
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.primaryTeal),
+                          ),
+                          SizedBox(width: 4),
+                          Icon(Icons.arrow_forward_ios_rounded, size: 12, color: AppTheme.primaryTeal),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildApplicationTab({
     required JourneyState journeyState,
     required dynamic customer,
@@ -1270,6 +1582,14 @@ class _DashboardScreenState
             customer.aadhaarKycStatus == 'VERIFIED' ||
             !customer.updateReadinessReasons.contains('DIGILOCKER_KYC_NOT_VERIFIED'));
 
+    final aaComplete = customer != null &&
+        (customer.aaVerified == true ||
+            ['SUCCESS', 'COMPLETED', 'VERIFIED'].contains(customer.aaStatus?.toUpperCase()) ||
+            ['SUCCESS', 'COMPLETED', 'VERIFIED'].contains(customer.accountAggregatorStatus?.toUpperCase()) ||
+            (!customer.updateReadinessReasons.contains('ACCOUNT_AGGREGATOR_NOT_VERIFIED') &&
+             !customer.updateReadinessReasons.contains('AA_NOT_VERIFIED') &&
+             !customer.updateReadinessReasons.contains('BANK_STATEMENT_NOT_VERIFIED')));
+
     final applicationSteps = <_ApplicationStep>[
       _ApplicationStep(
         number: 1,
@@ -1291,6 +1611,15 @@ class _DashboardScreenState
       ),
       _ApplicationStep(
         number: 3,
+        title: 'Lender & Assessment fee',
+        subtitle: 'Allocated lender and processing fee payment',
+        icon: Icons.payment_rounded,
+        route: '/payment/processing-fee',
+        isCompleted:
+            applicationSubmitted || assessmentFeePaid,
+      ),
+      _ApplicationStep(
+        number: 4,
         title: 'Profile and income',
         subtitle:
             'Employment, income and organisation details',
@@ -1298,15 +1627,6 @@ class _DashboardScreenState
         route: '/onboarding/profile',
         isCompleted:
             applicationSubmitted || profileComplete,
-      ),
-      _ApplicationStep(
-        number: 4,
-        title: 'Lender & Assessment fee',
-        subtitle: 'Allocated lender and processing fee payment',
-        icon: Icons.payment_rounded,
-        route: '/payment/processing-fee',
-        isCompleted:
-            applicationSubmitted || assessmentFeePaid,
       ),
       _ApplicationStep(
         number: 5,
@@ -1335,6 +1655,14 @@ class _DashboardScreenState
       ),
       _ApplicationStep(
         number: 8,
+        title: 'Account Aggregator Verification',
+        subtitle: 'Connect bank account for statement analysis',
+        icon: Icons.account_balance_outlined,
+        route: '/onboarding/account-aggregator',
+        isCompleted: applicationSubmitted || aaComplete,
+      ),
+      _ApplicationStep(
+        number: 9,
         title: 'Loan Offer Selection',
         subtitle: 'Select loan tenure and review approved pricing',
         icon: Icons.local_offer_outlined,
@@ -1342,7 +1670,7 @@ class _DashboardScreenState
         isCompleted: applicationSubmitted || offerAccepted,
       ),
       _ApplicationStep(
-        number: 9,
+        number: 10,
         title: 'Review and submit',
         subtitle:
             'Confirm the application before lender submission',

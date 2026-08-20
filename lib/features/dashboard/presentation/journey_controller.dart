@@ -63,7 +63,35 @@ class JourneyController extends StateNotifier<JourneyState> {
         rawCustomerData = rawCustomerData['data'];
       }
       
-      final customer = CustomerModel.fromJson(rawCustomerData is Map<String, dynamic> ? rawCustomerData : {});
+      CustomerModel customer = CustomerModel.fromJson(rawCustomerData is Map<String, dynamic> ? rawCustomerData : {});
+
+      if (!customer.aaVerified) {
+        try {
+          final lan = customer.latestLan ?? customer.platformLan ?? '';
+          final aaEndpoint = lan.isNotEmpty
+              ? '/customer/loans/$lan/account-aggregator/status'
+              : '/customer/account-aggregator/status';
+          final aaRes = await apiClient.get(aaEndpoint);
+          dynamic aaData = aaRes;
+          if (aaData is Map<String, dynamic> && aaData['data'] != null) {
+            aaData = aaData['data'];
+          }
+          if (aaData is Map<String, dynamic>) {
+            final statusStr = (aaData['status'] ?? '').toString().toUpperCase();
+            final dataStatusStr = (aaData['dataStatus'] ?? '').toString().toUpperCase();
+            final isDone = aaData['completed'] == true ||
+                ['SUCCESS', 'COMPLETED', 'VERIFIED'].contains(statusStr) ||
+                ['COMPLETED', 'FETCHED', 'DELIVERED'].contains(dataStatusStr);
+            if (isDone) {
+              customer = customer.copyWith(
+                aaVerified: true,
+                aaStatus: statusStr.isNotEmpty ? statusStr : 'SUCCESS',
+                accountAggregatorStatus: statusStr.isNotEmpty ? statusStr : 'SUCCESS',
+              );
+            }
+          }
+        } catch (_) {}
+      }
 
       PostApprovalJourneyModel? postApproval;
       String nextRoute = '/dashboard';
@@ -72,13 +100,23 @@ class JourneyController extends StateNotifier<JourneyState> {
         nextRoute = '/dashboard';
       } else if (customer.fullName == null || customer.residentialPincode == null) {
         nextRoute = '/onboarding/basic-details';
+      } else if (!customer.assessmentFeePaid) {
+        nextRoute = '/payment/processing-fee';
       } else if (customer.employmentType == null) {
-        nextRoute = '/dashboard';
+        nextRoute = '/onboarding/profile';
+      } else if (!customer.aaVerified) {
+        nextRoute = '/onboarding/account-aggregator';
+      } else if (customer.nextPermittedStep == 'PRE_APPROVAL_OFFER_SELECTION' ||
+                 customer.latestApplicationStatus == 'LENDER_PRE_APPROVED') {
+        final lan = customer.latestLan ?? customer.platformLan ?? '';
+        nextRoute = lan.isNotEmpty ? '/loan/$lan/offer?isPreApproval=true' : '/onboarding/offer';
       } else if (customer.latestApplicationStatus == null || customer.latestApplicationStatus == 'DRAFT') {
-        nextRoute = '/dashboard';
+        nextRoute = '/onboarding/review';
       } else if (customer.latestApplicationStatus == 'SUBMITTED' ||
                  customer.latestApplicationStatus == 'PENDING_CREDIT_REVIEW' ||
-                 customer.latestApplicationStatus == 'LENDER_PRE_APPROVED') {
+                 customer.latestApplicationStatus == 'LENDER_REVIEW' ||
+                 customer.nextPermittedStep == 'LENDER_DECISION_PROCESSING' ||
+                 customer.nextPermittedStep == 'APPROVAL_PROCESSING') {
         nextRoute = '/application/status';
       } else if (customer.latestApplicationStatus == 'LENDER_APPROVED' && customer.latestLan != null) {
         final lan = customer.latestLan!;
@@ -119,6 +157,9 @@ class JourneyController extends StateNotifier<JourneyState> {
         return '/loan/$lan/digilocker';
       case 'ADDRESS_CONFIRMATION':
         return '/loan/$lan/address';
+      case 'ACCOUNT_AGGREGATOR':
+      case 'BANK_STATEMENT':
+        return '/loan/$lan/account-aggregator';
       case 'BANK_VERIFICATION':
         return '/loan/$lan/bank';
       case 'KFS_ACCEPTANCE':

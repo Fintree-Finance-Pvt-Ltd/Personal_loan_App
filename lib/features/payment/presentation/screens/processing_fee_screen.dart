@@ -149,7 +149,7 @@ class _ProcessingFeeScreenState extends ConsumerState<ProcessingFeeScreen> {
 
     if (customer.assessmentFeePaid) {
       if (mounted) {
-        context.go('/dashboard');
+        context.push('/onboarding/profile');
       }
       return;
     }
@@ -339,15 +339,14 @@ class _ProcessingFeeScreenState extends ConsumerState<ProcessingFeeScreen> {
         customer!.fullName!.trim().isNotEmpty &&
         customer.residentialPincode != null &&
         customer.residentialPincode!.trim().isNotEmpty;
-    final isProfileDone = customer?.employmentType != null &&
-        customer!.employmentType!.trim().isNotEmpty;
 
-    final isBasicInfoComplete = isPanVerified && isBasicDetailsDone && isProfileDone;
+    final isBasicInfoComplete = isPanVerified && isBasicDetailsDone;
 
     if (!isBasicInfoComplete) {
       return Scaffold(
         appBar: const AppHeader(
           title: 'Assessment Fee Payment',
+          fallbackRoute: '/onboarding/basic-details',
         ),
         body: SafeArea(
           child: Padding(
@@ -490,9 +489,9 @@ class _ProcessingFeeScreenState extends ConsumerState<ProcessingFeeScreen> {
                 ),
                 const Spacer(),
                 AppButton(
-                  text: 'Continue Onboarding',
+                  text: 'Continue to Profile & Employment',
                   onPressed: () {
-                    context.go('/dashboard');
+                    context.push('/onboarding/profile');
                   },
                   icon: Icons.arrow_forward_rounded,
                 ),
@@ -506,6 +505,7 @@ class _ProcessingFeeScreenState extends ConsumerState<ProcessingFeeScreen> {
     return Scaffold(
       appBar: const AppHeader(
         title: 'Processing Fee Payment',
+        fallbackRoute: '/onboarding/basic-details',
       ),
       body: SafeArea(
         child: _paymentUrl != null && _webViewController != null

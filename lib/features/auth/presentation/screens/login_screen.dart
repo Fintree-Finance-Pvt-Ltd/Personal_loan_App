@@ -294,6 +294,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                 textInputAction: TextInputAction.done,
                 autofillHints: const [
                   AutofillHints.telephoneNumber,
+                  AutofillHints.telephoneNumberNational,
+                  AutofillHints.username,
                 ],
                 maxLength: 10,
                 validator: Validators.validateMobile,
@@ -303,8 +305,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                   }
                 },
                 inputFormatters: [
-                  FilteringTextInputFormatter.digitsOnly,
-                  LengthLimitingTextInputFormatter(10),
+                  _MobileNumberAutofillFormatter(),
                 ],
                 style: const TextStyle(
                   color: AppTheme.textDarkPrimary,
@@ -543,6 +544,31 @@ class _SecurityFooter extends StatelessWidget {
           ],
         ),
       ],
+    );
+  }
+}
+
+class _MobileNumberAutofillFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    String text = newValue.text;
+    String digits = text.replaceAll(RegExp(r'\D'), '');
+
+    // Handle country code prefixes from mobile autofill (+91, 91, 0)
+    if (digits.length == 12 && digits.startsWith('91')) {
+      digits = digits.substring(2);
+    } else if (digits.length == 11 && digits.startsWith('0')) {
+      digits = digits.substring(1);
+    } else if (digits.length > 10) {
+      digits = digits.substring(digits.length - 10);
+    }
+
+    return TextEditingValue(
+      text: digits,
+      selection: TextSelection.collapsed(offset: digits.length),
     );
   }
 }

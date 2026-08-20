@@ -41,17 +41,17 @@ class _ApplicationReviewScreenState extends ConsumerState<ApplicationReviewScree
     });
 
     try {
-      final apiClient = ref.read(apiClientProvider);
+      final customerApi = ref.read(customerApiProvider);
       
-      // 1. Submit the application
-      await apiClient.post(
-        '/customer/$customerId/submit-application',
-        data: {'customerId': customerId},
-      );
+      // 1. Take decision consents prior to submitting application
+      await customerApi.acceptLenderDecisionConsents();
 
-      // 2. Backend processes the lender decision asynchronously.
+      // 2. Submit the application to lender
+      await customerApi.submitCustomerApplication(customerId);
+
+      // 3. Backend processes lender decision asynchronously.
       // Poll customer state until nextPermittedStep becomes PRE_APPROVAL_OFFER_SELECTION
-      // (meaning the lender pre-approved), or until timeout.
+      // (meaning lender pre-approved), or status becomes PENDING_CREDIT_REVIEW/LENDER_APPROVED.
       if (mounted) {
         setState(() {
           _isSubmitting = false;
@@ -81,17 +81,19 @@ class _ApplicationReviewScreenState extends ConsumerState<ApplicationReviewScree
             appStatus == 'LENDER_PRE_APPROVED') {
           resolved = true;
           if (mounted) {
-            if (effectiveLan != null) {
+            if (effectiveLan != null && effectiveLan.isNotEmpty) {
               context.go('/loan/$effectiveLan/offer?isPreApproval=true');
             } else {
-              context.go('/application/status');
+              context.go('/onboarding/offer');
             }
           }
           break;
         }
 
-        // If it reaches a terminal state like rejected or lender approved without pre-approval
-        if (appStatus == 'LENDER_REJECTED' ||
+        // If it reaches credit review, approved, or rejected terminal state
+        if (appStatus == 'PENDING_CREDIT_REVIEW' ||
+            appStatus == 'LENDER_REVIEW' ||
+            appStatus == 'LENDER_REJECTED' ||
             appStatus == 'LENDER_APPROVED' ||
             nextStep == 'INTEGRATION_SUPPORT') {
           resolved = true;

@@ -8,6 +8,7 @@ import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_loader.dart';
 import '../../../../core/widgets/app_status_badge.dart';
 import '../../../../core/widgets/app_header.dart';
+import '../../../../core/widgets/app_stepper.dart';
 import '../../../dashboard/presentation/journey_controller.dart';
 
 class DigilockerScreen extends ConsumerStatefulWidget {
@@ -234,7 +235,12 @@ class _DigilockerScreenState extends ConsumerState<DigilockerScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const SizedBox(height: 12),
+              const AppStepper(
+                currentStep: 6,
+                totalSteps: 7,
+                stepTitles: ['PAN Verification', 'Personal Details', 'Assessment Fee', 'Profile & Income', 'Photo & Liveness', 'DigiLocker KYC', 'Account Aggregator'],
+              ),
+              const SizedBox(height: 24),
               const Text(
                 'Aadhaar KYC Verification',
                 style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppTheme.textDarkPrimary),

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -23,6 +24,7 @@ class _LoanDetailsScreenState extends ConsumerState<LoanDetailsScreen> {
   String? _errorMessage;
   Map<String, dynamic>? _loanDetailsData;
   bool _isRepaying = false;
+  Timer? _pollingTimer;
 
   @override
   void initState() {
@@ -30,30 +32,65 @@ class _LoanDetailsScreenState extends ConsumerState<LoanDetailsScreen> {
     Future.microtask(() => _fetchLoanDetails());
   }
 
-  Future<void> _fetchLoanDetails() async {
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
+  @override
+  void dispose() {
+    _pollingTimer?.cancel();
+    super.dispose();
+  }
+
+  void _checkAndStartPolling() {
+    _pollingTimer?.cancel();
+    final apiLoan = _loanDetailsData?['loan'] as Map<String, dynamic>?;
+    final status = apiLoan?['status']?.toString().toUpperCase() ?? '';
+    final disbursalStatus = apiLoan?['disbursalStatus']?.toString().toUpperCase() ?? '';
+
+    final isDisbursed = status == 'DISBURSED' || status == 'FULLY_PAID' || disbursalStatus == 'DISBURSED';
+
+    if (!isDisbursed) {
+      _pollingTimer = Timer.periodic(const Duration(seconds: 4), (timer) async {
+        if (!mounted) {
+          timer.cancel();
+          return;
+        }
+        await _fetchLoanDetails(showLoading: false);
+        final updatedLoan = _loanDetailsData?['loan'] as Map<String, dynamic>?;
+        final updatedStatus = updatedLoan?['status']?.toString().toUpperCase() ?? '';
+        final updatedDisbursalStatus = updatedLoan?['disbursalStatus']?.toString().toUpperCase() ?? '';
+        if (updatedStatus == 'DISBURSED' || updatedStatus == 'FULLY_PAID' || updatedDisbursalStatus == 'DISBURSED') {
+          timer.cancel();
+          ref.read(journeyControllerProvider.notifier).syncCustomerState();
+        }
+      });
+    }
+  }
+
+  Future<void> _fetchLoanDetails({bool showLoading = true}) async {
+    if (showLoading) {
+      setState(() {
+        _isLoading = true;
+        _errorMessage = null;
+      });
+    }
 
     try {
-      final apiClient = ref.read(apiClientProvider);
-      final res = await apiClient.get('/customer/loans/${widget.lan}/details');
+      final customerApi = ref.read(customerApiProvider);
+      final res = await customerApi.getCustomerLoanDetails(widget.lan);
       
       final data = res['data'] ?? res;
       if (mounted) {
         setState(() {
           _loanDetailsData = data is Map<String, dynamic> ? data : null;
         });
+        _checkAndStartPolling();
       }
     } catch (e) {
-      if (mounted) {
+      if (mounted && showLoading) {
         setState(() {
           _errorMessage = e.toString();
         });
       }
     } finally {
-      if (mounted) {
+      if (mounted && showLoading) {
         setState(() => _isLoading = false);
       }
     }
@@ -65,17 +102,16 @@ class _LoanDetailsScreenState extends ConsumerState<LoanDetailsScreen> {
     });
 
     try {
-      final apiClient = ref.read(apiClientProvider);
-      final res = await apiClient.post(
-        '/customer/loans/${widget.lan}/repay/initiate',
-        data: {
+      final customerApi = ref.read(customerApiProvider);
+      final res = await customerApi.initiateRepaymentPayment(
+        widget.lan,
+        {
           'installmentNumber': installmentNumber,
           'amount': amount,
         },
       );
 
       final data = res['data'] ?? res;
-      final redirectUrl = data['paymentUrl'] ?? data['checkoutUrl'];
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

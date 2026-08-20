@@ -386,7 +386,7 @@ class _BasicDetailsScreenState extends ConsumerState<BasicDetailsScreen> {
         if (mounted) {
           final updatedCustomer = ref.read(journeyControllerProvider).customer;
           if (updatedCustomer?.assessmentFeePaid == true) {
-            context.go('/dashboard');
+            context.push('/onboarding/profile');
           } else {
             context.push('/payment/processing-fee', extra: eligibilityRes);
           }
@@ -425,8 +425,8 @@ class _BasicDetailsScreenState extends ConsumerState<BasicDetailsScreen> {
               children: [
                 const AppStepper(
                   currentStep: 2,
-                  totalSteps: 5,
-                  stepTitles: ['PAN Verification', 'Personal Details', 'Profile & Income', 'Photo & Liveness', 'Submit'],
+                  totalSteps: 7,
+                  stepTitles: ['PAN Verification', 'Personal Details', 'Assessment Fee', 'Profile & Income', 'Photo & Liveness', 'DigiLocker KYC', 'Account Aggregator'],
                 ),
                 const SizedBox(height: 24),
                 const Text(

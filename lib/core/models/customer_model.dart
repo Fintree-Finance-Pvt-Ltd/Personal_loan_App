@@ -47,6 +47,9 @@ class CustomerModel {
   final String? aadhaarKycStatus;
   final String? maskedAadhaar;
   final String? aadhaarVerifiedAt;
+  final bool aaVerified;
+  final String? aaStatus;
+  final String? accountAggregatorStatus;
   final List<String> updateReadinessReasons;
   final String? nextPermittedStep;
   final String? platformLan;
@@ -100,12 +103,147 @@ class CustomerModel {
     this.aadhaarKycStatus,
     this.maskedAadhaar,
     this.aadhaarVerifiedAt,
+    this.aaVerified = false,
+    this.aaStatus,
+    this.accountAggregatorStatus,
     this.updateReadinessReasons = const [],
     this.nextPermittedStep,
     this.platformLan,
   });
 
+  CustomerModel copyWith({
+    String? id,
+    String? customerCode,
+    String? mobileNumber,
+    bool? mobileVerified,
+    String? fullName,
+    String? firstName,
+    String? middleName,
+    String? lastName,
+    String? fatherName,
+    String? panNumber,
+    bool? panVerified,
+    String? dateOfBirth,
+    String? gender,
+    String? email,
+    bool? emailVerified,
+    String? residentialPincode,
+    String? residentialCity,
+    String? residentialState,
+    String? workPincode,
+    String? residenceStatus,
+    String? employmentType,
+    String? companyType,
+    String? companyName,
+    String? designation,
+    String? businessName,
+    String? businessConstitution,
+    num? monthlyIncome,
+    num? annualTurnover,
+    String? employmentVintage,
+    String? totalExperience,
+    String? salaryMode,
+    String? businessVintage,
+    String? accountStatus,
+    String? onboardingStatus,
+    String? eligibilityStatus,
+    String? eligibilityReason,
+    String? latestApplicationId,
+    String? latestApplicationStatus,
+    String? latestLan,
+    String? latestLoanStatus,
+    bool? assessmentFeePaid,
+    String? allocatedLenderName,
+    String? allocatedLenderCode,
+    Map<String, dynamic>? assessmentFee,
+    bool? aadhaarVerified,
+    String? aadhaarKycStatus,
+    String? maskedAadhaar,
+    String? aadhaarVerifiedAt,
+    bool? aaVerified,
+    String? aaStatus,
+    String? accountAggregatorStatus,
+    List<String>? updateReadinessReasons,
+    String? nextPermittedStep,
+    String? platformLan,
+  }) {
+    return CustomerModel(
+      id: id ?? this.id,
+      customerCode: customerCode ?? this.customerCode,
+      mobileNumber: mobileNumber ?? this.mobileNumber,
+      mobileVerified: mobileVerified ?? this.mobileVerified,
+      fullName: fullName ?? this.fullName,
+      firstName: firstName ?? this.firstName,
+      middleName: middleName ?? this.middleName,
+      lastName: lastName ?? this.lastName,
+      fatherName: fatherName ?? this.fatherName,
+      panNumber: panNumber ?? this.panNumber,
+      panVerified: panVerified ?? this.panVerified,
+      dateOfBirth: dateOfBirth ?? this.dateOfBirth,
+      gender: gender ?? this.gender,
+      email: email ?? this.email,
+      emailVerified: emailVerified ?? this.emailVerified,
+      residentialPincode: residentialPincode ?? this.residentialPincode,
+      residentialCity: residentialCity ?? this.residentialCity,
+      residentialState: residentialState ?? this.residentialState,
+      workPincode: workPincode ?? this.workPincode,
+      residenceStatus: residenceStatus ?? this.residenceStatus,
+      employmentType: employmentType ?? this.employmentType,
+      companyType: companyType ?? this.companyType,
+      companyName: companyName ?? this.companyName,
+      designation: designation ?? this.designation,
+      businessName: businessName ?? this.businessName,
+      businessConstitution: businessConstitution ?? this.businessConstitution,
+      monthlyIncome: monthlyIncome ?? this.monthlyIncome,
+      annualTurnover: annualTurnover ?? this.annualTurnover,
+      employmentVintage: employmentVintage ?? this.employmentVintage,
+      totalExperience: totalExperience ?? this.totalExperience,
+      salaryMode: salaryMode ?? this.salaryMode,
+      businessVintage: businessVintage ?? this.businessVintage,
+      accountStatus: accountStatus ?? this.accountStatus,
+      onboardingStatus: onboardingStatus ?? this.onboardingStatus,
+      eligibilityStatus: eligibilityStatus ?? this.eligibilityStatus,
+      eligibilityReason: eligibilityReason ?? this.eligibilityReason,
+      latestApplicationId: latestApplicationId ?? this.latestApplicationId,
+      latestApplicationStatus: latestApplicationStatus ?? this.latestApplicationStatus,
+      latestLan: latestLan ?? this.latestLan,
+      latestLoanStatus: latestLoanStatus ?? this.latestLoanStatus,
+      assessmentFeePaid: assessmentFeePaid ?? this.assessmentFeePaid,
+      allocatedLenderName: allocatedLenderName ?? this.allocatedLenderName,
+      allocatedLenderCode: allocatedLenderCode ?? this.allocatedLenderCode,
+      assessmentFee: assessmentFee ?? this.assessmentFee,
+      aadhaarVerified: aadhaarVerified ?? this.aadhaarVerified,
+      aadhaarKycStatus: aadhaarKycStatus ?? this.aadhaarKycStatus,
+      maskedAadhaar: maskedAadhaar ?? this.maskedAadhaar,
+      aadhaarVerifiedAt: aadhaarVerifiedAt ?? this.aadhaarVerifiedAt,
+      aaVerified: aaVerified ?? this.aaVerified,
+      aaStatus: aaStatus ?? this.aaStatus,
+      accountAggregatorStatus: accountAggregatorStatus ?? this.accountAggregatorStatus,
+      updateReadinessReasons: updateReadinessReasons ?? this.updateReadinessReasons,
+      nextPermittedStep: nextPermittedStep ?? this.nextPermittedStep,
+      platformLan: platformLan ?? this.platformLan,
+    );
+  }
+
   factory CustomerModel.fromJson(Map<String, dynamic> json) {
+    final aaStatusVal = json['aaStatus']?.toString() ??
+        json['accountAggregatorStatus']?.toString() ??
+        json['bankStatementStatus']?.toString() ??
+        json['journey']?['accountAggregatorStatus']?.toString() ??
+        json['journey']?['aaStatus']?.toString();
+
+    final isAaVerified = json['aaVerified'] == true ||
+        json['accountAggregatorVerified'] == true ||
+        json['bankStatementVerified'] == true ||
+        json['isAaDone'] == true ||
+        json['isAaVerified'] == true ||
+        ['SUCCESS', 'COMPLETED', 'VERIFIED'].contains(aaStatusVal?.toUpperCase()) ||
+        json['journey']?['aaVerified'] == true ||
+        json['journey']?['accountAggregatorVerified'] == true ||
+        json['journey']?['bankStatementVerified'] == true ||
+        ['SUCCESS', 'COMPLETED', 'VERIFIED'].contains(json['journey']?['accountAggregatorStatus']?.toString().toUpperCase()) ||
+        ['SUCCESS', 'COMPLETED', 'VERIFIED'].contains(json['journey']?['aaStatus']?.toString().toUpperCase());
+
     return CustomerModel(
       id: json['id']?.toString() ?? '',
       customerCode: json['customerCode'] ?? '',
@@ -158,6 +296,9 @@ class CustomerModel {
       aadhaarKycStatus: json['aadhaarKycStatus'],
       maskedAadhaar: json['maskedAadhaar'],
       aadhaarVerifiedAt: json['aadhaarVerifiedAt'],
+      aaVerified: isAaVerified,
+      aaStatus: aaStatusVal,
+      accountAggregatorStatus: json['accountAggregatorStatus']?.toString() ?? aaStatusVal,
       updateReadinessReasons: (json['journey']?['updateReadiness']?['reasons'] is List)
           ? List<String>.from(json['journey']['updateReadiness']['reasons'])
           : [],

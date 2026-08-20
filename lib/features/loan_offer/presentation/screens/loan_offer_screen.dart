@@ -35,10 +35,16 @@ class _LoanOfferScreenState extends ConsumerState<LoanOfferScreen> {
     });
   }
 
+  bool _checkIsPreApproval() {
+    final customer = ref.read(journeyControllerProvider).customer;
+    return widget.isOnboarding ||
+        customer?.nextPermittedStep == 'PRE_APPROVAL_OFFER_SELECTION' ||
+        customer?.latestApplicationStatus == 'LENDER_PRE_APPROVED';
+  }
+
   void _loadOfferData() async {
     final customer = ref.read(journeyControllerProvider).customer;
-    final isPreApproval = customer?.nextPermittedStep == 'PRE_APPROVAL_OFFER_SELECTION' ||
-        customer?.latestApplicationStatus == 'LENDER_PRE_APPROVED';
+    final isPreApproval = _checkIsPreApproval();
 
     final effectiveLan = widget.lan?.isNotEmpty == true
         ? widget.lan
@@ -109,11 +115,10 @@ class _LoanOfferScreenState extends ConsumerState<LoanOfferScreen> {
 
     try {
       final apiClient = ref.read(apiClientProvider);
-      final isPreApproval = customer?.nextPermittedStep == 'PRE_APPROVAL_OFFER_SELECTION' ||
-          customer?.latestApplicationStatus == 'LENDER_PRE_APPROVED';
+      final isPreApproval = _checkIsPreApproval();
       
       if (isPreApproval) {
-        // Pre-approval accept flow
+        // Pre-approval accept flow: sends offer selection to credit team/lender for final decision
         await apiClient.post(
           '/customer/loans/$effectiveLan/pre-approval-offer/select',
           data: {
@@ -159,8 +164,7 @@ class _LoanOfferScreenState extends ConsumerState<LoanOfferScreen> {
   Widget build(BuildContext context) {
     final journeyState = ref.watch(journeyControllerProvider);
     final customer = journeyState.customer;
-    final isPreApproval = customer?.nextPermittedStep == 'PRE_APPROVAL_OFFER_SELECTION' ||
-        customer?.latestApplicationStatus == 'LENDER_PRE_APPROVED';
+    final isPreApproval = _checkIsPreApproval();
 
     final effectiveLan = widget.lan?.isNotEmpty == true
         ? widget.lan
@@ -217,8 +221,8 @@ class _LoanOfferScreenState extends ConsumerState<LoanOfferScreen> {
     final netDisbursal = amount - (processingFee + gst);
 
     return Scaffold(
-      appBar: const AppHeader(
-        title: 'Loan Offer Summary',
+      appBar: AppHeader(
+        title: isPreApproval ? 'Pre-Approved Loan Offer' : 'Loan Offer Summary',
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -310,11 +314,11 @@ class _LoanOfferScreenState extends ConsumerState<LoanOfferScreen> {
               if (isAccepted)
                 AppButton(
                   text: isPreApproval 
-                      ? 'Offer Selected - Return' 
+                      ? 'Offer Selected - View Status' 
                       : (widget.isOnboarding ? 'Offer Accepted - Continue to Review' : 'Offer Accepted - Continue to KYC'),
                   onPressed: () {
                     if (isPreApproval) {
-                      context.pop();
+                      context.push('/application/status');
                     } else if (widget.isOnboarding) {
                       context.push('/onboarding/review');
                     } else {
@@ -325,10 +329,10 @@ class _LoanOfferScreenState extends ConsumerState<LoanOfferScreen> {
                 )
               else
                 AppButton(
-                  text: isPreApproval ? 'Select Pre-Approved Offer' : 'Accept Loan Offer',
+                  text: isPreApproval ? 'Submit Pre-Approved Offer & Send to Credit Review' : 'Accept Loan Offer',
                   isLoading: _isAccepting,
                   onPressed: _acceptOffer,
-                  icon: Icons.check_circle_outline,
+                  icon: Icons.send_rounded,
                 ),
             ],
           ),

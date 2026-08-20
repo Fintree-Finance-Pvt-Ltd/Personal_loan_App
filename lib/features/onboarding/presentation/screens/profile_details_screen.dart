@@ -124,7 +124,7 @@ class _ProfileDetailsScreenState extends ConsumerState<ProfileDetailsScreen> {
     return Scaffold(
       appBar: const AppHeader(
         title: 'Profile & Employment',
-        fallbackRoute: '/onboarding/basic-details',
+        fallbackRoute: '/payment/processing-fee',
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -135,9 +135,9 @@ class _ProfileDetailsScreenState extends ConsumerState<ProfileDetailsScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const AppStepper(
-                  currentStep: 3,
-                  totalSteps: 5,
-                  stepTitles: ['PAN Verification', 'Personal Details', 'Profile & Income', 'Photo & Liveness', 'Submit'],
+                  currentStep: 4,
+                  totalSteps: 7,
+                  stepTitles: ['PAN Verification', 'Personal Details', 'Assessment Fee', 'Profile & Income', 'Photo & Liveness', 'DigiLocker KYC', 'Account Aggregator'],
                 ),
                 const SizedBox(height: 24),
                 const Text(
