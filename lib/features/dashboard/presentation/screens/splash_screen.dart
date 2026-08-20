@@ -195,7 +195,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                               const SizedBox(height: 30),
 
                               const Text(
-                                'Personal Loan',
+                                'Finle',
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
                                   color: Colors.white,
