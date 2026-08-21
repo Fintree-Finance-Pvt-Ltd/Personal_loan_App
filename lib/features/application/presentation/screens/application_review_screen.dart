@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:dio/dio.dart';
+import '../../../../core/api/api_exception.dart';
 import '../../../../app/theme.dart';
 import '../../../../core/providers/providers.dart';
 import '../../../../core/utils/currency_utils.dart';
@@ -19,18 +21,12 @@ class ApplicationReviewScreen extends ConsumerStatefulWidget {
 }
 
 class _ApplicationReviewScreenState extends ConsumerState<ApplicationReviewScreen> {
-  bool _consent = true;
+  bool _consent = false;
   bool _isSubmitting = false;
-  bool _isPolling = false;
   String? _errorMessage;
 
   void _submitApplication() async {
-    if (!_consent) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please accept terms & declaration to submit.')),
-      );
-      return;
-    }
+    if (!_consent) return;
 
     final customerId = ref.read(journeyControllerProvider).customer?.id;
     if (customerId == null) return;
@@ -43,115 +39,38 @@ class _ApplicationReviewScreenState extends ConsumerState<ApplicationReviewScree
     try {
       final customerApi = ref.read(customerApiProvider);
       
-      // 1. Take decision consents prior to submitting application
+      // Step 1: Accept Decision Consents
       await customerApi.acceptLenderDecisionConsents();
 
-      // 2. Submit the application to lender
+      // Step 2: Submit Application
       await customerApi.submitCustomerApplication(customerId);
 
-      // 3. Backend processes lender decision asynchronously.
-      // Poll customer state until nextPermittedStep becomes PRE_APPROVAL_OFFER_SELECTION
-      // (meaning lender pre-approved), or status becomes PENDING_CREDIT_REVIEW/LENDER_APPROVED.
+      await ref.read(journeyControllerProvider.notifier).syncCustomerState();
+
       if (mounted) {
-        setState(() {
-          _isSubmitting = false;
-          _isPolling = true;
-        });
-      }
-
-      bool resolved = false;
-      const maxAttempts = 30; // 30 * 3s = 90 seconds max
-      int attempts = 0;
-
-      while (attempts < maxAttempts && mounted) {
-        await Future.delayed(const Duration(seconds: 3));
-        attempts++;
-
-        await ref.read(journeyControllerProvider.notifier).syncCustomerState();
-
-        if (!mounted) break;
-
-        final customer = ref.read(journeyControllerProvider).customer;
-        final nextStep = customer?.nextPermittedStep;
-        final appStatus = customer?.latestApplicationStatus;
-        final effectiveLan = customer?.latestLan ?? customer?.platformLan;
-
-        // Check for pre-approval offer selection step
-        if (nextStep == 'PRE_APPROVAL_OFFER_SELECTION' ||
-            appStatus == 'LENDER_PRE_APPROVED') {
-          resolved = true;
-          if (mounted) {
-            if (effectiveLan != null && effectiveLan.isNotEmpty) {
-              context.go('/loan/$effectiveLan/offer?isPreApproval=true');
-            } else {
-              context.go('/onboarding/offer');
-            }
-          }
-          break;
-        }
-
-        // If it reaches credit review, approved, or rejected terminal state
-        if (appStatus == 'PENDING_CREDIT_REVIEW' ||
-            appStatus == 'LENDER_REVIEW' ||
-            appStatus == 'LENDER_REJECTED' ||
-            appStatus == 'LENDER_APPROVED' ||
-            nextStep == 'INTEGRATION_SUPPORT') {
-          resolved = true;
-          if (mounted) context.go('/application/status');
-          break;
-        }
-      }
-
-      // Timed out - go to status screen anyway
-      if (!resolved && mounted) {
         context.go('/application/status');
       }
     } catch (e) {
+      String msg = e.toString();
+      if (e is DioException) {
+        final apiClient = ref.read(apiClientProvider);
+        msg = apiClient.handleError(e).message;
+      } else if (e is AppException) {
+        msg = e.message;
+      } else if (msg.startsWith('Exception: ')) {
+        msg = msg.substring(11);
+      }
       setState(() {
-        _errorMessage = e.toString();
+        _errorMessage = msg;
       });
     } finally {
-      if (mounted) setState(() => _isPolling = false);
+      if (mounted) setState(() => _isSubmitting = false);
     }
   }
-
 
   @override
   Widget build(BuildContext context) {
     final customer = ref.watch(journeyControllerProvider).customer;
-
-    // Show processing screen while waiting for lender decision
-    if (_isPolling) {
-      return Scaffold(
-        appBar: const AppHeader(
-          title: 'Submitting Application',
-          showBackButton: false,
-        ),
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(32.0),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const CircularProgressIndicator(color: AppTheme.primaryTeal),
-                const SizedBox(height: 24),
-                const Text(
-                  'Your application is being processed',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppTheme.textDarkPrimary),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 12),
-                const Text(
-                  'We are securely completing your lender integration. This may take up to 90 seconds. Please do not close this screen.',
-                  style: TextStyle(fontSize: 14, color: AppTheme.textDarkSecondary),
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
 
     return Scaffold(
       appBar: const AppHeader(
@@ -238,12 +157,15 @@ class _ApplicationReviewScreenState extends ConsumerState<ApplicationReviewScree
                     activeColor: AppTheme.primaryTeal,
                     onChanged: (v) => setState(() => _consent = v == true),
                   ),
-                  const Expanded(
-                    child: Padding(
-                      padding: EdgeInsets.only(top: 10.0),
-                      child: Text(
-                        'I declare that all provided information is accurate and give consent to evaluate my loan application.',
-                        style: TextStyle(fontSize: 12, color: AppTheme.textDarkSecondary),
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => setState(() => _consent = !_consent),
+                      child: const Padding(
+                        padding: EdgeInsets.only(top: 8.0),
+                        child: Text(
+                          'I authorize the lender to pull my bureau report and assess my eligibility for this personal loan.',
+                          style: TextStyle(fontSize: 13, color: AppTheme.textDarkSecondary, height: 1.4),
+                        ),
                       ),
                     ),
                   ),
@@ -270,9 +192,9 @@ class _ApplicationReviewScreenState extends ConsumerState<ApplicationReviewScree
               ],
               const SizedBox(height: 32),
               AppButton(
-                text: 'Submit Loan Application',
+                text: 'Submit Application',
                 isLoading: _isSubmitting,
-                onPressed: _submitApplication,
+                onPressed: (_consent && !_isSubmitting) ? _submitApplication : null,
                 icon: Icons.send_rounded,
               ),
             ],

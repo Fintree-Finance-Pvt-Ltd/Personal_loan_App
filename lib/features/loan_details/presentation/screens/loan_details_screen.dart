@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:dio/dio.dart';
+import '../../../../core/api/api_exception.dart';
 import '../../../../app/theme.dart';
 import '../../../../core/providers/providers.dart';
 import '../../../../core/utils/currency_utils.dart';
@@ -85,8 +87,17 @@ class _LoanDetailsScreenState extends ConsumerState<LoanDetailsScreen> {
       }
     } catch (e) {
       if (mounted && showLoading) {
+        String msg = e.toString();
+        if (e is DioException) {
+          final apiClient = ref.read(apiClientProvider);
+          msg = apiClient.handleError(e).message;
+        } else if (e is AppException) {
+          msg = e.message;
+        } else if (msg.startsWith('Exception: ')) {
+          msg = msg.substring(11);
+        }
         setState(() {
-          _errorMessage = e.toString();
+          _errorMessage = msg;
         });
       }
     } finally {
@@ -124,8 +135,17 @@ class _LoanDetailsScreenState extends ConsumerState<LoanDetailsScreen> {
       }
     } catch (e) {
       if (mounted) {
+        String msg = e.toString();
+        if (e is DioException) {
+          final apiClient = ref.read(apiClientProvider);
+          msg = apiClient.handleError(e).message;
+        } else if (e is AppException) {
+          msg = e.message;
+        } else if (msg.startsWith('Exception: ')) {
+          msg = msg.substring(11);
+        }
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Repayment Error: $e')),
+          SnackBar(content: Text('Repayment Error: $msg')),
         );
       }
     } finally {

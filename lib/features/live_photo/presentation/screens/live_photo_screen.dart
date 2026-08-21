@@ -11,6 +11,8 @@ import 'package:go_router/go_router.dart';
 import 'package:http_parser/http_parser.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../../../core/api/api_exception.dart';
+import '../../../../app/env.dart';
 import '../../../../app/theme.dart';
 import '../../../../core/providers/providers.dart';
 import '../../../../core/widgets/app_button.dart';
@@ -50,17 +52,30 @@ class _LivePhotoScreenState extends ConsumerState<LivePhotoScreen> {
   Future<void> _checkExistingPhoto() async {
     try {
       final customer = ref.read(journeyControllerProvider).customer;
-      if (customer != null && !customer.updateReadinessReasons.contains('LIVENESS_NOT_VERIFIED')) {
+      if (customer != null) {
         final customerApi = ref.read(customerApiProvider);
         final res = await customerApi.getCustomerLivePhoto(customer.id);
         if (res != null) {
-          final url = res['documentUrl'] ?? res['url'];
-          if (url != null) {
+          final dataObj = res['data'] is Map<String, dynamic> ? res['data'] : res;
+          final String? fileUrl = dataObj?['fileUrl'] ?? dataObj?['documentUrl'] ?? dataObj?['url'] ?? res['fileUrl'] ?? res['url'];
+          final String? status = dataObj?['status'] ?? dataObj?['faceLivenessStatus'] ?? res['status'];
+          
+          final bool isVerified = status == 'VERIFIED' ||
+              !customer.updateReadinessReasons.contains('LIVENESS_NOT_VERIFIED');
+          
+          if (fileUrl != null || isVerified) {
             setState(() {
-              _imageUrl = url;
+              if (fileUrl != null && fileUrl.isNotEmpty) {
+                final baseUrl = currentEnvironment.apiBaseUrl.replaceAll('/api', '');
+                _imageUrl = fileUrl.startsWith('http') ? fileUrl : '$baseUrl$fileUrl';
+              }
               _isCompleted = true;
             });
           }
+        } else if (!customer.updateReadinessReasons.contains('LIVENESS_NOT_VERIFIED')) {
+          setState(() {
+            _isCompleted = true;
+          });
         }
       }
     } catch (e) {
@@ -371,9 +386,17 @@ class _LivePhotoScreenState extends ConsumerState<LivePhotoScreen> {
       await ref.read(journeyControllerProvider.notifier).syncCustomerState();
 
     } catch (e) {
-      print('Liveness & Upload failed: $e');
+      String msg = e.toString();
+      if (e is DioException) {
+        final apiClient = ref.read(apiClientProvider);
+        msg = apiClient.handleError(e).message;
+      } else if (e is AppException) {
+        msg = e.message;
+      } else if (msg.startsWith('Exception: ')) {
+        msg = msg.substring(11);
+      }
       setState(() {
-        _errorMessage = e.toString().replaceAll('Exception: ', '');
+        _errorMessage = msg;
       });
     } finally {
       if (mounted) {

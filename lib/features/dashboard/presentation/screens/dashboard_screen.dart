@@ -1561,14 +1561,11 @@ class _DashboardScreenState
             statusUpper.contains('DISBURS');
 
     final basicDetailsComplete =
-        fullName != 'Not provided';
+        fullName != 'Not provided' && emailVerified == true;
 
     final profileComplete =
         employmentType != 'Not provided' ||
             monthlyIncome != null;
-
-    final addressComplete =
-        residentialPincode != 'Not provided';
 
     final assessmentFeePaid = customer?.assessmentFeePaid == true;
     final postApproval = journeyState.postApproval;
@@ -1579,16 +1576,17 @@ class _DashboardScreenState
 
     final digilockerComplete = customer != null &&
         (customer.aadhaarVerified == true ||
-            customer.aadhaarKycStatus == 'VERIFIED' ||
-            !customer.updateReadinessReasons.contains('DIGILOCKER_KYC_NOT_VERIFIED'));
+            customer.aadhaarKycStatus == 'VERIFIED');
+
+    final addressComplete = customer != null &&
+        !customer.updateReadinessReasons.contains('ADDRESS_NOT_VERIFIED') &&
+        !customer.updateReadinessReasons.contains('RESIDENTIAL_ADDRESS_NOT_VERIFIED') &&
+        (customer.residentialCity != null && customer.residentialCity != 'Not provided');
 
     final aaComplete = customer != null &&
         (customer.aaVerified == true ||
             ['SUCCESS', 'COMPLETED', 'VERIFIED'].contains(customer.aaStatus?.toUpperCase()) ||
-            ['SUCCESS', 'COMPLETED', 'VERIFIED'].contains(customer.accountAggregatorStatus?.toUpperCase()) ||
-            (!customer.updateReadinessReasons.contains('ACCOUNT_AGGREGATOR_NOT_VERIFIED') &&
-             !customer.updateReadinessReasons.contains('AA_NOT_VERIFIED') &&
-             !customer.updateReadinessReasons.contains('BANK_STATEMENT_NOT_VERIFIED')));
+            ['SUCCESS', 'COMPLETED', 'VERIFIED'].contains(customer.accountAggregatorStatus?.toUpperCase()));
 
     final applicationSteps = <_ApplicationStep>[
       _ApplicationStep(
@@ -1739,7 +1737,7 @@ class _DashboardScreenState
                           CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Application #$applicationId',
+                          'Application $applicationId',
                           style: const TextStyle(
                             color: AppTheme.textDarkPrimary,
                             fontSize: 18,
@@ -1849,11 +1847,15 @@ class _DashboardScreenState
                     children: [
                       const SizedBox(height: 17),
                       AppButton(
-                        text: nextIncompleteRoute == '/onboarding/basic-details'
+                        text: (nextIncompleteRoute == '/onboarding/basic-details' || emailVerified != true)
                             ? 'Apply for Loan'
                             : 'Resume Application',
-                        onPressed: () {
-                          context.push(nextIncompleteRoute!);
+                        onPressed: () async {
+                          await ref.read(journeyControllerProvider.notifier).syncCustomerState();
+                          if (mounted) {
+                            final target = ref.read(journeyControllerProvider).targetRoute;
+                            context.push((target.isNotEmpty && target != '/dashboard' && target != '/login') ? target : nextIncompleteRoute!);
+                          }
                         },
                         icon: Icons.arrow_forward_rounded,
                       ),

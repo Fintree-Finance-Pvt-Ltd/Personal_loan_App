@@ -5,6 +5,8 @@ import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
+import 'package:dio/dio.dart';
+import '../../../../core/api/api_exception.dart';
 import '../../../../app/theme.dart';
 import '../../../../core/providers/providers.dart';
 import '../../../../core/utils/currency_utils.dart';
@@ -252,9 +254,18 @@ class _AccountAggregatorScreenState extends ConsumerState<AccountAggregatorScree
     } catch (e) {
       print('[AA SCREEN] [ERROR] _initiateAA error: $e');
       if (!mounted) return;
+      String msg = e.toString();
+      if (e is DioException) {
+        final apiClient = ref.read(apiClientProvider);
+        msg = apiClient.handleError(e).message;
+      } else if (e is AppException) {
+        msg = e.message;
+      } else if (msg.startsWith('Exception: ')) {
+        msg = msg.substring(11);
+      }
       setState(() {
         _isInitiating = false;
-        _failureReason = e.toString().replaceAll('Exception: ', '');
+        _failureReason = msg;
         _status = 'FAILED';
       });
     }

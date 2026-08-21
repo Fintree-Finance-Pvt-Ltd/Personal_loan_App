@@ -66,15 +66,32 @@ class ApiClient {
           String? code;
 
           if (data is Map<String, dynamic>) {
-            message = data['message'] as String? ?? data['error'] as String? ?? message;
-            code = data['code'] as String?;
+            if (data['error'] is Map<String, dynamic>) {
+              final errMap = data['error'] as Map<String, dynamic>;
+              if (errMap['message'] != null) {
+                message = errMap['message'].toString();
+              }
+              if (errMap['code'] != null) {
+                code = errMap['code'].toString();
+              }
+            } else if (data['error'] is String) {
+              message = data['error'] as String;
+            }
+
+            if (data['message'] is String) {
+              message = data['message'] as String;
+            } else if (data['message'] is List) {
+              message = (data['message'] as List).join(', ');
+            }
+
+            if (data['code'] is String) {
+              code = data['code'] as String;
+            }
 
             if (data['errors'] is Map<String, dynamic>) {
               fieldErrors = (data['errors'] as Map<String, dynamic>).map(
                 (k, v) => MapEntry(k, v.toString()),
               );
-            } else if (data['message'] is List) {
-              message = (data['message'] as List).join(', ');
             }
           }
 

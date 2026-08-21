@@ -320,6 +320,33 @@ class CustomerApi {
     return _extractData(res);
   }
 
+  Future<Map<String, dynamic>> getCustomerProfile() async {
+    final session = await _getSession();
+    final customerId = session?['customerId'] as String?;
+    if (customerId != null && customerId.isNotEmpty) {
+      final res = await _apiClient.get('/customer/$customerId');
+      return _extractData(res);
+    }
+    final res = await _apiClient.get('/customer/me');
+    return _extractData(res);
+  }
+
+  Future<Map<String, dynamic>> getPreApprovalOffer(String lan) async {
+    final res = await _apiClient.get('/customer/loans/$lan/pre-approval-offer');
+    return _extractData(res);
+  }
+
+  Future<Map<String, dynamic>> selectPreApprovalOffer(
+    String lan,
+    int tenureDays,
+  ) async {
+    final res = await _apiClient.post(
+      '/customer/loans/$lan/pre-approval-offer/select',
+      data: {'tenureDays': tenureDays},
+    );
+    return _extractData(res);
+  }
+
   Future<Map<String, dynamic>> getLoanOffer(String lan) async {
     final res = await _apiClient.get('/customer/loans/$lan/offer');
     return _extractData(res);

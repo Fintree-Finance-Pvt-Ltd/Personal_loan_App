@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:dio/dio.dart';
+import '../../../../core/api/api_exception.dart';
 import '../../../../app/theme.dart';
 import '../../../../core/providers/providers.dart';
 import '../../../../core/utils/formatters.dart';
@@ -56,21 +57,10 @@ class _PanVerificationScreenState extends ConsumerState<PanVerificationScreen> {
   }
 
   String _extractErrorMessage(dynamic e) {
+    if (e is AppException) return e.message;
     if (e is DioException) {
-      if (e.response?.data != null) {
-        final data = e.response!.data;
-        if (data is Map) {
-          if (data['error'] is Map && data['error']['message'] != null) {
-            return data['error']['message'].toString();
-          }
-          if (data['message'] != null) {
-            return data['message'].toString();
-          }
-        }
-      }
-      if (e.message != null && e.message!.isNotEmpty) {
-        return e.message!;
-      }
+      final apiClient = ref.read(apiClientProvider);
+      return apiClient.handleError(e).message;
     }
     final str = e.toString();
     if (str.startsWith('Exception: ')) {
@@ -193,8 +183,6 @@ class _PanVerificationScreenState extends ConsumerState<PanVerificationScreen> {
           data: {
             'customerId': customerId,
             'panNumber': _panController.text.trim().toUpperCase(),
-            if (_fullNameController.text.trim().isNotEmpty)
-              'fullName': _fullNameController.text.trim(),
           },
         );
 
@@ -463,15 +451,15 @@ class _PanVerificationScreenState extends ConsumerState<PanVerificationScreen> {
                     UpperCaseTextFormatter(),
                   ],
                 ),
-                const SizedBox(height: 16),
-                AppTextField(
-                  label: 'Full Name (as per PAN)',
-                  hint: 'Enter full name as per PAN card',
-                  controller: _fullNameController,
-                  textCapitalization: TextCapitalization.words,
-                  readOnly: isAlreadyVerified,
-                  prefix: const Icon(Icons.person_outline_rounded, size: 20),
-                ),
+                if (isAlreadyVerified && _fullNameController.text.trim().isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  AppTextField(
+                    label: 'Full Name (as per PAN)',
+                    controller: _fullNameController,
+                    readOnly: true,
+                    prefix: const Icon(Icons.person_outline_rounded, size: 20),
+                  ),
+                ],
                 if (_errorMessage != null) ...[
                   const SizedBox(height: 16),
                   Container(

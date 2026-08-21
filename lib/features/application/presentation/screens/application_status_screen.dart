@@ -6,6 +6,7 @@ import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_loader.dart';
 import '../../../../core/widgets/app_status_badge.dart';
 import '../../../../core/widgets/app_header.dart';
+import '../../../../core/providers/providers.dart';
 import '../../../dashboard/presentation/journey_controller.dart';
 
 
@@ -52,57 +53,45 @@ class _ApplicationStatusScreenState extends ConsumerState<ApplicationStatusScree
     if (!mounted) return;
     setState(() => _isAutoPolling = true);
 
-    const maxAttempts = 36; // 36 * 5s = 180 seconds (3 mins max)
+    const maxAttempts = 30; // 30 * 4s = 120s (2 minutes timeout)
     int attempts = 0;
 
     while (attempts < maxAttempts && mounted) {
-      await Future.delayed(const Duration(seconds: 5));
+      await Future.delayed(const Duration(seconds: 4));
       if (!mounted) break;
       attempts++;
 
-      await ref.read(journeyControllerProvider.notifier).syncCustomerState();
-      if (!mounted) break;
+      try {
+        final customerApi = ref.read(customerApiProvider);
+        final profileRes = await customerApi.getCustomerProfile();
+        dynamic journeyData = profileRes['journey'] ?? profileRes['data']?['journey'];
+        String? currentStep = journeyData?['currentStep'];
+        String? appStatus = journeyData?['applicationStatus'];
+        String? platformLan = journeyData?['platformLan'];
 
-      final customer = ref.read(journeyControllerProvider).customer;
-      final nextStep = customer?.nextPermittedStep;
-      final appStatus = customer?.latestApplicationStatus;
-      final lan = customer?.latestLan ?? customer?.platformLan;
+        await ref.read(journeyControllerProvider.notifier).syncCustomerState();
+        if (!mounted) break;
 
-      // Resolved to pre-approved — go to offer page
-      if (nextStep == 'PRE_APPROVAL_OFFER_SELECTION' ||
-          appStatus == 'LENDER_PRE_APPROVED') {
-        if (mounted) {
-          if (lan != null && lan.isNotEmpty) {
-            context.go('/loan/$lan/offer?isPreApproval=true');
-          } else {
-            context.go('/onboarding/offer');
+        final customer = ref.read(journeyControllerProvider).customer;
+        currentStep ??= customer?.nextPermittedStep;
+        appStatus ??= customer?.latestApplicationStatus;
+        platformLan ??= customer?.latestLan ?? customer?.platformLan;
+
+        if (currentStep == 'PRE_APPROVAL_OFFER_SELECTION' || appStatus == 'LENDER_PRE_APPROVED') {
+          if (mounted) {
+            final effectiveLan = (platformLan != null && platformLan.isNotEmpty) ? platformLan : 'default';
+            context.go('/loan/$effectiveLan/offer?isPreApproval=true');
           }
+          break;
         }
-        break;
-      }
 
-      // Resolved to Lender Approved — stop polling (UI will present post-approval start button)
-      if (appStatus == 'LENDER_APPROVED') {
-        break;
+        if (appStatus == 'LENDER_REJECTED' || appStatus == 'REJECTED') {
+          break;
+        }
+      } catch (e) {
+        debugPrint('[StatusPoll] Error polling profile: $e');
+        await ref.read(journeyControllerProvider.notifier).syncCustomerState();
       }
-
-      // Terminal rejection or support step
-      if (nextStep == 'INTEGRATION_SUPPORT' ||
-          appStatus == 'LENDER_REJECTED' ||
-          appStatus == 'REJECTED') {
-        break;
-      }
-
-      // Still processing — keep looping
-      final isStillProcessing = nextStep == 'LENDER_DECISION_PROCESSING' ||
-          nextStep == 'LENDER_CREATE_PROCESSING' ||
-          nextStep == 'LENDER_UPDATE_PROCESSING' ||
-          nextStep == 'APPROVAL_PROCESSING' ||
-          appStatus == 'SUBMITTED' ||
-          appStatus == 'PENDING_CREDIT_REVIEW' ||
-          appStatus == 'LENDER_REVIEW';
-          
-      if (!isStillProcessing) break;
     }
 
     if (mounted) setState(() => _isAutoPolling = false);
@@ -117,15 +106,22 @@ class _ApplicationStatusScreenState extends ConsumerState<ApplicationStatusScree
     final nextStep = customer?.nextPermittedStep;
     final lan = customer?.latestLan ?? customer?.platformLan;
 
-
-
     if (journeyState.isLoading) {
       return const Scaffold(body: AppLoader(message: 'Checking application status...'));
     }
 
+    final bool isRejection = appStatus == 'LENDER_REJECTED' || appStatus == 'REJECTED';
+    final bool isProcessing = _isAutoPolling ||
+        nextStep == 'LENDER_DECISION_PROCESSING' ||
+        nextStep == 'LENDER_CREATE_PROCESSING' ||
+        nextStep == 'APPROVAL_PROCESSING' ||
+        appStatus == 'SUBMITTED' ||
+        appStatus == 'PENDING_CREDIT_REVIEW' ||
+        appStatus == 'LENDER_REVIEW';
+
     return Scaffold(
       appBar: AppHeader(
-        title: 'Application Status',
+        title: isProcessing ? 'Underwriting in Progress' : 'Application Status',
         actions: [
           IconButton(icon: const Icon(Icons.refresh), onPressed: _refresh),
         ],
@@ -137,51 +133,62 @@ class _ApplicationStatusScreenState extends ConsumerState<ApplicationStatusScree
             children: [
               const SizedBox(height: 20),
               Container(
-                padding: const EdgeInsets.all(20),
-                decoration: const BoxDecoration(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
                   color: AppTheme.surfaceWhite,
                   shape: BoxShape.circle,
+                  border: Border.all(color: AppTheme.primaryTeal.withValues(alpha: 0.15), width: 2),
                   boxShadow: [
-                    BoxShadow(color: Colors.black12, blurRadius: 4),
+                    BoxShadow(color: AppTheme.primaryTeal.withValues(alpha: 0.08), blurRadius: 16, offset: const Offset(0, 4)),
                   ],
                 ),
-                child: Icon(
-                  _isAutoPolling || nextStep == 'LENDER_DECISION_PROCESSING' ||
-                      nextStep == 'LENDER_CREATE_PROCESSING' ||
-                      nextStep == 'APPROVAL_PROCESSING'
-                      ? Icons.sync_rounded
-                      : (appStatus == 'LENDER_APPROVED'
-                          ? Icons.check_circle_rounded
-                          : (appStatus == 'REJECTED' ? Icons.cancel_rounded : Icons.hourglass_top_rounded)),
-                  size: 64,
-                  color: _isAutoPolling
-                      ? AppTheme.primaryTeal
-                      : (appStatus == 'LENDER_APPROVED'
-                          ? AppTheme.successGreen
-                          : (appStatus == 'REJECTED' ? AppTheme.errorRed : AppTheme.warningOrange)),
-                ),
-              ),
-              const SizedBox(height: 20),
-              Text(
-                _getStatusTitle(appStatus),
-                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AppTheme.textDarkPrimary),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                _getStatusDescription(appStatus),
-                style: const TextStyle(fontSize: 14, color: AppTheme.textDarkSecondary),
-                textAlign: TextAlign.center,
+                child: isProcessing
+                    ? const SizedBox(
+                        width: 54,
+                        height: 54,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 4,
+                          color: AppTheme.primaryTeal,
+                        ),
+                      )
+                    : Icon(
+                        isRejection
+                            ? Icons.cancel_rounded
+                            : (appStatus == 'LENDER_APPROVED' || appStatus == 'LENDER_PRE_APPROVED'
+                                ? Icons.check_circle_rounded
+                                : Icons.hourglass_top_rounded),
+                        size: 64,
+                        color: isRejection
+                            ? AppTheme.errorRed
+                            : (appStatus == 'LENDER_APPROVED' || appStatus == 'LENDER_PRE_APPROVED'
+                                ? AppTheme.successGreen
+                                : AppTheme.warningOrange),
+                      ),
               ),
               const SizedBox(height: 24),
+              Text(
+                isProcessing ? 'We are processing your application with the lender...' : _getStatusTitle(appStatus),
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppTheme.textDarkPrimary),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                isProcessing
+                    ? 'This usually takes 10 to 30 seconds. Please do not close or refresh this page.'
+                    : _getStatusDescription(appStatus),
+                style: const TextStyle(fontSize: 14, color: AppTheme.textDarkSecondary, height: 1.4),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 28),
               Card(
                 child: Padding(
                   padding: const EdgeInsets.all(16.0),
                   child: Column(
                     children: [
-                      _infoRow('Lender', 'Fintree Finance Private Limited'),
+                      _infoRow('Lender', customer?.allocatedLenderName ?? 'Fintree Finance Private Limited'),
                       const Divider(height: 16),
                       _infoRow('Status', appStatus, isBadge: true),
-                      if (lan != null) ...[
+                      if (lan != null && lan.isNotEmpty) ...[
                         const Divider(height: 16),
                         _infoRow('Loan Account No. (LAN)', lan),
                       ],
@@ -190,7 +197,37 @@ class _ApplicationStatusScreenState extends ConsumerState<ApplicationStatusScree
                 ),
               ),
               const Spacer(),
-              _buildActionButtons(appStatus, nextStep, lan, context),
+              if (isRejection) ...[
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppTheme.errorBg,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Column(
+                    children: [
+                      Text(
+                        'Application Not Approved',
+                        style: TextStyle(fontWeight: FontWeight.bold, color: AppTheme.errorRed, fontSize: 15),
+                      ),
+                      SizedBox(height: 6),
+                      Text(
+                        'Your application does not currently satisfy lender policy thresholds. You may re-apply after 90 days or contact support for assistance.',
+                        style: TextStyle(color: AppTheme.errorRed, fontSize: 13, height: 1.4),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                AppButton(
+                  text: 'Return to Dashboard',
+                  onPressed: () => context.go('/dashboard'),
+                  icon: Icons.home_rounded,
+                ),
+              ] else ...[
+                _buildActionButtons(appStatus, nextStep, lan, context),
+              ],
             ],
           ),
         ),

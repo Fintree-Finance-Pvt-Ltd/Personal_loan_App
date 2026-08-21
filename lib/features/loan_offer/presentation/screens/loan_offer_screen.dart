@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:dio/dio.dart';
+import '../../../../core/api/api_exception.dart';
 import '../../../../app/theme.dart';
 import '../../../../core/providers/providers.dart';
 import '../../../../core/utils/currency_utils.dart';
@@ -55,13 +57,10 @@ class _LoanOfferScreenState extends ConsumerState<LoanOfferScreen> {
       if (effectiveLan != null && effectiveLan.isNotEmpty) {
         setState(() => _isLoadingPreApproval = true);
         try {
-          final apiClient = ref.read(apiClientProvider);
-          final res = await apiClient.get('/customer/loans/$effectiveLan/pre-approval-offer');
+          final customerApi = ref.read(customerApiProvider);
+          final res = await customerApi.getPreApprovalOffer(effectiveLan);
           
           dynamic rawData = res;
-          if (rawData is Map<String, dynamic> && rawData['data'] != null) {
-            rawData = rawData['data'];
-          }
           if (rawData is Map<String, dynamic> && rawData['data'] != null) {
             rawData = rawData['data'];
           }
@@ -74,8 +73,17 @@ class _LoanOfferScreenState extends ConsumerState<LoanOfferScreen> {
             }
           });
         } catch (e) {
+          String msg = e.toString();
+          if (e is DioException) {
+            final apiClient = ref.read(apiClientProvider);
+            msg = apiClient.handleError(e).message;
+          } else if (e is AppException) {
+            msg = e.message;
+          } else if (msg.startsWith('Exception: ')) {
+            msg = msg.substring(11);
+          }
           setState(() {
-            _errorMessage = 'Failed to load pre-approval offer: $e';
+            _errorMessage = 'Failed to load pre-approval offer: $msg';
           });
         } finally {
           if (mounted) setState(() => _isLoadingPreApproval = false);
@@ -118,18 +126,24 @@ class _LoanOfferScreenState extends ConsumerState<LoanOfferScreen> {
       final isPreApproval = _checkIsPreApproval();
       
       if (isPreApproval) {
-        // Pre-approval accept flow: sends offer selection to credit team/lender for final decision
-        await apiClient.post(
-          '/customer/loans/$effectiveLan/pre-approval-offer/select',
-          data: {
-            'customerId': customerId,
-            'tenureDays': _selectedTenureDays,
-          },
-        );
+        final customerApi = ref.read(customerApiProvider);
+        await customerApi.selectPreApprovalOffer(effectiveLan, _selectedTenureDays);
         
         await ref.read(journeyControllerProvider.notifier).syncCustomerState();
         if (mounted) {
-          context.go('/application/status');
+          final postApproval = ref.read(journeyControllerProvider).postApproval;
+          if (postApproval != null) {
+            final step = postApproval.workflow.currentStep;
+            if (step == 'DIGILOCKER_KYC') {
+              context.go('/loan/$effectiveLan/digilocker');
+            } else if (step == 'ADDRESS_VERIFICATION') {
+              context.go('/loan/$effectiveLan/address');
+            } else {
+              context.go('/loan/$effectiveLan/bank');
+            }
+          } else {
+            context.go('/loan/$effectiveLan/digilocker');
+          }
         }
       } else {
         // Post-approval accept flow
@@ -152,8 +166,17 @@ class _LoanOfferScreenState extends ConsumerState<LoanOfferScreen> {
         }
       }
     } catch (e) {
+      String msg = e.toString();
+      if (e is DioException) {
+        final apiClient = ref.read(apiClientProvider);
+        msg = apiClient.handleError(e).message;
+      } else if (e is AppException) {
+        msg = e.message;
+      } else if (msg.startsWith('Exception: ')) {
+        msg = msg.substring(11);
+      }
       setState(() {
-        _errorMessage = e.toString();
+        _errorMessage = msg;
       });
     } finally {
       if (mounted) setState(() => _isAccepting = false);
@@ -192,10 +215,12 @@ class _LoanOfferScreenState extends ConsumerState<LoanOfferScreen> {
           body: const Center(child: Text('Offer not available.')),
         );
       }
-      amount = (_preApprovalOffer!['amount'] ?? 0).toDouble();
-      allowedTenures = List<int>.from(_preApprovalOffer!['allowedTenures'] ?? []);
-      isAccepted = _preApprovalOffer!['alreadySelected'] == true;
-      processingFee = amount * 0.02; // Approximation, usually from config
+      amount = ((_preApprovalOffer!['lenderApprovedAmount'] ?? _preApprovalOffer!['amount']) ?? 8000).toDouble();
+      interestRate = ((_preApprovalOffer!['roi'] ?? _preApprovalOffer!['interestRate']) ?? 24.0).toDouble();
+      lenderName = (_preApprovalOffer!['lenderName'] ?? 'Fintree Finance Private Limited').toString();
+      allowedTenures = List<int>.from(_preApprovalOffer!['allowedTenures'] ?? [30, 45, 60]);
+      isAccepted = _preApprovalOffer!['alreadySelected'] == true || _preApprovalOffer!['status'] == 'OFFER_SELECTED';
+      processingFee = amount * 0.02;
       totalRepayment = amount + (amount * (interestRate / 100) * (_selectedTenureDays / 365));
     } else {
       final journey = journeyState.postApproval;
@@ -329,10 +354,10 @@ class _LoanOfferScreenState extends ConsumerState<LoanOfferScreen> {
                 )
               else
                 AppButton(
-                  text: isPreApproval ? 'Submit Pre-Approved Offer & Send to Credit Review' : 'Accept Loan Offer',
+                  text: isPreApproval ? 'Accept Offer & Proceed to next stage' : 'Accept Loan Offer',
                   isLoading: _isAccepting,
                   onPressed: _acceptOffer,
-                  icon: Icons.send_rounded,
+                  icon: Icons.check_circle_outline_rounded,
                 ),
             ],
           ),
