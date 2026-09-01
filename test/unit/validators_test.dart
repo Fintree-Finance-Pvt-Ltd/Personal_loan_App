@@ -9,9 +9,9 @@ void main() {
     });
 
     test('validateMobile returns error string for invalid mobile', () {
-      expect(Validators.validateMobile('12345'), isNotNull);
-      expect(Validators.validateMobile('5876543210'), isNotNull);
-      expect(Validators.validateMobile(''), isNotNull);
+      expect(Validators.validateMobile('12345'), equals('Mobile number must be exactly 10 digits'));
+      expect(Validators.validateMobile('5876543210'), equals('Mobile number must start with 6, 7, 8, or 9'));
+      expect(Validators.validateMobile(''), equals('Please enter your mobile number'));
     });
 
     test('validatePan returns null for valid PAN', () {

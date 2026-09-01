@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:dio/dio.dart';
+import '../../../../core/api/api_exception.dart';
 import '../../../../app/theme.dart';
 import '../../../../core/providers/providers.dart';
 import '../../../../core/utils/validators.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_text_field.dart';
+import '../../../../core/widgets/app_header.dart';
 import '../../../dashboard/presentation/journey_controller.dart';
 
 class AddressScreen extends ConsumerStatefulWidget {
@@ -126,11 +129,24 @@ class _AddressScreenState extends ConsumerState<AddressScreen> {
       await ref.read(journeyControllerProvider.notifier).syncCustomerState();
 
       if (mounted) {
-        context.push('/onboarding/review');
+        if (widget.lan != null && widget.lan!.isNotEmpty) {
+          context.push('/loan/${widget.lan}/account-aggregator');
+        } else {
+          context.push('/onboarding/account-aggregator');
+        }
       }
     } catch (e) {
+      String msg = e.toString();
+      if (e is DioException) {
+        final apiClient = ref.read(apiClientProvider);
+        msg = apiClient.handleError(e).message;
+      } else if (e is AppException) {
+        msg = e.message;
+      } else if (msg.startsWith('Exception: ')) {
+        msg = msg.substring(11);
+      }
       setState(() {
-        _errorMessage = e.toString();
+        _errorMessage = msg;
       });
     } finally {
       if (mounted) setState(() => _isSaving = false);
@@ -140,8 +156,9 @@ class _AddressScreenState extends ConsumerState<AddressScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Address Confirmation'),
+      appBar: const AppHeader(
+        title: 'Address Confirmation',
+        fallbackRoute: '/onboarding/digilocker',
       ),
       body: SafeArea(
         child: SingleChildScrollView(

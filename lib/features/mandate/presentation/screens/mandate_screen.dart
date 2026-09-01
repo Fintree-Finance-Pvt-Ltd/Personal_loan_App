@@ -3,11 +3,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import 'package:dio/dio.dart';
+import '../../../../core/api/api_exception.dart';
 import '../../../../app/theme.dart';
 import '../../../../core/providers/providers.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_loader.dart';
 import '../../../../core/widgets/app_status_badge.dart';
+import '../../../../core/widgets/app_header.dart';
 import '../../../dashboard/presentation/journey_controller.dart';
 
 class MandateScreen extends ConsumerStatefulWidget {
@@ -231,8 +234,17 @@ class _MandateScreenState extends ConsumerState<MandateScreen> {
         });
       }
     } catch (e) {
+      String msg = e.toString();
+      if (e is DioException) {
+        final apiClient = ref.read(apiClientProvider);
+        msg = apiClient.handleError(e).message;
+      } else if (e is AppException) {
+        msg = e.message;
+      } else if (msg.startsWith('Exception: ')) {
+        msg = msg.substring(11);
+      }
       setState(() {
-        _errorMessage = e.toString();
+        _errorMessage = msg;
       });
     } finally {
       if (mounted) setState(() => _isInitiating = false);
@@ -278,8 +290,17 @@ class _MandateScreenState extends ConsumerState<MandateScreen> {
         }
       }
     } catch (e) {
+      String msg = e.toString();
+      if (e is DioException) {
+        final apiClient = ref.read(apiClientProvider);
+        msg = apiClient.handleError(e).message;
+      } else if (e is AppException) {
+        msg = e.message;
+      } else if (msg.startsWith('Exception: ')) {
+        msg = msg.substring(11);
+      }
       setState(() {
-        _errorMessage = e.toString();
+        _errorMessage = msg;
       });
     } finally {
       if (mounted) setState(() => _isChecking = false);
@@ -295,19 +316,16 @@ class _MandateScreenState extends ConsumerState<MandateScreen> {
     // ── WebView Screen ────────────────────────────────────────────────────
     if (_mandateUrl != null && _webViewController != null && !isCompleted) {
       return Scaffold(
-        appBar: AppBar(
-          title: const Text('Mandate Authorization'),
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back),
-            onPressed: () {
-              setState(() {
-                _mandateUrl = null;
-                _webViewController = null;
-                _isWebViewLoading = false;
-                _errorMessage = null;
-              });
-            },
-          ),
+        appBar: AppHeader(
+          title: 'Mandate Authorization',
+          onBackPressed: () {
+            setState(() {
+              _mandateUrl = null;
+              _webViewController = null;
+              _isWebViewLoading = false;
+              _errorMessage = null;
+            });
+          },
           actions: [
             if (_isChecking)
               const Padding(
@@ -398,8 +416,9 @@ class _MandateScreenState extends ConsumerState<MandateScreen> {
 
     // ── Setup Screen ──────────────────────────────────────────────────────
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Mandate Setup'),
+      appBar: AppHeader(
+        title: 'Mandate Setup',
+        fallbackRoute: widget.lan.isNotEmpty ? '/loan/${widget.lan}/kfs' : '/dashboard',
       ),
       body: SafeArea(
         child: Padding(

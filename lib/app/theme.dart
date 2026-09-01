@@ -1,61 +1,62 @@
 import 'package:flutter/material.dart';
 
+/// Central application design system and theme tokens.
 class AppTheme {
   AppTheme._();
 
   // ============================================================
-  // BRAND COLORS
+  // BRAND COLORS (DARK NAVY BLUE & EMERALD GREEN)
   // ============================================================
 
-  static const Color primaryTeal = Color(0xFF00897B);
-  static const Color primaryDarkTeal = Color(0xFF005B52);
-  static const Color primaryDeepTeal = Color(0xFF033F45);
-  static const Color primaryLightTeal = Color(0xFFE6F6F4);
-  static const Color primarySoftTeal = Color(0xFFF1FAF9);
+  static const Color primaryTeal = Color(0xFF0D4B85);      // Deep Royal/Navy Blue
+  static const Color primaryDarkTeal = Color(0xFF1E293B);  // Slate Dark Navy
+  static const Color primaryDeepTeal = Color(0xFF0F172A);  // Midnight Deep Navy
+  static const Color primaryLightTeal = Color(0xFFECFDF5); // Light Emerald Tint
+  static const Color primarySoftTeal = Color(0xFFF0FDF4);  // Soft Mint Tint
 
-  static const Color secondaryBlue = Color(0xFF0284C7);
-  static const Color secondaryDarkBlue = Color(0xFF075985);
-  static const Color secondaryLightBlue = Color(0xFFE0F2FE);
+  static const Color secondaryBlue = Color(0xFF1E40AF);
+  static const Color secondaryDarkBlue = Color(0xFF1E3A8A);
+  static const Color secondaryLightBlue = Color(0xFFDBEAFE);
 
-  static const Color accentCyan = Color(0xFF16B8AA);
-  static const Color accentMint = Color(0xFF5EEAD4);
+  static const Color accentCyan = Color(0xFF10B981);       // Vibrant Emerald Green
+  static const Color accentMint = Color(0xFF34D399);       // Bright Mint
 
   // ============================================================
   // BACKGROUND AND SURFACE COLORS
   // ============================================================
 
-  static const Color backgroundLight = Color(0xFFF4F8F8);
-  static const Color backgroundSoft = Color(0xFFF8FBFB);
+  static const Color backgroundLight = Color(0xFFF8FAFC);  // Soft Cool Slate Light
+  static const Color backgroundSoft = Color(0xFFF1F5F9);
 
   static const Color surfaceWhite = Color(0xFFFFFFFF);
-  static const Color surfaceLight = Color(0xFFF7FAFA);
-  static const Color surfaceMuted = Color(0xFFF1F5F5);
-  static const Color surfaceTeal = Color(0xFFF0F9F8);
+  static const Color surfaceLight = Color(0xFFF8FAFC);
+  static const Color surfaceMuted = Color(0xFFF1F5F9);
+  static const Color surfaceTeal = Color(0xFFECFDF5);
 
   // ============================================================
   // TEXT COLORS
   // ============================================================
 
-  static const Color textDarkPrimary = Color(0xFF102A2C);
-  static const Color textDarkSecondary = Color(0xFF526769);
-  static const Color textMuted = Color(0xFF8A9C9E);
-  static const Color textDisabled = Color(0xFFB4C0C1);
+  static const Color textDarkPrimary = Color(0xFF0F172A);   // Midnight Dark Text
+  static const Color textDarkSecondary = Color(0xFF475569); // Slate Subtitle Text
+  static const Color textMuted = Color(0xFF94A3B8);         // Muted Caption Text
+  static const Color textDisabled = Color(0xFFCBD5E1);
   static const Color textOnPrimary = Color(0xFFFFFFFF);
 
   // ============================================================
   // BORDER AND DIVIDER COLORS
   // ============================================================
 
-  static const Color borderLight = Color(0xFFDCE8E8);
-  static const Color borderMuted = Color(0xFFE8EFEF);
+  static const Color borderLight = Color(0xFFE2E8F0);
+  static const Color borderMuted = Color(0xFFF1F5F9);
   static const Color borderFocused = primaryTeal;
-  static const Color dividerColor = Color(0xFFE6EEEE);
+  static const Color dividerColor = Color(0xFFE2E8F0);
 
   // ============================================================
   // STATUS COLORS
   // ============================================================
 
-  static const Color successGreen = Color(0xFF0E9F6E);
+  static const Color successGreen = Color(0xFF059669);       // Vibrant Emerald
   static const Color successDarkGreen = Color(0xFF047857);
   static const Color successBg = Color(0xFFECFDF5);
 
@@ -63,25 +64,25 @@ class AppTheme {
   static const Color warningDarkOrange = Color(0xFFB45309);
   static const Color warningBg = Color(0xFFFFF8E6);
 
-  static const Color errorRed = Color(0xFFDC3545);
+  static const Color errorRed = Color(0xFFDC2626);
   static const Color errorDarkRed = Color(0xFFB91C1C);
-  static const Color errorBg = Color(0xFFFFF1F2);
+  static const Color errorBg = Color(0xFFFEF2F2);
 
   static const Color infoBlue = Color(0xFF2563EB);
   static const Color infoDarkBlue = Color(0xFF1D4ED8);
   static const Color infoBg = Color(0xFFEFF6FF);
 
   // ============================================================
-  // GRADIENTS
+  // GRADIENTS (DARK NAVY BLUE TO EMERALD GREEN)
   // ============================================================
 
   static const LinearGradient primaryGradient = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
     colors: [
-      primaryDeepTeal,
-      primaryTeal,
-      accentCyan,
+      primaryDeepTeal,  // Midnight Navy
+      primaryTeal,      // Royal Navy Blue
+      accentCyan,       // Vibrant Emerald Green
     ],
   );
 
@@ -89,7 +90,7 @@ class AppTheme {
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
     colors: [
-      primarySoftTeal,
+      primaryLightTeal,
       surfaceWhite,
     ],
   );
@@ -98,9 +99,8 @@ class AppTheme {
     begin: Alignment.centerLeft,
     end: Alignment.centerRight,
     colors: [
-      primaryDarkTeal,
-      primaryTeal,
-      accentCyan,
+      primaryTeal,      // Deep Royal Blue
+      accentCyan,       // Emerald Green
     ],
   );
 

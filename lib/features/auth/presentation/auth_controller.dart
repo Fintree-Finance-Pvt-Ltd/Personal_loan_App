@@ -1,4 +1,6 @@
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/api/api_exception.dart';
 import '../../../core/models/customer_model.dart';
 import '../../../core/providers/providers.dart';
 import '../data/auth_repository.dart';
@@ -47,6 +49,30 @@ class AuthController extends StateNotifier<AuthState> {
 
   AuthController(this._repository) : super(const AuthState());
 
+  String _cleanErrorMessage(dynamic e) {
+    if (e is AppException) return e.message;
+    if (e is DioException) {
+      final data = e.response?.data;
+      if (data is Map<String, dynamic>) {
+        if (data['error'] is Map<String, dynamic> && data['error']['message'] != null) {
+          return data['error']['message'].toString();
+        }
+        if (data['message'] != null) {
+          return data['message'].toString();
+        }
+      }
+    }
+    String msg = e.toString();
+    if (msg.startsWith('Exception: ')) msg = msg.substring(11);
+    if (msg.startsWith('AppException(')) {
+      final match = RegExp(r'message:\s*([^,]+)').firstMatch(msg);
+      if (match != null && match.group(1) != null) {
+        return match.group(1)!.trim();
+      }
+    }
+    return msg;
+  }
+
   Future<bool> sendOtp(String mobileNumber, bool consent) async {
     state = state.copyWith(isLoading: true, errorMessage: null);
     try {
@@ -63,7 +89,7 @@ class AuthController extends StateNotifier<AuthState> {
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
-        errorMessage: e.toString(),
+        errorMessage: _cleanErrorMessage(e),
       );
       return false;
     }
@@ -85,7 +111,7 @@ class AuthController extends StateNotifier<AuthState> {
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
-        errorMessage: e.toString(),
+        errorMessage: _cleanErrorMessage(e),
       );
       return null;
     }

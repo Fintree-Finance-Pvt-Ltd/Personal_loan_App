@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:dio/dio.dart';
+import '../../../../core/api/api_exception.dart';
 import '../../../../app/theme.dart';
 import '../../../../core/providers/providers.dart';
 import '../../../../core/utils/currency_utils.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_loader.dart';
 import '../../../../core/widgets/app_status_badge.dart';
+import '../../../../core/widgets/app_header.dart';
 import '../../../dashboard/presentation/journey_controller.dart';
 
 class KfsScreen extends ConsumerStatefulWidget {
@@ -47,8 +50,17 @@ class _KfsScreenState extends ConsumerState<KfsScreen> {
       );
       await ref.read(journeyControllerProvider.notifier).syncCustomerState();
     } catch (e) {
+      String msg = e.toString();
+      if (e is DioException) {
+        final apiClient = ref.read(apiClientProvider);
+        msg = apiClient.handleError(e).message;
+      } else if (e is AppException) {
+        msg = e.message;
+      } else if (msg.startsWith('Exception: ')) {
+        msg = msg.substring(11);
+      }
       setState(() {
-        _errorMessage = e.toString();
+        _errorMessage = msg;
       });
     } finally {
       if (mounted) setState(() => _isGenerating = false);
@@ -84,8 +96,17 @@ class _KfsScreenState extends ConsumerState<KfsScreen> {
         context.push('/loan/${widget.lan}/mandate');
       }
     } catch (e) {
+      String msg = e.toString();
+      if (e is DioException) {
+        final apiClient = ref.read(apiClientProvider);
+        msg = apiClient.handleError(e).message;
+      } else if (e is AppException) {
+        msg = e.message;
+      } else if (msg.startsWith('Exception: ')) {
+        msg = msg.substring(11);
+      }
       setState(() {
-        _errorMessage = e.toString();
+        _errorMessage = msg;
       });
     } finally {
       if (mounted) setState(() => _isAccepting = false);
@@ -157,7 +178,7 @@ class _KfsScreenState extends ConsumerState<KfsScreen> {
 
     if (_isGenerating) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Key Fact Statement')),
+        appBar: const AppHeader(title: 'Key Fact Statement'),
         body: const AppLoader(message: 'Generating Key Fact Statement (KFS)...'),
       );
     }
@@ -167,8 +188,9 @@ class _KfsScreenState extends ConsumerState<KfsScreen> {
     final totalRepayment = offer?.acceptedTotalRepayment ?? (amount * 1.05);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Key Fact Statement (KFS)'),
+      appBar: AppHeader(
+        title: 'Key Fact Statement (KFS)',
+        fallbackRoute: widget.lan.isNotEmpty ? '/loan/${widget.lan}/bank' : '/dashboard',
       ),
       body: SafeArea(
         child: SingleChildScrollView(

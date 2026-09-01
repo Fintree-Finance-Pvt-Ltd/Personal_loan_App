@@ -4,12 +4,15 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:dio/dio.dart';
 import 'package:http_parser/http_parser.dart';
+import '../../../../core/api/api_exception.dart';
 import '../../../../app/theme.dart';
 import '../../../../core/providers/providers.dart';
+import '../../../../core/utils/formatters.dart';
 import '../../../../core/utils/validators.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_stepper.dart';
 import '../../../../core/widgets/app_text_field.dart';
+import '../../../../core/widgets/app_header.dart';
 import '../../../dashboard/presentation/journey_controller.dart';
 
 class BasicDetailsScreen extends ConsumerStatefulWidget {
@@ -46,30 +49,18 @@ class _BasicDetailsScreenState extends ConsumerState<BasicDetailsScreen> {
     super.initState();
     final customer = ref.read(journeyControllerProvider).customer;
     if (customer != null) {
-      if (customer.fullName != null) _nameController.text = customer.fullName!;
-      if (customer.panNumber != null) _panController.text = customer.panNumber!;
-      if (customer.fatherName != null) _fatherNameController.text = customer.fatherName!;
-      if (customer.email != null) _emailController.text = customer.email!;
-      if (customer.residentialPincode != null) _pincodeController.text = customer.residentialPincode!;
-      if (customer.residentialCity != null) _cityController.text = customer.residentialCity!;
-      if (customer.residentialState != null) _stateController.text = customer.residentialState!;
-    } else {
-      WidgetsBinding.instance.addPostFrameCallback((_) async {
-        await ref.read(journeyControllerProvider.notifier).syncCustomerState();
-        final updatedCustomer = ref.read(journeyControllerProvider).customer;
-        if (updatedCustomer != null && mounted) {
-          setState(() {
-            if (updatedCustomer.fullName != null) _nameController.text = updatedCustomer.fullName!;
-            if (updatedCustomer.panNumber != null) _panController.text = updatedCustomer.panNumber!;
-            if (updatedCustomer.fatherName != null) _fatherNameController.text = updatedCustomer.fatherName!;
-            if (updatedCustomer.email != null) _emailController.text = updatedCustomer.email!;
-            if (updatedCustomer.residentialPincode != null) _pincodeController.text = updatedCustomer.residentialPincode!;
-            if (updatedCustomer.residentialCity != null) _cityController.text = updatedCustomer.residentialCity!;
-            if (updatedCustomer.residentialState != null) _stateController.text = updatedCustomer.residentialState!;
-          });
-        }
-      });
+      _syncControllersFromCustomer(customer);
     }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await ref.read(journeyControllerProvider.notifier).syncCustomerState();
+      final updatedCustomer = ref.read(journeyControllerProvider).customer;
+      if (updatedCustomer != null && mounted) {
+        setState(() {
+          _syncControllersFromCustomer(updatedCustomer);
+        });
+      }
+    });
 
     _pincodeController.addListener(() {
       final pincode = _pincodeController.text.trim();
@@ -77,6 +68,77 @@ class _BasicDetailsScreenState extends ConsumerState<BasicDetailsScreen> {
         _lookupPincode(pincode);
       }
     });
+  }
+
+  void _syncControllersFromCustomer(dynamic customer, [Map<String, dynamic>? verificationData]) {
+    if (customer == null && verificationData == null) return;
+
+    Map<String, dynamic>? verificationMap;
+    if (verificationData != null) {
+      if (verificationData['verification'] is Map<String, dynamic>) {
+        verificationMap = verificationData['verification'] as Map<String, dynamic>;
+      } else if (verificationData['data'] is Map<String, dynamic> && verificationData['data']['verification'] is Map<String, dynamic>) {
+        verificationMap = verificationData['data']['verification'] as Map<String, dynamic>;
+      } else {
+        verificationMap = verificationData;
+      }
+    }
+
+    final String? fullName = verificationMap?['fullName'] ??
+        verificationData?['fullName'] ??
+        customer?.fullName;
+
+    final String? pincode = verificationMap?['pincode'] ??
+        verificationData?['pincode'] ??
+        verificationData?['residentialPincode'] ??
+        customer?.residentialPincode;
+
+    final String? fatherName = verificationMap?['fatherName'] ??
+        verificationData?['fatherName'] ??
+        customer?.fatherName;
+
+    final String? city = verificationMap?['city'] ??
+        verificationData?['city'] ??
+        verificationData?['residentialCity'] ??
+        customer?.residentialCity;
+
+    final String? state = verificationMap?['state'] ??
+        verificationData?['state'] ??
+        verificationData?['residentialState'] ??
+        customer?.residentialState;
+
+    final String? pan = verificationMap?['panNumber'] ??
+        verificationData?['panNumber'] ??
+        customer?.panNumber;
+
+    final String? email = verificationMap?['email'] ??
+        verificationData?['email'] ??
+        customer?.email;
+
+    if (pan != null && pan.toString().isNotEmpty && _panController.text.trim().isEmpty) {
+      _panController.text = pan.toString().toUpperCase();
+    }
+    if (fullName != null && fullName.toString().isNotEmpty && _nameController.text.trim().isEmpty) {
+      _nameController.text = fullName.toString();
+    }
+    if (fatherName != null && fatherName.toString().isNotEmpty && _fatherNameController.text.trim().isEmpty) {
+      _fatherNameController.text = fatherName.toString();
+    }
+    if (pincode != null && pincode.toString().isNotEmpty && _pincodeController.text.trim().isEmpty) {
+      _pincodeController.text = pincode.toString();
+      if (pincode.toString().length == 6) {
+        _lookupPincode(pincode.toString());
+      }
+    }
+    if (city != null && city.toString().isNotEmpty && _cityController.text.trim().isEmpty) {
+      _cityController.text = city.toString();
+    }
+    if (state != null && state.toString().isNotEmpty && _stateController.text.trim().isEmpty) {
+      _stateController.text = state.toString();
+    }
+    if (email != null && email.toString().isNotEmpty && _emailController.text.trim().isEmpty) {
+      _emailController.text = email.toString();
+    }
   }
 
   @override
@@ -202,14 +264,35 @@ class _BasicDetailsScreenState extends ConsumerState<BasicDetailsScreen> {
           },
         );
         print('[PAN VERIFY] API Response: $res');
+
+        final resData = res['data'] ?? res;
+        final innerData = (resData is Map<String, dynamic> && resData['data'] is Map<String, dynamic>)
+            ? resData['data']
+            : resData;
+
         await ref.read(journeyControllerProvider.notifier).syncCustomerState();
+        final updatedCustomer = ref.read(journeyControllerProvider).customer;
+
         setState(() {
           _panOcrResult = 'PAN verified successfully: $pan';
+          _syncControllersFromCustomer(
+            updatedCustomer,
+            innerData is Map<String, dynamic> ? innerData : null,
+          );
         });
       }
     } catch (e) {
+      String msg = e.toString();
+      if (e is DioException) {
+        final apiClient = ref.read(apiClientProvider);
+        msg = apiClient.handleError(e).message;
+      } else if (e is AppException) {
+        msg = e.message;
+      } else if (msg.startsWith('Exception: ')) {
+        msg = msg.substring(11);
+      }
       setState(() {
-        _errorMessage = 'Verification failed: $e';
+        _errorMessage = msg;
       });
     } finally {
       if (mounted) {
@@ -384,7 +467,7 @@ class _BasicDetailsScreenState extends ConsumerState<BasicDetailsScreen> {
         if (mounted) {
           final updatedCustomer = ref.read(journeyControllerProvider).customer;
           if (updatedCustomer?.assessmentFeePaid == true) {
-            context.go('/dashboard');
+            context.push('/onboarding/profile');
           } else {
             context.push('/payment/processing-fee', extra: eligibilityRes);
           }
@@ -406,11 +489,15 @@ class _BasicDetailsScreenState extends ConsumerState<BasicDetailsScreen> {
   @override
   Widget build(BuildContext context) {
     final customer = ref.watch(journeyControllerProvider).customer;
+    if (customer != null) {
+      _syncControllersFromCustomer(customer);
+    }
     final isPanVerified = customer?.panVerified == true;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Personal Details'),
+      appBar: const AppHeader(
+        title: 'Personal Details',
+        fallbackRoute: '/onboarding/pan',
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -422,8 +509,8 @@ class _BasicDetailsScreenState extends ConsumerState<BasicDetailsScreen> {
               children: [
                 const AppStepper(
                   currentStep: 2,
-                  totalSteps: 5,
-                  stepTitles: ['PAN Verification', 'Personal Details', 'Profile & Income', 'Photo & Liveness', 'Submit'],
+                  totalSteps: 7,
+                  stepTitles: ['PAN Verification', 'Personal Details', 'Assessment Fee', 'Profile & Income', 'Photo & Liveness', 'DigiLocker KYC', 'Account Aggregator'],
                 ),
                 const SizedBox(height: 24),
                 const Text(
@@ -440,13 +527,15 @@ class _BasicDetailsScreenState extends ConsumerState<BasicDetailsScreen> {
                   style: TextStyle(fontSize: 14, color: AppTheme.textDarkSecondary),
                 ),
                 const SizedBox(height: 24),
-                AppTextField(
-                  label: 'Full Name (As per PAN)',
-                  controller: _nameController,
-                  readOnly: true,
-                  prefix: const Icon(Icons.person_outline, size: 20),
-                ),
-                const SizedBox(height: 16),
+                if (isPanVerified || _nameController.text.trim().isNotEmpty) ...[
+                  AppTextField(
+                    label: 'Full Name (As per PAN)',
+                    controller: _nameController,
+                    readOnly: true,
+                    prefix: const Icon(Icons.person_outline, size: 20),
+                  ),
+                  const SizedBox(height: 16),
+                ],
                 AppTextField(
                   label: 'PAN Number',
                   hint: 'ABCDE1234F',
@@ -455,6 +544,9 @@ class _BasicDetailsScreenState extends ConsumerState<BasicDetailsScreen> {
                   textCapitalization: TextCapitalization.characters,
                   prefix: const Icon(Icons.credit_card_outlined, size: 20),
                   validator: Validators.validatePan,
+                  inputFormatters: [
+                    UpperCaseTextFormatter(),
+                  ],
                 ),
                 const SizedBox(height: 16),
                 if (!isPanVerified) ...[

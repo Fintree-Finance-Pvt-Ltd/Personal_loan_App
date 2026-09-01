@@ -38,4 +38,12 @@ class ApiEndpoints {
   static String esignStatus(String lan) => '/customer/loans/$lan/esign/status';
   static String requestDisbursal(String lan) => '/customer/loans/$lan/disbursal/request';
   static String disbursalStatus(String lan) => '/customer/loans/$lan/disbursal/status';
+
+  // Account Aggregator (AA)
+  static String initiateAccountAggregator(String lan) =>
+      lan.isNotEmpty ? '/customer/loans/$lan/account-aggregator/initiate' : '/customer/account-aggregator/initiate';
+  static String accountAggregatorStatus(String lan) =>
+      lan.isNotEmpty ? '/customer/loans/$lan/account-aggregator/status' : '/customer/account-aggregator/status';
+  static String refreshAccountAggregatorStatus(String lan) =>
+      lan.isNotEmpty ? '/customer/loans/$lan/account-aggregator/refresh-status' : '/customer/account-aggregator/refresh-status';
 }

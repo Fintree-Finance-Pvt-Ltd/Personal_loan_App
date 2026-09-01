@@ -14,10 +14,11 @@ class AuthRepository {
     required bool consentGiven,
     String? consentText,
   }) async {
+    final cleanMobile = mobileNumber.trim();
     final response = await _apiClient.post(
       ApiEndpoints.sendMobileOtp,
       data: {
-        'mobileNumber': mobileNumber,
+        'mobileNumber': cleanMobile,
         'consentGiven': consentGiven,
         'consentText': consentText ?? 'I consent to receiving OTP and terms for Personal Loan.',
       },
@@ -29,14 +30,21 @@ class AuthRepository {
     required String mobileNumber,
     required String otp,
   }) async {
+    final cleanMobile = mobileNumber.trim();
+    final cleanOtp = otp.trim();
+
     final response = await _apiClient.post(
       ApiEndpoints.verifyMobileOtp,
       data: {
-        'mobileNumber': mobileNumber,
-        'otp': otp,
+        'mobileNumber': cleanMobile,
+        'otp': cleanOtp,
       },
     );
 
+    return _processCustomerResponse(response, cleanMobile);
+  }
+
+  Future<CustomerModel> _processCustomerResponse(dynamic response, String fallbackMobile) async {
     // Deep extraction for nested backend response structure
     dynamic rawData = response;
     if (rawData is Map<String, dynamic> && rawData['data'] != null) {
@@ -60,7 +68,7 @@ class AuthRepository {
     if (customer.id.isNotEmpty) {
       await _storageService.saveSession(
         customerId: customer.id,
-        mobileNumber: customer.mobileNumber.isNotEmpty ? customer.mobileNumber : mobileNumber,
+        mobileNumber: customer.mobileNumber.isNotEmpty ? customer.mobileNumber : fallbackMobile,
         token: accessToken,
       );
     }

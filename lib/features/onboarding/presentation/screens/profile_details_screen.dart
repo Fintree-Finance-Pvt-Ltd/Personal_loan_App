@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:dio/dio.dart';
+import '../../../../core/api/api_exception.dart';
 import '../../../../app/theme.dart';
 import '../../../../core/providers/providers.dart';
 import '../../../../core/utils/validators.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_stepper.dart';
 import '../../../../core/widgets/app_text_field.dart';
+import '../../../../core/widgets/app_header.dart';
 import '../../../dashboard/presentation/journey_controller.dart';
 
 class ProfileDetailsScreen extends ConsumerStatefulWidget {
@@ -104,8 +107,17 @@ class _ProfileDetailsScreenState extends ConsumerState<ProfileDetailsScreen> {
         }
       }
     } catch (e) {
+      String msg = e.toString();
+      if (e is DioException) {
+        final apiClient = ref.read(apiClientProvider);
+        msg = apiClient.handleError(e).message;
+      } else if (e is AppException) {
+        msg = e.message;
+      } else if (msg.startsWith('Exception: ')) {
+        msg = msg.substring(11);
+      }
       setState(() {
-        _errorMessage = e.toString();
+        _errorMessage = msg;
       });
     } finally {
       if (mounted) {
@@ -121,8 +133,9 @@ class _ProfileDetailsScreenState extends ConsumerState<ProfileDetailsScreen> {
     final isSalaried = _employmentType == 'SALARIED';
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Profile & Employment'),
+      appBar: const AppHeader(
+        title: 'Profile & Employment',
+        fallbackRoute: '/payment/processing-fee',
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -133,9 +146,9 @@ class _ProfileDetailsScreenState extends ConsumerState<ProfileDetailsScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const AppStepper(
-                  currentStep: 3,
-                  totalSteps: 5,
-                  stepTitles: ['PAN Verification', 'Personal Details', 'Profile & Income', 'Photo & Liveness', 'Submit'],
+                  currentStep: 4,
+                  totalSteps: 7,
+                  stepTitles: ['PAN Verification', 'Personal Details', 'Assessment Fee', 'Profile & Income', 'Photo & Liveness', 'DigiLocker KYC', 'Account Aggregator'],
                 ),
                 const SizedBox(height: 24),
                 const Text(

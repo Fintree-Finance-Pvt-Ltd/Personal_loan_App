@@ -4,11 +4,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import 'package:dio/dio.dart';
+import '../../../../core/api/api_exception.dart';
 import '../../../../app/theme.dart';
 import '../../../../core/providers/providers.dart';
 import '../../../../core/utils/currency_utils.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_loader.dart';
+import '../../../../core/widgets/app_header.dart';
 import '../../../dashboard/presentation/journey_controller.dart';
 
 class ProcessingFeeScreen extends ConsumerStatefulWidget {
@@ -23,6 +26,7 @@ class ProcessingFeeScreen extends ConsumerStatefulWidget {
 class _ProcessingFeeScreenState extends ConsumerState<ProcessingFeeScreen> {
   bool _isInitiating = false;
   bool _isVerifying = false;
+  bool _consentAccepted = false;
   String? _paymentUrl;
   String? _txnid;
   String? _paymentId;
@@ -31,12 +35,50 @@ class _ProcessingFeeScreenState extends ConsumerState<ProcessingFeeScreen> {
   Timer? _statusTimer;
   bool _isSuccess = false;
 
+  Map<String, dynamic>? _fetchedEligibility;
+  bool _isLoadingEligibility = false;
+
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _initiatePayment();
-    });
+    _fetchEligibilityIfNeeded();
+  }
+
+  Future<void> _fetchEligibilityIfNeeded() async {
+    final customer = ref.read(journeyControllerProvider).customer;
+    final eligibility = widget.eligibilityData ?? _fetchedEligibility;
+    final assessmentFee = eligibility?['data']?['assessmentFee'] ?? eligibility?['assessmentFee'] ?? customer?.assessmentFee;
+
+    if (eligibility == null || assessmentFee == null || customer?.allocatedLenderCode == null) {
+      final customerId = customer?.id;
+      if (customerId == null || customerId.isEmpty) return;
+
+      setState(() {
+        _isLoadingEligibility = true;
+      });
+
+      try {
+        final apiClient = ref.read(apiClientProvider);
+        final res = await apiClient.post(
+          '/customer/$customerId/run-eligibility',
+          data: const {},
+        );
+        await ref.read(journeyControllerProvider.notifier).syncCustomerState();
+        if (mounted) {
+          setState(() {
+            _fetchedEligibility = res is Map<String, dynamic> ? res : null;
+          });
+        }
+      } catch (e) {
+        debugPrint('[ProcessingFee] Error running eligibility: $e');
+      } finally {
+        if (mounted) {
+          setState(() {
+            _isLoadingEligibility = false;
+          });
+        }
+      }
+    }
   }
 
   @override
@@ -47,7 +89,7 @@ class _ProcessingFeeScreenState extends ConsumerState<ProcessingFeeScreen> {
 
   String _getLenderName(String? lenderId) {
     if (lenderId == 'cms62saaa0001tsmcksp92trc') {
-      return 'Fintree Finance Pvt Lt';
+      return 'Fintree Finance Pvt Ltd';
     }
     if (lenderId != null && lenderId.isNotEmpty) {
       return 'Partner Lender ($lenderId)';
@@ -135,9 +177,20 @@ class _ProcessingFeeScreenState extends ConsumerState<ProcessingFeeScreen> {
     final customer = ref.read(journeyControllerProvider).customer;
     if (customer == null) return;
 
+    final isPanVerified = customer.panVerified == true;
+    final isBasicDetailsDone = customer.fullName != null &&
+        customer.fullName!.trim().isNotEmpty &&
+        customer.residentialPincode != null &&
+        customer.residentialPincode!.trim().isNotEmpty;
+    
+    if (!isPanVerified || !isBasicDetailsDone) {
+      debugPrint('[ProcessingFee] Blocked: Basic information is incomplete.');
+      return;
+    }
+
     if (customer.assessmentFeePaid) {
       if (mounted) {
-        context.go('/dashboard');
+        context.push('/onboarding/profile');
       }
       return;
     }
@@ -148,12 +201,12 @@ class _ProcessingFeeScreenState extends ConsumerState<ProcessingFeeScreen> {
     });
 
     try {
-      final eligibility = widget.eligibilityData;
+      final eligibility = widget.eligibilityData ?? _fetchedEligibility;
       final assessmentFee = eligibility?['data']?['assessmentFee'] ?? eligibility?['assessmentFee'] ?? customer.assessmentFee;
-      final feeAmount = (assessmentFee?['baseAmount'] ?? 499) as num;
+      final num feeAmount = (assessmentFee?['baseAmount'] ?? assessmentFee?['amount'] ?? 0) as num;
 
       final String? lenderId = eligibility?['data']?['lenderId'] ?? eligibility?['lenderId'] ?? customer.allocatedLenderCode;
-      final String? allocatedLenderName = customer.allocatedLenderName;
+      final String? allocatedLenderName = customer.allocatedLenderName ?? eligibility?['data']?['allocatedLenderName'] ?? eligibility?['allocatedLenderName'];
       final String lenderName = (allocatedLenderName != null && allocatedLenderName.isNotEmpty) 
           ? allocatedLenderName 
           : _getLenderName(lenderId);
@@ -251,8 +304,17 @@ class _ProcessingFeeScreenState extends ConsumerState<ProcessingFeeScreen> {
         });
       }
     } catch (e) {
+      String msg = e.toString();
+      if (e is DioException) {
+        final apiClient = ref.read(apiClientProvider);
+        msg = apiClient.handleError(e).message;
+      } else if (e is AppException) {
+        msg = e.message;
+      } else if (msg.startsWith('Exception: ')) {
+        msg = msg.substring(11);
+      }
       setState(() {
-        _errorMessage = e.toString();
+        _errorMessage = msg;
       });
     } finally {
       if (mounted) setState(() => _isInitiating = false);
@@ -310,8 +372,17 @@ class _ProcessingFeeScreenState extends ConsumerState<ProcessingFeeScreen> {
         });
       }
     } catch (e) {
+      String msg = e.toString();
+      if (e is DioException) {
+        final apiClient = ref.read(apiClientProvider);
+        msg = apiClient.handleError(e).message;
+      } else if (e is AppException) {
+        msg = e.message;
+      } else if (msg.startsWith('Exception: ')) {
+        msg = msg.substring(11);
+      }
       setState(() {
-        _errorMessage = e.toString();
+        _errorMessage = msg;
       });
     } finally {
       if (mounted) setState(() => _isVerifying = false);
@@ -321,21 +392,139 @@ class _ProcessingFeeScreenState extends ConsumerState<ProcessingFeeScreen> {
   @override
   Widget build(BuildContext context) {
     final customer = ref.watch(journeyControllerProvider).customer;
-    final eligibility = widget.eligibilityData;
-    final assessmentFee = eligibility?['data']?['assessmentFee'] ?? eligibility?['assessmentFee'] ?? customer?.assessmentFee;
+
+    final isPanVerified = customer?.panVerified == true;
+    final isBasicDetailsDone = customer?.fullName != null &&
+        customer!.fullName!.trim().isNotEmpty &&
+        customer.residentialPincode != null &&
+        customer.residentialPincode!.trim().isNotEmpty;
+
+    final isBasicInfoComplete = isPanVerified && isBasicDetailsDone;
+
+    if (_isLoadingEligibility) {
+      return const Scaffold(
+        appBar: AppHeader(
+          title: 'Assessment Fee Payment',
+          fallbackRoute: '/onboarding/basic-details',
+        ),
+        body: Center(
+          child: AppLoader(message: 'Allocating lender and calculating assessment fee...'),
+        ),
+      );
+    }
+
+    if (!isBasicInfoComplete) {
+      return Scaffold(
+        appBar: const AppHeader(
+          title: 'Assessment Fee Payment',
+          fallbackRoute: '/onboarding/basic-details',
+        ),
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: AppTheme.warningOrange.withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.lock_outline_rounded,
+                    size: 60,
+                    color: AppTheme.warningOrange,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                const Text(
+                  'Basic Information Incomplete',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.textDarkPrimary,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                const Text(
+                  'Please complete your PAN verification, personal basic details, and profile information before accessing the assessment fee payment page.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: AppTheme.textDarkSecondary,
+                    height: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 32),
+                SizedBox(
+                  width: double.infinity,
+                  child: AppButton(
+                    text: 'Complete Basic Information',
+                    onPressed: () {
+                      if (!isPanVerified) {
+                        context.go('/onboarding/pan');
+                      } else if (!isBasicDetailsDone) {
+                        context.go('/onboarding/basic-details');
+                      } else {
+                        context.go('/onboarding/profile');
+                      }
+                    },
+                    icon: Icons.arrow_forward_rounded,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextButton(
+                  onPressed: () => context.go('/dashboard'),
+                  child: const Text(
+                    'Return to Dashboard',
+                    style: TextStyle(
+                      color: AppTheme.primaryTeal,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    final eligibility = widget.eligibilityData ?? _fetchedEligibility;
+    final assessmentFee = eligibility?['data']?['assessmentFee'] ?? eligibility?['assessmentFee'] ?? customer.assessmentFee;
     
-    final num feeAmount = (assessmentFee?['baseAmount'] ?? 499) as num;
-    final num gstAmount = (assessmentFee?['gstAmount'] ?? (feeAmount * 0.18)) as num;
-    final num totalAmount = (assessmentFee?['totalAmount'] ?? (feeAmount + gstAmount)) as num;
+    final num? feeAmount = (assessmentFee?['baseAmount'] ?? assessmentFee?['amount']) as num?;
+    final num? gstAmount = (assessmentFee?['gstAmount'] ?? assessmentFee?['gst']) as num?;
+    final num? totalAmount = (assessmentFee?['totalAmount'] ?? assessmentFee?['total']) as num?;
     
-    final String? lenderId = eligibility?['data']?['lenderId'] ?? eligibility?['lenderId'] ?? customer?.allocatedLenderCode;
-    final String? allocatedLenderName = customer?.allocatedLenderName;
+    final String? lenderId = eligibility?['data']?['lenderId'] ?? eligibility?['lenderId'] ?? customer.allocatedLenderCode;
+    final String? allocatedLenderName = customer.allocatedLenderName ?? eligibility?['data']?['allocatedLenderName'] ?? eligibility?['allocatedLenderName'];
     final String lenderName = (allocatedLenderName != null && allocatedLenderName.isNotEmpty) 
         ? allocatedLenderName 
         : _getLenderName(lenderId);
 
-    if (_isSuccess) {
+    if (_isLoadingEligibility || feeAmount == null || totalAmount == null) {
+      return const Scaffold(
+        appBar: AppHeader(
+          title: 'Processing Fee Payment',
+          fallbackRoute: '/onboarding/basic-details',
+        ),
+        body: Center(
+          child: AppLoader(message: 'Retrieving assessment fee & lender allocation...'),
+        ),
+      );
+    }
+
+    final bool isPaymentComplete = _isSuccess || customer.assessmentFeePaid == true;
+
+    if (isPaymentComplete) {
       return Scaffold(
+        appBar: const AppHeader(
+          title: 'Assessment Fee Paid',
+          fallbackRoute: '/dashboard',
+        ),
         body: SafeArea(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 32.0),
@@ -357,7 +546,7 @@ class _ProcessingFeeScreenState extends ConsumerState<ProcessingFeeScreen> {
                 ),
                 const SizedBox(height: 24),
                 const Text(
-                  'Payment Successful!',
+                  'Payment Received!',
                   style: TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
@@ -366,7 +555,7 @@ class _ProcessingFeeScreenState extends ConsumerState<ProcessingFeeScreen> {
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  'Your assessment fee has been verified successfully. You can now proceed with the remaining onboarding steps.',
+                  'Your assessment fee payment is complete and verified. You can now proceed with the remaining onboarding steps.',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 14,
@@ -381,19 +570,61 @@ class _ProcessingFeeScreenState extends ConsumerState<ProcessingFeeScreen> {
                     child: Column(
                       children: [
                         _row('Allocated Lender', lenderName),
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8.0),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text('Payment Status', style: TextStyle(fontSize: 14, color: AppTheme.textDarkSecondary)),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.successGreen.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.check_circle, size: 14, color: AppTheme.successGreen),
+                                    SizedBox(width: 4),
+                                    Text(
+                                      'Payment Received',
+                                      style: TextStyle(
+                                        color: AppTheme.successGreen,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                         _row('Amount Paid', CurrencyUtils.formatAmount(totalAmount, showDecimals: true)),
-                        if (_txnid != null) _row('Transaction ID', _txnid!),
+                        if (_txnid != null && _txnid!.isNotEmpty) _row('Transaction ID', _txnid!),
                       ],
                     ),
                   ),
                 ),
                 const Spacer(),
                 AppButton(
-                  text: 'Continue Onboarding',
+                  text: 'Continue to Profile & Employment',
                   onPressed: () {
-                    context.go('/dashboard');
+                    context.push('/onboarding/profile');
                   },
                   icon: Icons.arrow_forward_rounded,
+                ),
+                const SizedBox(height: 12),
+                TextButton(
+                  onPressed: () => context.go('/dashboard'),
+                  child: const Text(
+                    'Return to Dashboard',
+                    style: TextStyle(
+                      color: AppTheme.primaryTeal,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -403,8 +634,9 @@ class _ProcessingFeeScreenState extends ConsumerState<ProcessingFeeScreen> {
     }
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Processing Fee Payment'),
+      appBar: const AppHeader(
+        title: 'Processing Fee Payment',
+        fallbackRoute: '/onboarding/basic-details',
       ),
       body: SafeArea(
         child: _paymentUrl != null && _webViewController != null
@@ -446,7 +678,7 @@ class _ProcessingFeeScreenState extends ConsumerState<ProcessingFeeScreen> {
                           children: [
                             _row('Allocated Lender', lenderName),
                             _row('Processing Fee', CurrencyUtils.formatAmount(feeAmount)),
-                            _row('GST', CurrencyUtils.formatAmount(gstAmount, showDecimals: true)),
+                            _row('GST', gstAmount != null ? CurrencyUtils.formatAmount(gstAmount, showDecimals: true) : '₹0.00'),
                             const Divider(height: 20),
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -461,6 +693,37 @@ class _ProcessingFeeScreenState extends ConsumerState<ProcessingFeeScreen> {
                           ],
                         ),
                       ),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Checkbox(
+                          value: _consentAccepted,
+                          activeColor: AppTheme.primaryTeal,
+                          onChanged: (val) {
+                            setState(() {
+                              _consentAccepted = val ?? false;
+                            });
+                          },
+                        ),
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () {
+                              setState(() {
+                                _consentAccepted = !_consentAccepted;
+                              });
+                            },
+                            child: Padding(
+                              padding: const EdgeInsets.only(top: 8.0),
+                              child: Text(
+                                'I consent to share my application data with $lenderName for eligibility assessment and final decision and agree to pay the non-refundable assessment fee.',
+                                style: const TextStyle(fontSize: 13, color: AppTheme.textDarkSecondary, height: 1.4),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                     if (_errorMessage != null) ...[
                       const SizedBox(height: 16),
@@ -488,7 +751,7 @@ class _ProcessingFeeScreenState extends ConsumerState<ProcessingFeeScreen> {
                       AppButton(
                         text: 'Pay ${CurrencyUtils.formatAmount(totalAmount, showDecimals: true)}',
                         isLoading: _isInitiating,
-                        onPressed: _initiatePayment,
+                        onPressed: (_consentAccepted && !_isInitiating) ? _initiatePayment : null,
                         icon: Icons.payment_rounded,
                       ),
                   ],

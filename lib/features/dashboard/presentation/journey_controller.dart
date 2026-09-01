@@ -63,27 +63,77 @@ class JourneyController extends StateNotifier<JourneyState> {
         rawCustomerData = rawCustomerData['data'];
       }
       
-      final customer = CustomerModel.fromJson(rawCustomerData is Map<String, dynamic> ? rawCustomerData : {});
+      CustomerModel customer = CustomerModel.fromJson(rawCustomerData is Map<String, dynamic> ? rawCustomerData : {});
+
+      final lan = customer.latestLan ?? customer.platformLan ?? '';
+      if (!customer.aaVerified && lan.isNotEmpty) {
+        try {
+          final aaRes = await apiClient.get('/customer/loans/$lan/account-aggregator/status');
+          dynamic aaData = aaRes;
+          if (aaData is Map<String, dynamic> && aaData['data'] != null) {
+            aaData = aaData['data'];
+          }
+          if (aaData is Map<String, dynamic>) {
+            final statusStr = (aaData['status'] ?? '').toString().toUpperCase();
+            final dataStatusStr = (aaData['dataStatus'] ?? '').toString().toUpperCase();
+            final isDone = aaData['completed'] == true ||
+                ['SUCCESS', 'COMPLETED', 'VERIFIED'].contains(statusStr) ||
+                ['COMPLETED', 'FETCHED', 'DELIVERED'].contains(dataStatusStr);
+            if (isDone) {
+              customer = customer.copyWith(
+                aaVerified: true,
+                aaStatus: statusStr.isNotEmpty ? statusStr : 'SUCCESS',
+                accountAggregatorStatus: statusStr.isNotEmpty ? statusStr : 'SUCCESS',
+              );
+            }
+          }
+        } catch (_) {}
+      }
 
       PostApprovalJourneyModel? postApproval;
       String nextRoute = '/dashboard';
 
+      final livePhotoDone = customer.updateReadinessReasons.isEmpty ||
+          !customer.updateReadinessReasons.contains('LIVE_PHOTO_NOT_VERIFIED');
+
+      final digilockerDone = customer.aadhaarVerified ||
+          customer.aadhaarKycStatus == 'VERIFIED' ||
+          !customer.updateReadinessReasons.contains('DIGILOCKER_KYC_NOT_VERIFIED');
+
+      final addressDone = !customer.updateReadinessReasons.contains('ADDRESS_NOT_CONFIRMED');
+
       if (!customer.panVerified) {
-        nextRoute = '/dashboard';
-      } else if (customer.fullName == null || customer.residentialPincode == null) {
+        nextRoute = '/onboarding/pan';
+      } else if (customer.fullName == null || customer.fullName!.trim().isEmpty || customer.residentialPincode == null || customer.residentialPincode!.trim().isEmpty || customer.emailVerified != true) {
         nextRoute = '/onboarding/basic-details';
-      } else if (customer.employmentType == null) {
-        nextRoute = '/dashboard';
+      } else if (!customer.assessmentFeePaid) {
+        nextRoute = '/payment/processing-fee';
+      } else if (customer.employmentType == null || customer.monthlyIncome == null) {
+        nextRoute = '/onboarding/profile';
+      } else if (!livePhotoDone) {
+        nextRoute = '/onboarding/live-photo';
+      } else if (!digilockerDone) {
+        nextRoute = '/onboarding/digilocker';
+      } else if (!addressDone) {
+        nextRoute = '/onboarding/address';
+      } else if (!customer.aaVerified) {
+        nextRoute = '/onboarding/account-aggregator';
+      } else if (customer.nextPermittedStep == 'PRE_APPROVAL_OFFER_SELECTION' ||
+                 customer.latestApplicationStatus == 'LENDER_PRE_APPROVED') {
+        final effectiveLan = customer.latestLan ?? customer.platformLan ?? '';
+        nextRoute = effectiveLan.isNotEmpty ? '/loan/$effectiveLan/offer?isPreApproval=true' : '/onboarding/offer';
       } else if (customer.latestApplicationStatus == null || customer.latestApplicationStatus == 'DRAFT') {
-        nextRoute = '/dashboard';
+        nextRoute = '/onboarding/review';
       } else if (customer.latestApplicationStatus == 'SUBMITTED' ||
                  customer.latestApplicationStatus == 'PENDING_CREDIT_REVIEW' ||
-                 customer.latestApplicationStatus == 'LENDER_PRE_APPROVED') {
+                 customer.latestApplicationStatus == 'LENDER_REVIEW' ||
+                 customer.nextPermittedStep == 'LENDER_DECISION_PROCESSING' ||
+                 customer.nextPermittedStep == 'APPROVAL_PROCESSING') {
         nextRoute = '/application/status';
-      } else if (customer.latestApplicationStatus == 'LENDER_APPROVED' && customer.latestLan != null) {
-        final lan = customer.latestLan!;
-        await storage.saveActiveLan(lan);
-        final postApprovalRes = await apiClient.get('/customer/loans/$lan/post-approval?customerId=$customerId');
+      } else if (customer.latestApplicationStatus == 'LENDER_APPROVED' && (customer.latestLan != null || customer.platformLan != null)) {
+        final effectiveLan = (customer.latestLan ?? customer.platformLan)!;
+        await storage.saveActiveLan(effectiveLan);
+        final postApprovalRes = await apiClient.get('/customer/loans/$effectiveLan/post-approval?customerId=$customerId');
         
         dynamic rawPostData = postApprovalRes;
         if (rawPostData is Map<String, dynamic> && rawPostData['data'] != null) {
@@ -92,7 +142,7 @@ class JourneyController extends StateNotifier<JourneyState> {
         
         postApproval = PostApprovalJourneyModel.fromJson(rawPostData is Map<String, dynamic> ? rawPostData : postApprovalRes);
         final step = postApproval.workflow.currentStep;
-        nextRoute = _mapPostApprovalStepToRoute(step, lan);
+        nextRoute = _mapPostApprovalStepToRoute(step, effectiveLan);
       } else {
         nextRoute = '/dashboard';
       }
@@ -116,9 +166,9 @@ class JourneyController extends StateNotifier<JourneyState> {
       case 'APPROVAL_SUMMARY':
         return '/loan/$lan/offer';
       case 'DIGILOCKER_KYC':
-        return '/loan/$lan/digilocker';
       case 'ADDRESS_CONFIRMATION':
-        return '/loan/$lan/address';
+      case 'ACCOUNT_AGGREGATOR':
+      case 'BANK_STATEMENT':
       case 'BANK_VERIFICATION':
         return '/loan/$lan/bank';
       case 'KFS_ACCEPTANCE':
@@ -133,7 +183,7 @@ class JourneyController extends StateNotifier<JourneyState> {
       case 'DISBURSED':
         return '/loan/$lan/loan-details';
       default:
-        return '/dashboard';
+        return '/loan/$lan/bank';
     }
   }
 }

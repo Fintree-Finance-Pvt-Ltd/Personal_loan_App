@@ -3,9 +3,15 @@ import '../constants/app_constants.dart';
 class Validators {
   static String? validateMobile(String? value) {
     if (value == null || value.trim().isEmpty) {
-      return 'Mobile number is required';
+      return 'Please enter your mobile number';
     }
     final trimmed = value.trim();
+    if (trimmed.length != 10) {
+      return 'Mobile number must be exactly 10 digits';
+    }
+    if (!trimmed.startsWith(RegExp(r'[6-9]'))) {
+      return 'Mobile number must start with 6, 7, 8, or 9';
+    }
     if (!AppConstants.mobileRegex.hasMatch(trimmed)) {
       return 'Enter a valid 10-digit mobile number';
     }

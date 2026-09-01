@@ -2,11 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import 'package:dio/dio.dart';
+import '../../../../core/api/api_exception.dart';
 import '../../../../app/theme.dart';
 import '../../../../core/providers/providers.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_loader.dart';
 import '../../../../core/widgets/app_status_badge.dart';
+import '../../../../core/widgets/app_header.dart';
+import '../../../../core/widgets/app_stepper.dart';
 import '../../../dashboard/presentation/journey_controller.dart';
 
 class DigilockerScreen extends ConsumerStatefulWidget {
@@ -93,8 +97,17 @@ class _DigilockerScreenState extends ConsumerState<DigilockerScreen> {
         });
       }
     } catch (e) {
+      String msg = e.toString();
+      if (e is DioException) {
+        final apiClient = ref.read(apiClientProvider);
+        msg = apiClient.handleError(e).message;
+      } else if (e is AppException) {
+        msg = e.message;
+      } else if (msg.startsWith('Exception: ')) {
+        msg = msg.substring(11);
+      }
       setState(() {
-        _errorMessage = e.toString();
+        _errorMessage = msg;
       });
     } finally {
       if (mounted) setState(() => _isInitiating = false);
@@ -175,8 +188,17 @@ class _DigilockerScreenState extends ConsumerState<DigilockerScreen> {
         }
       }
     } catch (e) {
+      String msg = e.toString();
+      if (e is DioException) {
+        final apiClient = ref.read(apiClientProvider);
+        msg = apiClient.handleError(e).message;
+      } else if (e is AppException) {
+        msg = e.message;
+      } else if (msg.startsWith('Exception: ')) {
+        msg = msg.substring(11);
+      }
       setState(() {
-        _errorMessage = e.toString();
+        _errorMessage = msg;
       });
     } finally {
       if (mounted) setState(() => _isFetching = false);
@@ -197,17 +219,14 @@ class _DigilockerScreenState extends ConsumerState<DigilockerScreen> {
 
     if (_verificationUrl != null && !isVerified) {
       return Scaffold(
-        appBar: AppBar(
-          title: const Text('DigiLocker Verification'),
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back),
-            onPressed: () {
-              setState(() {
-                _verificationUrl = null;
-                _webViewController = null;
-              });
-            },
-          ),
+        appBar: AppHeader(
+          title: 'DigiLocker Verification',
+          onBackPressed: () {
+            setState(() {
+              _verificationUrl = null;
+              _webViewController = null;
+            });
+          },
         ),
         body: WebViewWidget(controller: _webViewController!),
       );
@@ -226,8 +245,9 @@ class _DigilockerScreenState extends ConsumerState<DigilockerScreen> {
         : (digilocker?.verifiedAt ?? 'Just now');
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('DigiLocker Aadhaar KYC'),
+      appBar: const AppHeader(
+        title: 'DigiLocker Aadhaar KYC',
+        fallbackRoute: '/onboarding/live-photo',
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -235,7 +255,12 @@ class _DigilockerScreenState extends ConsumerState<DigilockerScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const SizedBox(height: 12),
+              const AppStepper(
+                currentStep: 6,
+                totalSteps: 7,
+                stepTitles: ['PAN Verification', 'Personal Details', 'Assessment Fee', 'Profile & Income', 'Photo & Liveness', 'DigiLocker KYC', 'Account Aggregator'],
+              ),
+              const SizedBox(height: 24),
               const Text(
                 'Aadhaar KYC Verification',
                 style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppTheme.textDarkPrimary),
