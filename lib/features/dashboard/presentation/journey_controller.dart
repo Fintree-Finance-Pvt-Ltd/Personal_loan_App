@@ -166,12 +166,9 @@ class JourneyController extends StateNotifier<JourneyState> {
       case 'APPROVAL_SUMMARY':
         return '/loan/$lan/offer';
       case 'DIGILOCKER_KYC':
-        return '/loan/$lan/digilocker';
       case 'ADDRESS_CONFIRMATION':
-        return '/loan/$lan/address';
       case 'ACCOUNT_AGGREGATOR':
       case 'BANK_STATEMENT':
-        return '/loan/$lan/account-aggregator';
       case 'BANK_VERIFICATION':
         return '/loan/$lan/bank';
       case 'KFS_ACCEPTANCE':
@@ -186,7 +183,7 @@ class JourneyController extends StateNotifier<JourneyState> {
       case 'DISBURSED':
         return '/loan/$lan/loan-details';
       default:
-        return '/dashboard';
+        return '/loan/$lan/bank';
     }
   }
 }

@@ -396,7 +396,7 @@ class _DashboardScreenState
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
                                 color: Colors.white,
-                                fontSize: 23,
+                                fontSize: 10,
                                 fontWeight: FontWeight.w800,
                                 letterSpacing: -0.5,
                               ),

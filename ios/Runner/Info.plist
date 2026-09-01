@@ -22,14 +22,6 @@
 	<string>$(FLUTTER_BUILD_NAME)</string>
 	<key>CFBundleSignature</key>
 	<string>????</string>
-	<key>CFBundleVersion</key>
-	<string>$(FLUTTER_BUILD_NUMBER)</string>
-	<key>LSRequiresIPhoneOS</key>
-	<true/>
-	<key>NSCameraUsageDescription</key>
-	<string>Camera access is required for capturing live selfie during face liveness verification.</string>
-	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Location access is required for geolocation risk verification during application submit.</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -41,6 +33,26 @@
 			</array>
 		</dict>
 	</array>
+	<key>CFBundleVersion</key>
+	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>upi</string>
+		<string>phonepe</string>
+		<string>paytmmp</string>
+		<string>gpay</string>
+		<string>tez</string>
+		<string>bhim</string>
+		<string>cred</string>
+	</array>
+	<key>LSRequiresIPhoneOS</key>
+	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>Camera access is required for capturing live selfie during face liveness verification.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Photo library access is required for selecting and uploading identification and supporting documents.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Location access is required for geolocation risk verification during application submit.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
@@ -72,15 +84,12 @@
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
 	</array>
-	<key>LSApplicationQueriesSchemes</key>
+	<key>UISupportedInterfaceOrientations~ipad</key>
 	<array>
-		<string>upi</string>
-		<string>phonepe</string>
-		<string>paytmmp</string>
-		<string>gpay</string>
-		<string>tez</string>
-		<string>bhim</string>
-		<string>cred</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
 	</array>
 </dict>
 </plist>

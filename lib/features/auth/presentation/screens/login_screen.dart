@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -16,49 +17,102 @@ class LoginScreen extends ConsumerStatefulWidget {
 }
 
 class _LoginScreenState extends ConsumerState<LoginScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   final _mobileController = TextEditingController();
   final _mobileFocusNode = FocusNode();
 
-  late final AnimationController _animController;
-  late final Animation<double> _fadeAnimation;
-  late final Animation<Offset> _slideAnimation;
+  // Entrance and loop controllers
+  late final AnimationController _entranceController;
+  late final AnimationController _floatController;
+  late final AnimationController _pulseGlowController;
+
+  // Staggered entrance animations
+  late final Animation<double> _logoScaleAnimation;
+  late final Animation<Offset> _logoSlideAnimation;
+  late final Animation<double> _formFadeAnimation;
+  late final Animation<Offset> _formSlideAnimation;
+  late final Animation<double> _footerFadeAnimation;
 
   bool _consentGiven = true;
+  bool _isInputFocused = false;
 
   @override
   void initState() {
     super.initState();
 
-    _animController = AnimationController(
+    _entranceController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 900),
+      duration: const Duration(milliseconds: 1200),
     );
 
-    _fadeAnimation = CurvedAnimation(
-      parent: _animController,
-      curve: Curves.easeOut,
-    );
+    _floatController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 3600),
+    )..repeat(reverse: true);
 
-    _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, 0.08),
-      end: Offset.zero,
-    ).animate(
+    _pulseGlowController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2400),
+    )..repeat(reverse: true);
+
+    // Staggered Timeline:
+    // 0.0 - 0.5: Logo scale & slide
+    _logoScaleAnimation = Tween<double>(begin: 0.7, end: 1.0).animate(
       CurvedAnimation(
-        parent: _animController,
-        curve: Curves.easeOutCubic,
+        parent: _entranceController,
+        curve: const Interval(0.0, 0.55, curve: Curves.easeOutBack),
       ),
     );
 
-    _animController.forward();
+    _logoSlideAnimation = Tween<Offset>(
+      begin: const Offset(0, -0.2),
+      end: Offset.zero,
+    ).animate(
+      CurvedAnimation(
+        parent: _entranceController,
+        curve: const Interval(0.0, 0.55, curve: Curves.easeOutCubic),
+      ),
+    );
+
+    // 0.3 - 0.85: Form card slide & fade
+    _formFadeAnimation = CurvedAnimation(
+      parent: _entranceController,
+      curve: const Interval(0.3, 0.85, curve: Curves.easeOut),
+    );
+
+    _formSlideAnimation = Tween<Offset>(
+      begin: const Offset(0, 0.12),
+      end: Offset.zero,
+    ).animate(
+      CurvedAnimation(
+        parent: _entranceController,
+        curve: const Interval(0.3, 0.85, curve: Curves.easeOutCubic),
+      ),
+    );
+
+    // 0.6 - 1.0: Security footer fade
+    _footerFadeAnimation = CurvedAnimation(
+      parent: _entranceController,
+      curve: const Interval(0.6, 1.0, curve: Curves.easeOut),
+    );
+
+    _mobileFocusNode.addListener(() {
+      setState(() {
+        _isInputFocused = _mobileFocusNode.hasFocus;
+      });
+    });
+
+    _entranceController.forward();
   }
 
   @override
   void dispose() {
     _mobileController.dispose();
     _mobileFocusNode.dispose();
-    _animController.dispose();
+    _entranceController.dispose();
+    _floatController.dispose();
+    _pulseGlowController.dispose();
     super.dispose();
   }
 
@@ -101,137 +155,243 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
   Widget build(BuildContext context) {
     final state = ref.watch(authControllerProvider);
     final mediaQuery = MediaQuery.of(context);
+    final screenSize = mediaQuery.size;
 
     return Scaffold(
       backgroundColor: AppTheme.backgroundLight,
-      body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            return SingleChildScrollView(
-              keyboardDismissBehavior:
-                  ScrollViewKeyboardDismissBehavior.onDrag,
-              padding: EdgeInsets.only(
-                left: 24,
-                right: 24,
-                top: 20,
-                bottom: mediaQuery.viewInsets.bottom > 0
-                    ? mediaQuery.viewInsets.bottom + 16
-                    : 24,
-              ),
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  minHeight: constraints.maxHeight - 44,
-                ),
-                child: IntrinsicHeight(
-                  child: FadeTransition(
-                    opacity: _fadeAnimation,
-                    child: SlideTransition(
-                      position: _slideAnimation,
+      body: Stack(
+        children: [
+          // Subtle Animated Ambient Background Glows
+          _buildAmbientMeshBackground(screenSize),
+
+          SafeArea(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                return SingleChildScrollView(
+                  keyboardDismissBehavior:
+                      ScrollViewKeyboardDismissBehavior.onDrag,
+                  padding: EdgeInsets.only(
+                    left: 24,
+                    right: 24,
+                    top: 16,
+                    bottom: mediaQuery.viewInsets.bottom > 0
+                        ? mediaQuery.viewInsets.bottom + 16
+                        : 24,
+                  ),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minHeight: constraints.maxHeight - 40,
+                    ),
+                    child: IntrinsicHeight(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 10),
 
                           // ==========================================
-                          // PROMINENT LARGE LOGO HEADER
+                          // ANIMATED LARGE LOGO HEADER
                           // ==========================================
-                          _buildLargeLogoHeader(),
+                          SlideTransition(
+                            position: _logoSlideAnimation,
+                            child: ScaleTransition(
+                              scale: _logoScaleAnimation,
+                              child: _buildLargeLogoHeader(),
+                            ),
+                          ),
 
-                          const SizedBox(height: 36),
+                          const SizedBox(height: 32),
 
                           // ==========================================
-                          // FORM CARD
+                          // ANIMATED FORM CARD
                           // ==========================================
-                          _buildFormCard(state),
+                          SlideTransition(
+                            position: _formSlideAnimation,
+                            child: FadeTransition(
+                              opacity: _formFadeAnimation,
+                              child: _buildFormCard(state),
+                            ),
+                          ),
 
                           const Spacer(),
 
                           const SizedBox(height: 24),
 
                           // ==========================================
-                          // TRUST & SECURITY FOOTER
+                          // ANIMATED TRUST & SECURITY FOOTER
                           // ==========================================
-                          const _SecurityFooter(),
+                          FadeTransition(
+                            opacity: _footerFadeAnimation,
+                            child: const _SecurityFooter(),
+                          ),
                         ],
                       ),
                     ),
                   ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Ambient fintech glow spheres floating softly behind the layout
+  Widget _buildAmbientMeshBackground(Size size) {
+    return AnimatedBuilder(
+      animation: _floatController,
+      builder: (context, _) {
+        final t = _floatController.value;
+        return Stack(
+          children: [
+            // Top Right Soft Emerald Bloom
+            Positioned(
+              top: -60 + (t * 20),
+              right: -50 + (t * 15),
+              child: Container(
+                width: 240,
+                height: 240,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [
+                      AppTheme.accentMint.withValues(alpha: 0.12),
+                      Colors.transparent,
+                    ],
+                  ),
                 ),
               ),
-            );
-          },
-        ),
-      ),
+            ),
+
+            // Mid Left Deep Royal Blue Aura
+            Positioned(
+              top: size.height * 0.38 - (t * 25),
+              left: -70,
+              child: Container(
+                width: 220,
+                height: 220,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [
+                      AppTheme.secondaryLightBlue.withValues(alpha: 0.35),
+                      Colors.transparent,
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 
   Widget _buildLargeLogoHeader() {
     return Column(
       children: [
-        // Prominent Logo Container
-        Container(
-          height: 110,
-          width: 220,
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(
-              color: AppTheme.borderLight,
-              width: 1.2,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: AppTheme.primaryDeepTeal.withValues(alpha: 0.08),
-                blurRadius: 30,
-                spreadRadius: 2,
-                offset: const Offset(0, 10),
-              ),
-            ],
-          ),
-          child: Image.asset(
-            'lib/assets/images/Logo.png',
-            fit: BoxFit.contain,
-            errorBuilder: (_, __, ___) {
-              return const Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.account_balance_rounded,
-                    color: AppTheme.primaryTeal,
-                    size: 48,
+        // Floating Logo Card with Ambient Pulse Glow
+        AnimatedBuilder(
+          animation: _floatController,
+          builder: (context, child) {
+            final offsetY = math.sin(_floatController.value * math.pi) * -5;
+            return Transform.translate(
+              offset: Offset(0, offsetY),
+              child: child,
+            );
+          },
+          child: AnimatedBuilder(
+            animation: _pulseGlowController,
+            builder: (context, child) {
+              final glowAlpha = 0.05 + (_pulseGlowController.value * 0.07);
+              return Container(
+                height: 114,
+                width: 228,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 22, vertical: 16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(26),
+                  border: Border.all(
+                    color: _isInputFocused
+                        ? AppTheme.accentCyan.withValues(alpha: 0.45)
+                        : AppTheme.borderLight,
+                    width: 1.3,
                   ),
-                  SizedBox(height: 4),
-                  Text(
-                    'BRAND LOGO',
-                    style: TextStyle(
-                      color: AppTheme.primaryTeal,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 1.2,
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppTheme.primaryTeal.withValues(alpha: glowAlpha),
+                      blurRadius: 32,
+                      spreadRadius: 3,
+                      offset: const Offset(0, 12),
                     ),
-                  ),
-                ],
+                    BoxShadow(
+                      color: AppTheme.accentCyan.withValues(alpha: glowAlpha * 0.8),
+                      blurRadius: 16,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: child,
               );
             },
+            child: Image.asset(
+              'lib/assets/images/Logo.png',
+              fit: BoxFit.contain,
+              errorBuilder: (_, __, ___) {
+                return const Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.account_balance_rounded,
+                      color: AppTheme.primaryTeal,
+                      size: 48,
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      'FINLE',
+                      style: TextStyle(
+                        color: AppTheme.primaryTeal,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 1.4,
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
           ),
         ),
 
-        const SizedBox(height: 28),
+        const SizedBox(height: 26),
 
-        // Flat Stylized Headline (No 3D / No Stacked Outlines)
-        ShaderMask(
-          blendMode: BlendMode.srcIn,
-          shaderCallback: (bounds) => const LinearGradient(
-            colors: [
-              AppTheme.primaryTeal,
-              AppTheme.accentCyan,
-            ],
-            begin: Alignment.centerLeft,
-            end: Alignment.centerRight,
-          ).createShader(bounds),
+        // Shimmering Gradient Headline
+        AnimatedBuilder(
+          animation: _pulseGlowController,
+          builder: (context, child) {
+            final shift = _pulseGlowController.value;
+            return ShaderMask(
+              blendMode: BlendMode.srcIn,
+              shaderCallback: (bounds) => LinearGradient(
+                colors: const [
+                  AppTheme.primaryTeal,
+                  AppTheme.accentCyan,
+                  AppTheme.secondaryBlue,
+                ],
+                stops: [
+                  0.0,
+                  (0.4 + (shift * 0.3)).clamp(0.0, 1.0),
+                  1.0,
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ).createShader(bounds),
+              child: child,
+            );
+          },
           child: const Text(
-            'Finlay Se Loan Le',
+            'Finle Se Loan Le',
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 32,
@@ -258,16 +418,27 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
   }
 
   Widget _buildFormCard(dynamic state) {
-    return Container(
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         color: AppTheme.surfaceWhite,
         borderRadius: BorderRadius.circular(24),
         border: Border.all(
-          color: AppTheme.borderLight,
-          width: 1,
+          color: _isInputFocused
+              ? AppTheme.primaryTeal.withValues(alpha: 0.4)
+              : AppTheme.borderLight,
+          width: _isInputFocused ? 1.4 : 1.0,
         ),
-        boxShadow: AppTheme.cardShadow,
+        boxShadow: _isInputFocused
+            ? [
+                BoxShadow(
+                  color: AppTheme.primaryTeal.withValues(alpha: 0.10),
+                  blurRadius: 28,
+                  offset: const Offset(0, 10),
+                ),
+              ]
+            : AppTheme.cardShadow,
       ),
       child: Form(
         key: _formKey,
@@ -275,13 +446,41 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'Mobile Number',
-                style: TextStyle(
-                  color: AppTheme.textDarkPrimary,
-                  fontSize: 13.5,
-                  fontWeight: FontWeight.w700,
-                ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Mobile Number',
+                    style: TextStyle(
+                      color: AppTheme.textDarkPrimary,
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  if (_isInputFocused)
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 6,
+                          height: 6,
+                          decoration: const BoxDecoration(
+                            color: AppTheme.accentCyan,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 5),
+                        const Text(
+                          'Active',
+                          style: TextStyle(
+                            color: AppTheme.accentCyan,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                ],
               ),
 
               const SizedBox(height: 10),
@@ -292,6 +491,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                 enabled: !state.isLoading,
                 keyboardType: TextInputType.phone,
                 textInputAction: TextInputAction.done,
+                autovalidateMode: AutovalidateMode.onUserInteraction,
                 autofillHints: const [
                   AutofillHints.telephoneNumber,
                   AutofillHints.telephoneNumberNational,
@@ -305,7 +505,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                   }
                 },
                 inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
                   _MobileNumberAutofillFormatter(),
+                  LengthLimitingTextInputFormatter(10),
                 ],
                 style: const TextStyle(
                   color: AppTheme.textDarkPrimary,
@@ -323,7 +525,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                     letterSpacing: 0,
                   ),
                   filled: true,
-                  fillColor: AppTheme.surfaceLight,
+                  fillColor: _isInputFocused
+                      ? AppTheme.primarySoftTeal
+                      : AppTheme.surfaceLight,
                   contentPadding: const EdgeInsets.symmetric(
                     horizontal: 16,
                     vertical: 18,
@@ -367,7 +571,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
 
               const SizedBox(height: 20),
 
-              // Consent Checkbox Card
+              // Animated Consent Card
               InkWell(
                 borderRadius: BorderRadius.circular(16),
                 onTap: state.isLoading
@@ -378,19 +582,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                         });
                       },
                 child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
+                  duration: const Duration(milliseconds: 220),
                   padding: const EdgeInsets.symmetric(
                     horizontal: 12,
                     vertical: 12,
                   ),
                   decoration: BoxDecoration(
                     color: _consentGiven
-                        ? AppTheme.primaryLightTeal.withValues(alpha: 0.6)
+                        ? AppTheme.primaryLightTeal.withValues(alpha: 0.7)
                         : AppTheme.surfaceMuted,
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(
                       color: _consentGiven
-                          ? AppTheme.primaryTeal.withValues(alpha: 0.3)
+                          ? AppTheme.primaryTeal.withValues(alpha: 0.35)
                           : AppTheme.borderMuted,
                       width: 1,
                     ),
@@ -427,7 +631,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                             ),
                             children: [
                               TextSpan(
-                                text: 'I agree to receive verification OTP and accept the ',
+                                text:
+                                    'I agree to receive verification OTP and accept the ',
                               ),
                               TextSpan(
                                 text: 'Terms & Conditions',
@@ -448,9 +653,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                 ),
               ),
 
-              // Error State Banner
+              // Animated Error State Banner
               AnimatedSwitcher(
-                duration: const Duration(milliseconds: 250),
+                duration: const Duration(milliseconds: 280),
+                transitionBuilder: (child, animation) {
+                  return FadeTransition(
+                    opacity: animation,
+                    child: SizeTransition(
+                      sizeFactor: animation,
+                      child: child,
+                    ),
+                  );
+                },
                 child: state.errorMessage == null
                     ? const SizedBox.shrink()
                     : Padding(
@@ -492,7 +706,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
 
               const SizedBox(height: 24),
 
-              // Submit Button
+              // Animated Submit Button
               SizedBox(
                 width: double.infinity,
                 child: AppButton(

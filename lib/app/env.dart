@@ -7,7 +7,6 @@ class Environment {
   final String paymentReturnScheme;
   final String esignReturnScheme;
   final String mandateReturnScheme;
-
   const Environment._({
     required this.env,
     required this.apiBaseUrl,
@@ -18,22 +17,21 @@ class Environment {
   });
 
   factory Environment.fromDartDefine() {
-    const envString = String.fromEnvironment('APP_ENV', defaultValue: 'development');
+    const envString = String.fromEnvironment('APP_ENV', defaultValue: 'production');
     const baseUrl = String.fromEnvironment(
       'API_BASE_URL',
       defaultValue: 'https://finle-prod.fintreelms.com/api',
-      //defaultValue: 'https://pl-fintree-uat.fintreelms.com/api',
     );
-    const digitapEnv = String.fromEnvironment('DIGITAP_ENV', defaultValue: 'sandbox');
+    const digitapEnv = String.fromEnvironment('DIGITAP_ENV', defaultValue: 'production');
     const paymentReturnScheme = String.fromEnvironment('PAYMENT_RETURN_SCHEME', defaultValue: 'pldirect://payment-return');
     const esignReturnScheme = String.fromEnvironment('ESIGN_RETURN_SCHEME', defaultValue: 'pldirect://esign-return');
     const mandateReturnScheme = String.fromEnvironment('MANDATE_RETURN_SCHEME', defaultValue: 'pldirect://mandate-return');
 
-    AppEnvironment parsedEnv = AppEnvironment.development;
+    AppEnvironment parsedEnv = AppEnvironment.production;
     if (envString == 'uat') {
       parsedEnv = AppEnvironment.uat;
-    } else if (envString == 'production') {
-      parsedEnv = AppEnvironment.production;
+    } else if (envString == 'development') {
+      parsedEnv = AppEnvironment.development;
     }
 
     return Environment._(

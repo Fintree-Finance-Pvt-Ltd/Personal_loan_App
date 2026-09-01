@@ -218,8 +218,6 @@ class _OtpScreenState extends ConsumerState<OtpScreen>
         .read(journeyControllerProvider.notifier)
         .syncCustomerState();
 
-    if (!mounted) return;
-
     final targetRoute = ref.read(journeyControllerProvider).targetRoute;
     context.go(targetRoute);
   }

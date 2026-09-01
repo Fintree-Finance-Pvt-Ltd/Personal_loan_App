@@ -131,18 +131,28 @@ class _LoanOfferScreenState extends ConsumerState<LoanOfferScreen> {
         
         await ref.read(journeyControllerProvider.notifier).syncCustomerState();
         if (mounted) {
-          final postApproval = ref.read(journeyControllerProvider).postApproval;
-          if (postApproval != null) {
-            final step = postApproval.workflow.currentStep;
-            if (step == 'DIGILOCKER_KYC') {
-              context.go('/loan/$effectiveLan/digilocker');
-            } else if (step == 'ADDRESS_VERIFICATION') {
-              context.go('/loan/$effectiveLan/address');
+          final customerState = ref.read(journeyControllerProvider).customer;
+          final nextStep = customerState?.nextPermittedStep;
+          final isProcessing = nextStep == 'LENDER_DECISION_PROCESSING' ||
+              nextStep == 'LENDER_CREATE_PROCESSING' ||
+              nextStep == 'APPROVAL_PROCESSING' ||
+              customerState?.latestApplicationStatus == 'SUBMITTED' ||
+              customerState?.latestApplicationStatus == 'PENDING_CREDIT_REVIEW';
+
+          if (isProcessing) {
+            context.go('/application/status');
+          } else {
+            final postApproval = ref.read(journeyControllerProvider).postApproval;
+            final step = postApproval?.workflow.currentStep;
+            if (step == 'KFS_ACCEPTANCE') {
+              context.go('/loan/$effectiveLan/kfs');
+            } else if (step == 'EMANDATE') {
+              context.go('/loan/$effectiveLan/mandate');
+            } else if (step == 'ESIGN') {
+              context.go('/loan/$effectiveLan/esign');
             } else {
               context.go('/loan/$effectiveLan/bank');
             }
-          } else {
-            context.go('/loan/$effectiveLan/digilocker');
           }
         }
       } else {

@@ -1,7 +1,7 @@
 name: pl_customer_app
 description: "Production-ready Customer Mobile Application for Finle."
 publish_to: 'none'
-version: 1.0.0+1
+version: 1.0.0+4
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -60,3 +60,8 @@ flutter_launcher_icons:
   ios: true
   image_path: "lib/assets/images/Logo.png"
   min_sdk_android: 21
+  remove_alpha_ios: true
+
+
+  
+

@@ -493,14 +493,14 @@ class _ProcessingFeeScreenState extends ConsumerState<ProcessingFeeScreen> {
     }
 
     final eligibility = widget.eligibilityData ?? _fetchedEligibility;
-    final assessmentFee = eligibility?['data']?['assessmentFee'] ?? eligibility?['assessmentFee'] ?? customer?.assessmentFee;
+    final assessmentFee = eligibility?['data']?['assessmentFee'] ?? eligibility?['assessmentFee'] ?? customer.assessmentFee;
     
     final num? feeAmount = (assessmentFee?['baseAmount'] ?? assessmentFee?['amount']) as num?;
     final num? gstAmount = (assessmentFee?['gstAmount'] ?? assessmentFee?['gst']) as num?;
     final num? totalAmount = (assessmentFee?['totalAmount'] ?? assessmentFee?['total']) as num?;
     
-    final String? lenderId = eligibility?['data']?['lenderId'] ?? eligibility?['lenderId'] ?? customer?.allocatedLenderCode;
-    final String? allocatedLenderName = customer?.allocatedLenderName ?? eligibility?['data']?['allocatedLenderName'] ?? eligibility?['allocatedLenderName'];
+    final String? lenderId = eligibility?['data']?['lenderId'] ?? eligibility?['lenderId'] ?? customer.allocatedLenderCode;
+    final String? allocatedLenderName = customer.allocatedLenderName ?? eligibility?['data']?['allocatedLenderName'] ?? eligibility?['allocatedLenderName'];
     final String lenderName = (allocatedLenderName != null && allocatedLenderName.isNotEmpty) 
         ? allocatedLenderName 
         : _getLenderName(lenderId);
@@ -517,7 +517,7 @@ class _ProcessingFeeScreenState extends ConsumerState<ProcessingFeeScreen> {
       );
     }
 
-    final bool isPaymentComplete = _isSuccess || customer?.assessmentFeePaid == true;
+    final bool isPaymentComplete = _isSuccess || customer.assessmentFeePaid == true;
 
     if (isPaymentComplete) {
       return Scaffold(
