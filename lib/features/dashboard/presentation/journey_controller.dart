@@ -122,7 +122,9 @@ class JourneyController extends StateNotifier<JourneyState> {
                  customer.latestApplicationStatus == 'LENDER_PRE_APPROVED') {
         final effectiveLan = customer.latestLan ?? customer.platformLan ?? '';
         nextRoute = effectiveLan.isNotEmpty ? '/loan/$effectiveLan/offer?isPreApproval=true' : '/onboarding/offer';
-      } else if (customer.latestApplicationStatus == null || customer.latestApplicationStatus == 'DRAFT') {
+      } else if (customer.latestApplicationStatus == null ||
+                 customer.latestApplicationStatus == 'DRAFT' ||
+                 customer.nextPermittedStep == 'SUBMIT_APPLICATION') {
         nextRoute = '/onboarding/review';
       } else if (customer.latestApplicationStatus == 'SUBMITTED' ||
                  customer.latestApplicationStatus == 'PENDING_CREDIT_REVIEW' ||

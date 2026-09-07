@@ -167,8 +167,9 @@ class _LoanDetailsScreenState extends ConsumerState<LoanDetailsScreen> {
     final rpsList = (_loanDetailsData?['repaymentSchedule'] as List<dynamic>?) ?? [];
     final repaymentHistory = (_loanDetailsData?['repaymentHistory'] as List<dynamic>?) ?? [];
 
-    final status = apiLoan?['status']?.toString() ?? fallbackLoan?.status ?? 'DISBURSED';
-    final isDisbursed = status == 'DISBURSED' || fallbackLoan?.disbursalStatus == 'DISBURSED';
+    final status = (apiLoan?['status']?.toString() ?? fallbackLoan?.status ?? 'PROCESSING').toUpperCase();
+    final disbursalStatus = (apiLoan?['disbursalStatus']?.toString() ?? fallbackLoan?.disbursalStatus ?? '').toUpperCase();
+    final isDisbursed = status == 'DISBURSED' || status == 'FULLY_PAID' || disbursalStatus == 'DISBURSED';
 
     final approvedAmount = (apiLoan?['approvedAmount'] ?? fallbackLoan?.approvedAmount ?? 0).toDouble();
     final disbursedAmount = (apiLoan?['disbursedAmount'] ?? approvedAmount).toDouble();

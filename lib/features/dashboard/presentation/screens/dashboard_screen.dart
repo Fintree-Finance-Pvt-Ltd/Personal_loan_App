@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../app/theme.dart';
+import '../../../../core/models/lender_offer_multiplier.dart';
 import '../../../../core/utils/currency_utils.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_status_badge.dart';
@@ -20,6 +21,7 @@ class DashboardScreen extends ConsumerStatefulWidget {
 class _DashboardScreenState
     extends ConsumerState<DashboardScreen> {
   int _selectedTab = 0;
+  int _selectedNavIndex = 0;
 
   Future<void> _refreshDashboard() async {
     await ref
@@ -207,6 +209,7 @@ class _DashboardScreenState
           ],
         ),
       ),
+      bottomNavigationBar: _buildBottomQuickActionBar(context, journeyState),
     );
   }
 
@@ -1221,12 +1224,18 @@ class _DashboardScreenState
     final bank = postApproval?.bank;
     final lender = postApproval?.lender;
 
-    final lan = _readText(loan?.lan ?? customer?.latestLan, 'FFPL000001');
+    final lan = _readText(loan?.lan ?? customer?.latestLan, '');
     final status = _readText(loan?.status ?? customer?.latestLoanStatus, 'DISBURSED').toUpperCase();
     final approvedAmount = (loan?.approvedAmount ?? offer?.approvedAmount ?? 50000).toDouble();
     final lenderName = _readText(lender?.name, 'Fintree Finance Private Limited');
-    final utr = _readText(loan?.disbursalUtr, 'UTR984729104');
+    final utr = _readText(loan?.disbursalUtr, 'N/A');
     final isFullyPaid = status == 'FULLY_PAID' || status == 'CLOSED';
+
+    final int completedLoansCount = (customer?.completedLoansCount != null && customer!.completedLoansCount > 0)
+        ? customer.completedLoansCount
+        : 1;
+    final double offerMultiplier = LenderMultiplierCalculator.getMultiplier(completedLoansCount);
+    final double revisedLoanLimit = LenderMultiplierCalculator.calculateRevisedLimit(approvedAmount, completedLoansCount);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1268,27 +1277,27 @@ class _DashboardScreenState
                       ),
                       child: const Icon(
                         Icons.workspace_premium_rounded,
-                        color: Colors.amberAccent,
-                        size: 28,
+                        color: Colors.amber,
+                        size: 24,
                       ),
                     ),
                     const SizedBox(width: 14),
-                    const Expanded(
+                    Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            '🎉 Pre-Approved for New Loan!',
+                          const Text(
+                            '🎉 Pre-Approved Repeat Loan!',
                             style: TextStyle(
                               color: Colors.white,
                               fontSize: 17,
                               fontWeight: FontWeight.w800,
                             ),
                           ),
-                          SizedBox(height: 2),
+                          const SizedBox(height: 2),
                           Text(
-                            'Great repayment history unlocked higher limit',
-                            style: TextStyle(
+                            '${offerMultiplier}x Lender Multiplier applied for $completedLoansCount completed loan${completedLoansCount > 1 ? 's' : ''}',
+                            style: const TextStyle(
                               color: Colors.white70,
                               fontSize: 12,
                             ),
@@ -1305,9 +1314,9 @@ class _DashboardScreenState
                     color: Colors.white.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Text(
-                    'You are now approved to take an instant new loan up to ₹10,000 with zero hassle!',
-                    style: TextStyle(
+                  child: Text(
+                    'You are now eligible for a revised repeat loan limit of ${CurrencyUtils.formatAmount(revisedLoanLimit)} with instant disbursal!',
+                    style: const TextStyle(
                       color: Colors.white,
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
@@ -1316,29 +1325,60 @@ class _DashboardScreenState
                   ),
                 ),
                 const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  height: 48,
-                  child: ElevatedButton.icon(
-                    onPressed: () {
-                      _openRoute('/onboarding/basic-details');
-                    },
-                    icon: const Icon(Icons.add_circle_outline_rounded, color: AppTheme.primaryDeepTeal),
-                    label: const Text(
-                      'Apply for New Loan Now',
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w800,
-                        color: AppTheme.primaryDeepTeal,
+                Row(
+                  children: [
+                    Expanded(
+                      child: SizedBox(
+                        height: 48,
+                        child: ElevatedButton.icon(
+                          onPressed: () {
+                            _openRoute('/onboarding/basic-details');
+                          },
+                          icon: const Icon(Icons.add_circle_outline_rounded, color: AppTheme.primaryDeepTeal, size: 18),
+                          label: const Text(
+                            'Apply New Loan',
+                            style: TextStyle(
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w800,
+                              color: AppTheme.primaryDeepTeal,
+                            ),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                          ),
+                        ),
                       ),
                     ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: SizedBox(
+                        height: 48,
+                        child: OutlinedButton.icon(
+                          onPressed: () {
+                            _openRoute(lan.isNotEmpty ? '/loan/$lan/fully-paid-review' : '/loan/fully-paid-review');
+                          },
+                          icon: const Icon(Icons.verified_rounded, color: Colors.white, size: 18),
+                          label: const Text(
+                            'Review History',
+                            style: TextStyle(
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white,
+                            ),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: Colors.white, width: 1.5),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                          ),
+                        ),
                       ),
                     ),
-                  ),
+                  ],
                 ),
               ],
             ),
@@ -2080,6 +2120,531 @@ class _DashboardScreenState
     }
 
     return 'IN PROGRESS';
+  }
+
+  Widget _buildBottomQuickActionBar(
+    BuildContext context,
+    JourneyState journeyState,
+  ) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 16,
+            offset: const Offset(0, -4),
+          ),
+        ],
+      ),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _buildBottomNavItem(
+                icon: Icons.home_rounded,
+                label: 'Home',
+                isSelected: _selectedNavIndex == 0,
+                onTap: () {
+                  setState(() {
+                    _selectedNavIndex = 0;
+                    _selectedTab = 0;
+                  });
+                },
+              ),
+              _buildBottomNavItem(
+                icon: Icons.account_balance_wallet_rounded,
+                label: 'My Loans',
+                isSelected: _selectedNavIndex == 1,
+                onTap: () {
+                  setState(() => _selectedNavIndex = 1);
+                  _handleMyLoansTap(context, journeyState);
+                },
+              ),
+              _buildBottomNavItem(
+                icon: Icons.person_rounded,
+                label: 'Profile',
+                isSelected: _selectedNavIndex == 2,
+                onTap: () {
+                  setState(() => _selectedNavIndex = 2);
+                  _showCustomerProfileModal(context, journeyState);
+                },
+              ),
+              _buildBottomNavItem(
+                icon: Icons.headset_mic_rounded,
+                label: 'Help',
+                isSelected: _selectedNavIndex == 3,
+                onTap: () {
+                  setState(() => _selectedNavIndex = 3);
+                  _showHelpSupportModal(context);
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBottomNavItem({
+    required IconData icon,
+    required String label,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    final activeColor = AppTheme.primaryTeal;
+    final inactiveColor = AppTheme.textDarkSecondary.withOpacity(0.65);
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? AppTheme.primaryLightTeal : Colors.transparent,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              color: isSelected ? activeColor : inactiveColor,
+              size: 22,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? activeColor : inactiveColor,
+                fontSize: 11.5,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _handleMyLoansTap(BuildContext context, JourneyState journeyState) {
+    final customer = journeyState.customer;
+    final postApproval = journeyState.postApproval;
+    final lan = customer?.latestLan ?? customer?.platformLan;
+    final loanStatus = (customer?.latestLoanStatus ?? '').toUpperCase();
+
+    if (loanStatus == 'FULLY_PAID' || loanStatus == 'CLOSED') {
+      context.push(lan != null && lan.isNotEmpty ? '/loan/$lan/fully-paid-review' : '/loan/fully-paid-review');
+      return;
+    }
+
+    if (lan != null && lan.isNotEmpty && postApproval != null) {
+      context.push('/loan/$lan/loan-details');
+      return;
+    }
+
+    final appStatus = customer?.latestApplicationStatus;
+    if (appStatus == 'SUBMITTED' ||
+        appStatus == 'PENDING_CREDIT_REVIEW' ||
+        appStatus == 'LENDER_REVIEW') {
+      context.push('/application/status');
+      return;
+    }
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.fromLTRB(22, 16, 22, 28),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 42,
+                height: 5,
+                decoration: BoxDecoration(
+                  color: AppTheme.borderLight,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: AppTheme.primaryLightTeal,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: const Icon(
+                      Icons.account_balance_wallet_rounded,
+                      color: AppTheme.primaryTeal,
+                      size: 26,
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'My Loan Application',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: AppTheme.textDarkPrimary,
+                          ),
+                        ),
+                        Text(
+                          'LAN: ${lan ?? "Pending Allocation"}',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppTheme.textDarkSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppTheme.backgroundLight,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppTheme.borderLight),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Application Status',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: AppTheme.textDarkSecondary,
+                      ),
+                    ),
+                    AppStatusBadge(
+                      status: appStatus ?? 'IN_PROGRESS',
+                      label: appStatus ?? 'In Progress',
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 22),
+              AppButton(
+                text: 'Check Application Status',
+                icon: Icons.arrow_forward_rounded,
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  context.push('/application/status');
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showCustomerProfileModal(
+    BuildContext context,
+    JourneyState journeyState,
+  ) {
+    final customer = journeyState.customer;
+    final fullName = _readText(customer?.fullName, 'Valued Customer');
+    final mobile = _readText(customer?.mobileNumber, 'Not available');
+    final email = _readText(customer?.email, 'Not provided');
+    final pan = _readText(customer?.panNumber, 'Not verified');
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => Container(
+        height: MediaQuery.of(ctx).size.height * 0.75,
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        padding: const EdgeInsets.fromLTRB(22, 16, 22, 24),
+        child: Column(
+          children: [
+            Container(
+              width: 42,
+              height: 5,
+              decoration: BoxDecoration(
+                color: AppTheme.borderLight,
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                CircleAvatar(
+                  radius: 28,
+                  backgroundColor: AppTheme.primaryTeal,
+                  child: Text(
+                    fullName.isNotEmpty ? fullName[0].toUpperCase() : 'C',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        fullName,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.textDarkPrimary,
+                        ),
+                      ),
+                      Text(
+                        mobile,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: AppTheme.textDarkSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close_rounded),
+                  onPressed: () => Navigator.pop(ctx),
+                ),
+              ],
+            ),
+            const Divider(height: 24),
+            Expanded(
+              child: SingleChildScrollView(
+                child: Column(
+                  children: [
+                    _ProfileDetailRow(
+                      icon: Icons.person_outline_rounded,
+                      label: 'Full Name',
+                      value: fullName,
+                    ),
+                    _ProfileDetailRow(
+                      icon: Icons.phone_android_rounded,
+                      label: 'Mobile Number',
+                      value: mobile,
+                    ),
+                    _ProfileDetailRow(
+                      icon: Icons.email_outlined,
+                      label: 'Email Address',
+                      value: email,
+                    ),
+                    _ProfileDetailRow(
+                      icon: Icons.badge_outlined,
+                      label: 'PAN Card',
+                      value: pan,
+                    ),
+                    _ProfileDetailRow(
+                      icon: Icons.work_outline_rounded,
+                      label: 'Employment',
+                      value: _readText(customer?.employmentType, 'Self-Employed / Salaried'),
+                    ),
+                    _ProfileDetailRow(
+                      icon: Icons.location_on_outlined,
+                      label: 'Residence Pincode',
+                      value: _readText(customer?.residentialPincode, 'Not confirmed'),
+                      showDivider: false,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    icon: const Icon(Icons.logout_rounded, color: AppTheme.errorRed),
+                    label: const Text(
+                      'Logout',
+                      style: TextStyle(color: AppTheme.errorRed, fontWeight: FontWeight.bold),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      side: const BorderSide(color: AppTheme.errorRed),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      _logout();
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showHelpSupportModal(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => Container(
+        height: MediaQuery.of(ctx).size.height * 0.65,
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        padding: const EdgeInsets.fromLTRB(22, 16, 22, 24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 42,
+                height: 5,
+                decoration: BoxDecoration(
+                  color: AppTheme.borderLight,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Row(
+                  children: [
+                    Icon(Icons.headset_mic_rounded, color: AppTheme.primaryTeal, size: 26),
+                    SizedBox(width: 10),
+                    Text(
+                      'Customer Help & Support',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.textDarkPrimary,
+                      ),
+                    ),
+                  ],
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close_rounded),
+                  onPressed: () => Navigator.pop(ctx),
+                ),
+              ],
+            ),
+            const Divider(height: 20),
+            Expanded(
+              child: SingleChildScrollView(
+                child: Column(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primaryLightTeal,
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                      child: Column(
+                        children: [
+                          const Row(
+                            children: [
+                              Icon(Icons.verified_user_rounded, color: AppTheme.primaryTeal, size: 20),
+                              SizedBox(width: 8),
+                              Text(
+                                'Fintree LMS Support Desk',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: AppTheme.primaryDarkTeal,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          const Row(
+                            children: [
+                              Icon(Icons.phone_rounded, size: 16, color: AppTheme.textDarkSecondary),
+                              SizedBox(width: 8),
+                              Text('Helpline: 1800-123-4567 (Toll Free)', style: TextStyle(fontSize: 13, color: AppTheme.textDarkPrimary, fontWeight: FontWeight.w600)),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          const Row(
+                            children: [
+                              Icon(Icons.email_rounded, size: 16, color: AppTheme.textDarkSecondary),
+                              SizedBox(width: 8),
+                              Text('Email: support@fintreelms.com', style: TextStyle(fontSize: 13, color: AppTheme.textDarkPrimary, fontWeight: FontWeight.w600)),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          const Row(
+                            children: [
+                              Icon(Icons.access_time_rounded, size: 16, color: AppTheme.textDarkSecondary),
+                              SizedBox(width: 8),
+                              Text('Hours: Mon - Sat, 9:00 AM - 7:00 PM', style: TextStyle(fontSize: 12, color: AppTheme.textDarkSecondary)),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    ListTile(
+                      leading: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: AppTheme.backgroundLight,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(Icons.help_outline_rounded, color: AppTheme.primaryTeal),
+                      ),
+                      title: const Text('Frequently Asked Questions (FAQs)', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                      subtitle: const Text('Loan eligibility, charges, interest rate and tenure', style: TextStyle(fontSize: 12)),
+                      trailing: const Icon(Icons.chevron_right_rounded),
+                      onTap: () {},
+                    ),
+                    const Divider(),
+                    ListTile(
+                      leading: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: AppTheme.backgroundLight,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(Icons.description_outlined, color: AppTheme.primaryTeal),
+                      ),
+                      title: const Text('Key Fact Statement & Fair Practice Code', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                      subtitle: const Text('Review RBI regulatory loan policies', style: TextStyle(fontSize: 12)),
+                      trailing: const Icon(Icons.chevron_right_rounded),
+                      onTap: () {},
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 

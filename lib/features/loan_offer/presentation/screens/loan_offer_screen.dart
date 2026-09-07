@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:dio/dio.dart';
 import '../../../../core/api/api_exception.dart';
 import '../../../../app/theme.dart';
+import '../../../../core/models/lender_offer_multiplier.dart';
 import '../../../../core/providers/providers.dart';
 import '../../../../core/utils/currency_utils.dart';
 import '../../../../core/widgets/app_button.dart';
@@ -220,36 +221,38 @@ class _LoanOfferScreenState extends ConsumerState<LoanOfferScreen> {
 
     if (isPreApproval) {
       if (_preApprovalOffer == null) {
-        return Scaffold(
-          appBar: const AppHeader(title: 'Loan Offer'),
-          body: const Center(child: Text('Offer not available.')),
+        return const Scaffold(
+          appBar: AppHeader(title: 'Loan Offer'),
+          body: Center(child: Text('Offer not available.')),
         );
       }
-      amount = ((_preApprovalOffer!['lenderApprovedAmount'] ?? _preApprovalOffer!['amount']) ?? 8000).toDouble();
-      interestRate = ((_preApprovalOffer!['roi'] ?? _preApprovalOffer!['interestRate']) ?? 24.0).toDouble();
-      lenderName = (_preApprovalOffer!['lenderName'] ?? 'Fintree Finance Private Limited').toString();
+      final num rawAmount = _preApprovalOffer!['lenderApprovedAmount'] ?? _preApprovalOffer!['amount'] ?? 50000;
+      amount = rawAmount.toDouble();
+      interestRate = ((_preApprovalOffer!['roi'] ?? _preApprovalOffer!['interestRate']) ?? 18.0).toDouble();
+      lenderName = (customer?.allocatedLenderName ?? _preApprovalOffer!['lenderName'] ?? 'Allocated Lender').toString();
       allowedTenures = List<int>.from(_preApprovalOffer!['allowedTenures'] ?? [30, 45, 60]);
       isAccepted = _preApprovalOffer!['alreadySelected'] == true || _preApprovalOffer!['status'] == 'OFFER_SELECTED';
-      processingFee = amount * 0.02;
-      totalRepayment = amount + (amount * (interestRate / 100) * (_selectedTenureDays / 365));
+      processingFee = (_preApprovalOffer!['processingFee'] ?? (amount * 0.02)).toDouble();
+      totalRepayment = (_preApprovalOffer!['totalRepaymentAmount'] ?? (amount + (amount * (interestRate / 100) * (_selectedTenureDays / 365)))).toDouble();
     } else {
       final journey = journeyState.postApproval;
       final offer = journey?.offer;
       
       if (journey == null || offer == null) {
-        return Scaffold(
-          appBar: const AppHeader(title: 'Loan Offer'),
-          body: const AppLoader(message: 'Loading approved loan offer...'),
+        return const Scaffold(
+          appBar: AppHeader(title: 'Loan Offer'),
+          body: AppLoader(message: 'Loading approved loan offer...'),
         );
       }
       
-      amount = (offer.approvedAmount ?? 50000).toDouble();
+      final num rawAmount = offer.approvedAmount ?? journey.loan.approvedAmount ?? 50000;
+      amount = rawAmount.toDouble();
       interestRate = (offer.acceptedInterestRate ?? 18.0).toDouble();
       allowedTenures = offer.allowedTenures;
       isAccepted = offer.acceptedTenureDays != null;
       processingFee = (offer.acceptedProcessingFee ?? (amount * 0.02)).toDouble();
       totalRepayment = (offer.acceptedTotalRepayment ?? (amount + (amount * (interestRate / 100) * (_selectedTenureDays / 365)))).toDouble();
-      lenderName = journey.lender.name;
+      lenderName = customer?.allocatedLenderName ?? journey.lender.name;
     }
 
     final gst = processingFee * 0.18;
@@ -289,6 +292,25 @@ class _LoanOfferScreenState extends ConsumerState<LoanOfferScreen> {
                       ),
                       const SizedBox(height: 4),
                       Text('Lender: $lenderName', style: const TextStyle(fontSize: 12, color: AppTheme.textDarkSecondary)),
+                      if ((customer?.completedLoansCount ?? 0) > 0) ...[
+                        const SizedBox(height: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: AppTheme.primaryTeal.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: AppTheme.primaryTeal.withOpacity(0.3)),
+                          ),
+                          child: Text(
+                            '${LenderMultiplierCalculator.getMultiplier(customer!.completedLoansCount)}x Offer Multiplier Applied (${customer.completedLoansCount} Completed Loan${customer.completedLoansCount > 1 ? 's' : ''})',
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: AppTheme.primaryDarkTeal,
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),

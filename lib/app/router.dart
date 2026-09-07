@@ -21,6 +21,7 @@ import '../features/repayment/presentation/screens/repayment_screen.dart';
 import '../features/dashboard/presentation/screens/dashboard_screen.dart';
 import '../features/dashboard/presentation/screens/splash_screen.dart';
 import '../features/account_aggregator/presentation/screens/account_aggregator_screen.dart';
+import '../features/loan_details/presentation/screens/fully_paid_loan_review_screen.dart';
 
 final appRouter = GoRouter(
   initialLocation: '/splash',
@@ -127,6 +128,14 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/loan/:lan/repay',
       builder: (context, state) => RepaymentScreen(lan: state.pathParameters['lan'] ?? ''),
+    ),
+    GoRoute(
+      path: '/loan/fully-paid-review',
+      builder: (context, state) => const FullyPaidLoanReviewScreen(),
+    ),
+    GoRoute(
+      path: '/loan/:lan/fully-paid-review',
+      builder: (context, state) => FullyPaidLoanReviewScreen(lan: state.pathParameters['lan'] ?? ''),
     ),
     GoRoute(
       path: '/dashboard',

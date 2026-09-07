@@ -189,7 +189,7 @@ class _BasicDetailsScreenState extends ConsumerState<BasicDetailsScreen> {
         ),
       });
 
-      print('[PAN OCR] Sending request to UAT /external-api/pan-ocr...');
+      print('[PAN OCR] Sending request to /external-api/pan-ocr...');
       final res = await apiClient.post(
         '/external-api/pan-ocr',
         data: formData,
@@ -455,6 +455,15 @@ class _BasicDetailsScreenState extends ConsumerState<BasicDetailsScreen> {
           '/customer/resume-application',
           data: const {},
         );
+
+        // Allocate eligible lender and compute assessment fee
+        print('[BASIC DETAILS SUBMIT] Allocating lender for customerId: $customerId');
+        try {
+          final customerApi = ref.read(customerApiProvider);
+          await customerApi.allocateLender(customerId);
+        } catch (err) {
+          print('[BASIC DETAILS SUBMIT] Lender allocation note: $err');
+        }
 
         // Run eligibility
         print('[BASIC DETAILS SUBMIT] Running eligibility for customerId: $customerId');

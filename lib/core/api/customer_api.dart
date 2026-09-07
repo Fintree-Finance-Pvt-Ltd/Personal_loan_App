@@ -159,25 +159,42 @@ class CustomerApi {
     return _extractData(res);
   }
 
-  Future<Map<String, dynamic>> acceptLenderDecisionConsents() async {
+  Future<Map<String, dynamic>> allocateLender(String customerId) async {
+    final res = await _apiClient.post(
+      '/customer/$customerId/allocate-lender',
+      data: const {},
+    );
+    return _extractData(res);
+  }
+
+  Future<Map<String, dynamic>> acceptLenderDecisionConsents({
+    Map<String, dynamic>? customConsentTexts,
+  }) async {
+    final bureauText = customConsentTexts?['BUREAU_ENQUIRY']?['text'] as String? ??
+        'I authorize a bureau enquiry for this loan application.';
+    final assessmentText = customConsentTexts?['LENDER_CREDIT_ASSESSMENT']?['text'] as String? ??
+        'I authorize the allocated lender to assess my eligibility and credit profile.';
+    final decisionText = customConsentTexts?['LENDER_DECISION_REQUEST']?['text'] as String? ??
+        'I authorize submission of my completed application to the allocated lender for a lending decision.';
+
     final consents = [
       {
         'consentType': 'BUREAU_ENQUIRY',
-        'consentTemplateId': 'BUREAU_ENQUIRY_V1',
-        'consentVersion': '1.0',
-        'consentText': 'I authorize a bureau enquiry for this loan application.',
+        'consentTemplateId': customConsentTexts?['BUREAU_ENQUIRY']?['templateId'] as String? ?? 'BUREAU_ENQUIRY_V1',
+        'consentVersion': customConsentTexts?['BUREAU_ENQUIRY']?['version'] as String? ?? '1.0',
+        'consentText': bureauText,
       },
       {
         'consentType': 'LENDER_CREDIT_ASSESSMENT',
-        'consentTemplateId': 'LENDER_CREDIT_ASSESSMENT_V1',
-        'consentVersion': '1.0',
-        'consentText': 'I authorize the allocated lender to assess my eligibility and credit profile.',
+        'consentTemplateId': customConsentTexts?['LENDER_CREDIT_ASSESSMENT']?['templateId'] as String? ?? 'LENDER_CREDIT_ASSESSMENT_V1',
+        'consentVersion': customConsentTexts?['LENDER_CREDIT_ASSESSMENT']?['version'] as String? ?? '1.0',
+        'consentText': assessmentText,
       },
       {
         'consentType': 'LENDER_DECISION_REQUEST',
-        'consentTemplateId': 'LENDER_DECISION_REQUEST_V1',
-        'consentVersion': '1.0',
-        'consentText': 'I authorize submission of my completed application to the allocated lender for a lending decision.',
+        'consentTemplateId': customConsentTexts?['LENDER_DECISION_REQUEST']?['templateId'] as String? ?? 'LENDER_DECISION_REQUEST_V1',
+        'consentVersion': customConsentTexts?['LENDER_DECISION_REQUEST']?['version'] as String? ?? '1.0',
+        'consentText': decisionText,
       },
     ];
     final res = await _apiClient.post(

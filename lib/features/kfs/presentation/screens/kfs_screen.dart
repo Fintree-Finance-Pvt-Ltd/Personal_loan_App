@@ -26,6 +26,7 @@ class _KfsScreenState extends ConsumerState<KfsScreen> {
   bool _isAccepting = false;
   bool _termsAccepted = false;
   String? _errorMessage;
+  Map<String, dynamic>? _kfsData;
 
   @override
   void initState() {
@@ -44,11 +45,23 @@ class _KfsScreenState extends ConsumerState<KfsScreen> {
 
     try {
       final apiClient = ref.read(apiClientProvider);
-      await apiClient.post(
+      final res = await apiClient.post(
         '/customer/loans/${widget.lan}/kfs/generate',
         data: {'customerId': customerId},
       );
+
+      dynamic data = res;
+      if (data is Map<String, dynamic> && data['data'] != null) {
+        data = data['data'];
+      }
+
       await ref.read(journeyControllerProvider.notifier).syncCustomerState();
+
+      if (mounted) {
+        setState(() {
+          _kfsData = data is Map<String, dynamic> ? data : null;
+        });
+      }
     } catch (e) {
       String msg = e.toString();
       if (e is DioException) {
@@ -113,7 +126,18 @@ class _KfsScreenState extends ConsumerState<KfsScreen> {
     }
   }
 
-  void _openKfsViewer() {
+  void _openKfsViewer({
+    required String lan,
+    required String borrowerName,
+    required String borrowerPan,
+    required String bankInfo,
+    required double loanAmount,
+    required double interestRate,
+    required double totalInterest,
+    required double totalCharges,
+    required double netDisbursalAmount,
+    required double totalRepaymentAmount,
+  }) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -136,25 +160,28 @@ class _KfsScreenState extends ConsumerState<KfsScreen> {
               ],
             ),
             const Divider(),
-            const Expanded(
+            Expanded(
               child: SingleChildScrollView(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('KEY FACT STATEMENT FOR PERSONAL LOAN', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                    SizedBox(height: 12),
+                    const Text('KEY FACT STATEMENT FOR PERSONAL LOAN', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                    const SizedBox(height: 12),
                     Text(
-                      '1. Loan Proposal Reference: PL-APP-2026-07\n'
-                      '2. Sanctioned Amount: ₹50,000\n'
-                      '3. Annualized Interest Rate: 18.0% per annum\n'
-                      '4. Total Interest Chargeable: ₹1,479\n'
-                      '5. Upfront Processing Fee: ₹998 (incl. GST)\n'
-                      '6. Net Disbursal Amount: ₹49,002\n'
-                      '7. Total Repayment Amount: ₹51,479\n'
-                      '8. Penal Charges: 2% per month on overdue amount.\n\n'
+                      '1. Borrower Name: ${borrowerName.toUpperCase()}\n'
+                      '2. PAN Number: ${borrowerPan.toUpperCase()}\n'
+                      '3. Disbursal Account: $bankInfo\n'
+                      '4. Loan Proposal / LAN: $lan\n'
+                      '5. Sanctioned Amount: ${CurrencyUtils.formatAmount(loanAmount)}\n'
+                      '6. Annualized Interest Rate: ${interestRate.toStringAsFixed(1)}% per annum\n'
+                      '7. Total Interest Chargeable: ${CurrencyUtils.formatAmount(totalInterest, showDecimals: true)}\n'
+                      '8. Upfront Processing Fee (incl. GST): ${CurrencyUtils.formatAmount(totalCharges, showDecimals: true)}\n'
+                      '9. Net Disbursal Amount: ${CurrencyUtils.formatAmount(netDisbursalAmount, showDecimals: true)}\n'
+                      '10. Total Repayment Amount: ${CurrencyUtils.formatAmount(totalRepaymentAmount, showDecimals: true)}\n'
+                      '11. Penal Charges: 2% per month on overdue amount.\n\n'
                       'DECLARATION:\n'
                       'I have read, understood, and accept all parameters, repayment terms, and charges set out in this Key Fact Statement.',
-                      style: TextStyle(fontSize: 13, height: 1.6, color: AppTheme.textDarkSecondary),
+                      style: const TextStyle(fontSize: 13, height: 1.6, color: AppTheme.textDarkSecondary),
                     ),
                   ],
                 ),
@@ -172,8 +199,10 @@ class _KfsScreenState extends ConsumerState<KfsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final customer = ref.watch(journeyControllerProvider).customer;
     final journey = ref.watch(journeyControllerProvider).postApproval;
     final offer = journey?.offer;
+    final bank = journey?.bank;
     final isAccepted = journey?.workflow.kfsAccepted == true;
 
     if (_isGenerating) {
@@ -183,9 +212,26 @@ class _KfsScreenState extends ConsumerState<KfsScreen> {
       );
     }
 
-    final amount = offer?.approvedAmount ?? 50000;
-    final tenureDays = offer?.acceptedTenureDays ?? 60;
-    final totalRepayment = offer?.acceptedTotalRepayment ?? (amount * 1.05);
+    final num rawLoanAmount = _kfsData?['loanAmount'] ?? offer?.approvedAmount ?? 50000;
+    final double loanAmount = rawLoanAmount.toDouble();
+
+    final int tenureDays = _kfsData?['tenureDays'] ?? offer?.acceptedTenureDays ?? 60;
+    final double interestRate = (_kfsData?['interestRate'] ?? offer?.acceptedInterestRate ?? 18.0).toDouble();
+
+    final double processingFee = (_kfsData?['processingFee'] ?? offer?.acceptedProcessingFee ?? (loanAmount * 0.02)).toDouble();
+    final double processingFeeGst = (_kfsData?['processingFeeGst'] ?? (processingFee * 0.18)).toDouble();
+    final double totalCharges = (_kfsData?['totalCharges'] ?? (processingFee + processingFeeGst)).toDouble();
+
+    final double netDisbursalAmount = (_kfsData?['netDisbursalAmount'] ?? (loanAmount - totalCharges)).toDouble();
+    final double totalInterest = (_kfsData?['totalInterest'] ?? (loanAmount * (interestRate / 100) * (tenureDays / 365))).toDouble();
+    final double totalRepayment = (_kfsData?['totalRepaymentAmount'] ?? offer?.acceptedTotalRepayment ?? (loanAmount + totalInterest)).toDouble();
+
+    final String borrowerName = customer?.fullName ?? _kfsData?['borrowerName'] ?? 'Valued Customer';
+    final String borrowerPan = customer?.panNumber ?? _kfsData?['borrowerPan'] ?? 'N/A';
+
+    final String bankName = _kfsData?['bankName'] ?? bank?.bankName ?? 'Bank Account';
+    final String accountMasked = _kfsData?['accountMasked'] ?? bank?.accountMasked ?? 'Saved Account';
+    final String bankInfo = '$bankName ($accountMasked)';
 
     return Scaffold(
       appBar: AppHeader(
@@ -222,9 +268,12 @@ class _KfsScreenState extends ConsumerState<KfsScreen> {
                         ],
                       ),
                       const Divider(height: 20),
-                      _row('Sanctioned Amount', CurrencyUtils.formatAmount(amount)),
+                      _row('Borrower Name', borrowerName),
+                      _row('Sanctioned Amount', CurrencyUtils.formatAmount(loanAmount)),
                       _row('Tenure', '$tenureDays Days'),
-                      _row('Interest Rate', '18.0% p.a.'),
+                      _row('Interest Rate', '${interestRate.toStringAsFixed(1)}% p.a.'),
+                      _row('Upfront Charges (Fee + GST)', CurrencyUtils.formatAmount(totalCharges, showDecimals: true)),
+                      _row('Net Disbursal Amount', CurrencyUtils.formatAmount(netDisbursalAmount, showDecimals: true)),
                       _row('Total Repayment Obligation', CurrencyUtils.formatAmount(totalRepayment, showDecimals: true), isBold: true),
                     ],
                   ),
@@ -232,7 +281,18 @@ class _KfsScreenState extends ConsumerState<KfsScreen> {
               ),
               const SizedBox(height: 16),
               OutlinedButton.icon(
-                onPressed: _openKfsViewer,
+                onPressed: () => _openKfsViewer(
+                  lan: widget.lan,
+                  borrowerName: borrowerName,
+                  borrowerPan: borrowerPan,
+                  bankInfo: bankInfo,
+                  loanAmount: loanAmount,
+                  interestRate: interestRate,
+                  totalInterest: totalInterest,
+                  totalCharges: totalCharges,
+                  netDisbursalAmount: netDisbursalAmount,
+                  totalRepaymentAmount: totalRepayment,
+                ),
                 icon: const Icon(Icons.picture_as_pdf_outlined, color: AppTheme.primaryTeal),
                 label: const Text('View Complete KFS Document PDF'),
               ),

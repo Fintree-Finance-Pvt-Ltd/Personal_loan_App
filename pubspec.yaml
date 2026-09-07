@@ -1,7 +1,7 @@
 name: pl_customer_app
 description: "Production-ready Customer Mobile Application for Finle."
 publish_to: 'none'
-version: 1.0.0+4
+version: 1.0.0+5
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
