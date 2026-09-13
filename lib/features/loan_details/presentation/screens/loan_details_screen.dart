@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dio/dio.dart';
 import '../../../../core/api/api_exception.dart';
@@ -171,13 +172,43 @@ class _LoanDetailsScreenState extends ConsumerState<LoanDetailsScreen> {
     final disbursalStatus = (apiLoan?['disbursalStatus']?.toString() ?? fallbackLoan?.disbursalStatus ?? '').toUpperCase();
     final isDisbursed = status == 'DISBURSED' || status == 'FULLY_PAID' || disbursalStatus == 'DISBURSED';
 
-    final approvedAmount = (apiLoan?['approvedAmount'] ?? fallbackLoan?.approvedAmount ?? 0).toDouble();
-    final disbursedAmount = (apiLoan?['disbursedAmount'] ?? approvedAmount).toDouble();
-    final totalOutstanding = (summary?['totalOutstanding'] ?? approvedAmount).toDouble();
-    final totalPaid = (summary?['totalPaid'] ?? 0).toDouble();
-    final overdueAmount = (summary?['overdueAmount'] ?? 0).toDouble();
-    final nextEmiAmount = (summary?['nextEmiAmount'] ?? 0).toDouble();
+    final num? rawApproved = apiLoan?['approvedAmount'] ??
+        apiLoan?['amount'] ??
+        fallbackLoan?.approvedAmount ??
+        fallbackOffer?.approvedAmount;
+
+    final double? approvedAmount = (rawApproved != null && rawApproved.toDouble() > 0)
+        ? rawApproved.toDouble()
+        : null;
+
+    final double rawDisbursed = (apiLoan?['disbursedAmount'] ?? fallbackLoan?.disbursalAmount ?? 0).toDouble();
+    final double? disbursedAmount = rawDisbursed > 0 ? rawDisbursed : null;
+
+    final double rawOutstanding = (summary?['totalOutstanding'] ?? 0).toDouble();
+    final double? totalOutstanding = rawOutstanding > 0 ? rawOutstanding : null;
+
+    final double rawPaid = (summary?['totalPaid'] ?? 0).toDouble();
+    final double? totalPaid = rawPaid > 0 ? rawPaid : (summary?['totalPaid'] != null ? 0.0 : null);
+
+    final double overdueAmount = (summary?['overdueAmount'] ?? 0).toDouble();
+
+    final num? rawNextEmi = summary?['nextEmiAmount'] ?? fallbackOffer?.acceptedEmiAmount;
+    final double? nextEmiAmount = (rawNextEmi != null && rawNextEmi.toDouble() > 0) ? rawNextEmi.toDouble() : null;
     final nextDueDate = summary?['nextDueDate']?.toString();
+
+    String headerAmountText = 'Pending Confirmation';
+    String headerSubText = 'Syncing Loan Details with Lender';
+
+    if (totalOutstanding != null) {
+      headerAmountText = CurrencyUtils.formatAmount(totalOutstanding);
+      headerSubText = 'Total Outstanding Amount';
+    } else if (disbursedAmount != null) {
+      headerAmountText = CurrencyUtils.formatAmount(disbursedAmount);
+      headerSubText = 'Disbursed Loan Amount';
+    } else if (approvedAmount != null) {
+      headerAmountText = CurrencyUtils.formatAmount(approvedAmount);
+      headerSubText = 'Sanctioned Loan Amount';
+    }
 
     return Scaffold(
       backgroundColor: AppTheme.backgroundLight,
@@ -301,16 +332,16 @@ class _LoanDetailsScreenState extends ConsumerState<LoanDetailsScreen> {
                                   ),
                                   const SizedBox(height: 12),
                                   Text(
-                                    CurrencyUtils.formatAmount(totalOutstanding > 0 ? totalOutstanding : approvedAmount),
-                                    style: const TextStyle(
+                                    headerAmountText,
+                                    style: TextStyle(
                                       color: Colors.white,
-                                      fontSize: 32,
+                                      fontSize: headerAmountText.startsWith('₹') ? 32 : 24,
                                       fontWeight: FontWeight.w800,
-                                      letterSpacing: -1,
+                                      letterSpacing: -0.5,
                                     ),
                                   ),
                                   Text(
-                                    totalOutstanding > 0 ? 'Total Outstanding Amount' : 'Disbursed Loan Amount',
+                                    headerSubText,
                                     style: TextStyle(
                                       color: Colors.white.withOpacity(0.7),
                                       fontSize: 12,
@@ -331,21 +362,90 @@ class _LoanDetailsScreenState extends ConsumerState<LoanDetailsScreen> {
                   padding: const EdgeInsets.all(18),
                   sliver: SliverList(
                     delegate: SliverChildListDelegate([
-                      // Error message if any
-                      if (_errorMessage != null) ...[
+                      // Processing / Disbursal Sync Banner if statement is generating or notice present
+                      if (_errorMessage != null || rpsList.isEmpty) ...[
                         Container(
-                          padding: const EdgeInsets.all(12),
+                          padding: const EdgeInsets.all(18),
                           decoration: BoxDecoration(
-                            color: AppTheme.errorBg,
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: AppTheme.errorRed),
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: const Color(0xFF0F5A47).withValues(alpha: 0.2)),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFF0F5A47).withValues(alpha: 0.06),
+                                blurRadius: 16,
+                                offset: const Offset(0, 6),
+                              ),
+                            ],
                           ),
-                          child: Text(
-                            'Notice: $_errorMessage',
-                            style: const TextStyle(color: AppTheme.errorRed, fontSize: 12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  SvgPicture.asset(
+                                    'lib/assets/images/illustrations/Loading-rafiki.svg',
+                                    height: 80,
+                                  ),
+                                  const SizedBox(width: 14),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFFFEF3C7),
+                                            borderRadius: BorderRadius.circular(12),
+                                          ),
+                                          child: const Text(
+                                            '⏳ STATEMENT SYNC IN PROGRESS',
+                                            style: TextStyle(
+                                              fontSize: 9.5,
+                                              fontWeight: FontWeight.w800,
+                                              color: Color(0xFFD97706),
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(height: 6),
+                                        Text(
+                                          approvedAmount != null
+                                              ? 'Sanctioned Amount: ${CurrencyUtils.formatAmount(approvedAmount)}'
+                                              : 'Sanctioned Amount: Pending Confirmation',
+                                          style: const TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w800,
+                                            color: Color(0xFF0F172A),
+                                          ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        const Text(
+                                          'Final RPS schedule & UTR reference statement are being updated.',
+                                          style: TextStyle(fontSize: 11.5, color: Color(0xFF64748B), height: 1.3),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 14),
+                              SizedBox(
+                                width: double.infinity,
+                                child: OutlinedButton.icon(
+                                  onPressed: _fetchLoanDetails,
+                                  icon: const Icon(Icons.refresh_rounded, size: 18),
+                                  label: const Text('Refresh Disbursal Details'),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: const Color(0xFF0F5A47),
+                                    side: const BorderSide(color: Color(0xFF0F5A47)),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                        const SizedBox(height: 14),
+                        const SizedBox(height: 16),
                       ],
 
                       // Summary Overview Grid
@@ -354,7 +454,7 @@ class _LoanDetailsScreenState extends ConsumerState<LoanDetailsScreen> {
                           Expanded(
                             child: _summaryBox(
                               title: 'Next Due EMI',
-                              val: nextEmiAmount > 0 ? CurrencyUtils.formatAmount(nextEmiAmount) : '—',
+                              val: nextEmiAmount != null ? CurrencyUtils.formatAmount(nextEmiAmount) : '—',
                               sub: nextDueDate != null ? 'Due: ${_formatDate(nextDueDate)}' : 'No dues pending',
                               color: AppTheme.primaryTeal,
                             ),
@@ -363,7 +463,7 @@ class _LoanDetailsScreenState extends ConsumerState<LoanDetailsScreen> {
                           Expanded(
                             child: _summaryBox(
                               title: 'Total Paid',
-                              val: CurrencyUtils.formatAmount(totalPaid),
+                              val: totalPaid != null ? CurrencyUtils.formatAmount(totalPaid) : '—',
                               sub: overdueAmount > 0 ? 'Overdue: ${CurrencyUtils.formatAmount(overdueAmount)}' : 'On schedule',
                               color: overdueAmount > 0 ? AppTheme.errorRed : AppTheme.successGreen,
                             ),
@@ -372,13 +472,15 @@ class _LoanDetailsScreenState extends ConsumerState<LoanDetailsScreen> {
                       ),
                       const SizedBox(height: 16),
 
-                      // Disbursal Banner
-                      _disbursalSuccessCard(
-                        disbursedAmount,
-                        apiLoan?['disbursalUtr'] ?? fallbackLoan?.disbursalUtr,
-                        apiLoan?['disbursalDate'] ?? fallbackLoan?.disbursalCompletedAt,
-                      ),
-                      const SizedBox(height: 16),
+                      // Disbursal Banner - Only show if confirmed disbursed and amounts are confirmed
+                      if (isDisbursed && (disbursedAmount != null || approvedAmount != null)) ...[
+                        _disbursalSuccessCard(
+                          (disbursedAmount ?? approvedAmount)!,
+                          apiLoan?['disbursalUtr'] ?? fallbackLoan?.disbursalUtr,
+                          apiLoan?['disbursalDate'] ?? fallbackLoan?.disbursalCompletedAt,
+                        ),
+                        const SizedBox(height: 16),
+                      ],
 
                       // ── Repayment Schedule (RPS) ────────────────────
                       _sectionCard(
@@ -386,11 +488,21 @@ class _LoanDetailsScreenState extends ConsumerState<LoanDetailsScreen> {
                         icon: Icons.calendar_month_rounded,
                         children: [
                           if (rpsList.isEmpty)
-                            const Padding(
-                              padding: EdgeInsets.symmetric(vertical: 12),
-                              child: Text(
-                                'Repayment schedule will be available once final disbursal statement is generated.',
-                                style: TextStyle(fontSize: 13, color: AppTheme.textDarkSecondary),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.schedule_rounded, color: AppTheme.primaryTeal, size: 22),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      approvedAmount != null
+                                          ? 'Repayment schedule for ${CurrencyUtils.formatAmount(approvedAmount)} will be populated as soon as final UTR statement is synced.'
+                                          : 'Repayment schedule will be populated as soon as loan details are confirmed by lender.',
+                                      style: const TextStyle(fontSize: 12.5, color: AppTheme.textDarkSecondary, height: 1.35),
+                                    ),
+                                  ),
+                                ],
                               ),
                             )
                           else
@@ -478,9 +590,19 @@ class _LoanDetailsScreenState extends ConsumerState<LoanDetailsScreen> {
                         children: [
                           _row('Loan Account No. (LAN)', widget.lan),
                           _row('Application No.', apiLoan?['applicationNumber'] ?? fallbackLoan?.applicationNumber ?? '—'),
-                          _row('Lender', apiLoan?['lenderName'] ?? 'Fintree Finance Private Limited'),
-                          _row('Interest Rate', '${apiLoan?['interestRate'] ?? fallbackOffer?.acceptedInterestRate ?? 24}% p.a.'),
-                          _row('Tenure', '${apiLoan?['tenure'] ?? fallbackOffer?.acceptedTenureDays ?? 40} Days'),
+                          _row('Lender', apiLoan?['lenderName'] ?? postApproval?.lender?.name ?? customer?.allocatedLenderName ?? 'Fintree Finance Private Limited'),
+                          _row(
+                            'Interest Rate',
+                            (apiLoan?['interestRate'] != null || fallbackOffer?.acceptedInterestRate != null)
+                                ? '${apiLoan?['interestRate'] ?? fallbackOffer?.acceptedInterestRate}% p.a.'
+                                : 'Pending Confirmation',
+                          ),
+                          _row(
+                            'Tenure',
+                            (apiLoan?['tenure'] != null || fallbackOffer?.acceptedTenureDays != null)
+                                ? '${apiLoan?['tenure'] ?? fallbackOffer?.acceptedTenureDays} Days'
+                                : 'Pending Confirmation',
+                          ),
                           _row('Repayment Frequency', apiLoan?['repaymentFrequency'] ?? 'MONTHLY'),
                         ],
                       ),

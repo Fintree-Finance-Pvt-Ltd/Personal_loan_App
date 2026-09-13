@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../app/theme.dart';
 import '../../../../core/models/lender_offer_multiplier.dart';
@@ -366,26 +367,42 @@ class _FullyPaidLoanReviewScreenState
                       ],
                     ),
                     const SizedBox(height: 16),
-                    Text(
-                      'LAN: $lan',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: Colors.white.withOpacity(0.85),
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      CurrencyUtils.formatAmount(approvedAmount),
-                      style: const TextStyle(
-                        fontSize: 32,
-                        fontWeight: FontWeight.w800,
-                        color: Colors.white,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Fully Repaid • Zero Outstanding Balance',
-                      style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.8)),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'LAN: $lan',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: Colors.white.withOpacity(0.85),
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                CurrencyUtils.formatAmount(approvedAmount),
+                                style: const TextStyle(
+                                  fontSize: 32,
+                                  fontWeight: FontWeight.w800,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Fully Repaid • Zero Outstanding',
+                                style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.8)),
+                              ),
+                            ],
+                          ),
+                        ),
+                        SvgPicture.asset(
+                          'lib/assets/images/illustrations/Celebration-rafiki.svg',
+                          height: 105,
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 18),
                     ElevatedButton.icon(

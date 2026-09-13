@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:dio/dio.dart';
@@ -521,21 +522,36 @@ class _BasicDetailsScreenState extends ConsumerState<BasicDetailsScreen> {
                   totalSteps: 7,
                   stepTitles: ['PAN Verification', 'Personal Details', 'Assessment Fee', 'Profile & Income', 'Photo & Liveness', 'DigiLocker KYC', 'Account Aggregator'],
                 ),
-                const SizedBox(height: 24),
-                const Text(
-                  'Basic Information',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: AppTheme.textDarkPrimary,
-                  ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Basic Information',
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: AppTheme.textDarkPrimary,
+                            ),
+                          ),
+                          SizedBox(height: 6),
+                          Text(
+                            'Please provide your personal details to complete your profile.',
+                            style: TextStyle(fontSize: 13, color: AppTheme.textDarkSecondary),
+                          ),
+                        ],
+                      ),
+                    ),
+                    SvgPicture.asset(
+                      'lib/assets/images/illustrations/Personal settings-pana.svg',
+                      height: 90,
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 6),
-                const Text(
-                  'Please provide your personal details to complete your profile.',
-                  style: TextStyle(fontSize: 14, color: AppTheme.textDarkSecondary),
-                ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 20),
                 if (isPanVerified || _nameController.text.trim().isNotEmpty) ...[
                   AppTextField(
                     label: 'Full Name (As per PAN)',

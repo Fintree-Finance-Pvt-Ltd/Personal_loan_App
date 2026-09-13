@@ -8,6 +8,7 @@ class AppButton extends StatelessWidget {
   final bool isLoading;
   final bool isOutlined;
   final IconData? icon;
+  final Color? iconColor;
 
   const AppButton({
     super.key,
@@ -16,6 +17,7 @@ class AppButton extends StatelessWidget {
     this.isLoading = false,
     this.isOutlined = false,
     this.icon,
+    this.iconColor,
   });
 
   @override
@@ -47,7 +49,7 @@ class AppButton extends StatelessWidget {
       return Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, size: 20, color: color),
+          Icon(icon, size: 20, color: iconColor ?? AppTheme.iconPrimary),
           const SizedBox(width: 8),
           Text(text),
         ],

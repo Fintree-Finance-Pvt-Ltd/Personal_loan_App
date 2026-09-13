@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import 'package:smart_auth/smart_auth.dart';
 
@@ -382,8 +383,13 @@ class _OtpScreenState extends ConsumerState<OtpScreen>
             },
           ),
         ),
-
-        const SizedBox(height: 28),
+        const SizedBox(height: 16),
+        SvgPicture.asset(
+          'lib/assets/images/illustrations/Enter OTP-cuate.svg',
+          height: 130,
+          fit: BoxFit.contain,
+        ),
+        const SizedBox(height: 16),
 
         // Flat Stylized Headline
         // ShaderMask(

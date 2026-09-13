@@ -15,85 +15,82 @@ class SplashScreen extends ConsumerStatefulWidget {
 
 class _SplashScreenState extends ConsumerState<SplashScreen>
     with TickerProviderStateMixin {
-  late final AnimationController _introController;
+  late final AnimationController _entranceController;
+  late final AnimationController _orbitalController;
   late final AnimationController _radarController;
-  late final AnimationController _scanController;
   late final AnimationController _floatController;
 
   late final Animation<double> _fadeAnimation;
-  late final Animation<double> _logoScaleAnimation;
-  late final Animation<Offset> _textSlideAnimation;
+  late final Animation<double> _scaleAnimation;
+  late final Animation<Offset> _slideAnimation;
 
   String? _errorMessage;
   bool _isSyncing = true;
-  int _securityStepIndex = 0;
+  int _statusStepIndex = 0;
 
   static const List<String> _securitySteps = [
-    'Verifying Security...',
-    'Authenticating Session...',
-    'Loading Personal Loan Portal...',
+    'Verifying Secure Gateway...',
+    'Authenticating Device Profile...',
+    'Loading Finley Portal...',
   ];
 
   @override
   void initState() {
     super.initState();
 
-    _introController = AnimationController(
+    _entranceController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1200),
+      duration: const Duration(milliseconds: 1000),
     );
 
-    // Continuous glowing radar pulse expansion
+    _orbitalController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2000),
+    )..repeat();
+
+    _orbitalController.addListener(_onOrbitalTick);
+
     _radarController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 2600),
     )..repeat();
 
-    // Holographic sweep / spinner
-    _scanController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1800),
-    )..repeat();
-
-    _scanController.addListener(_onScanTick);
-
-    // Subtle 3D crest hover float
     _floatController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 3200),
     )..repeat(reverse: true);
 
     _fadeAnimation = CurvedAnimation(
-      parent: _introController,
+      parent: _entranceController,
       curve: const Interval(0.0, 0.85, curve: Curves.easeOut),
     );
 
-    _logoScaleAnimation = Tween<double>(begin: 0.6, end: 1.0).animate(
+    _scaleAnimation = Tween<double>(begin: 0.72, end: 1.0).animate(
       CurvedAnimation(
-        parent: _introController,
+        parent: _entranceController,
         curve: const Interval(0.0, 0.85, curve: Curves.easeOutBack),
       ),
     );
 
-    _textSlideAnimation = Tween<Offset>(
-      begin: const Offset(0, 0.25),
+    _slideAnimation = Tween<Offset>(
+      begin: const Offset(0, 0.2),
       end: Offset.zero,
     ).animate(
       CurvedAnimation(
-        parent: _introController,
-        curve: const Interval(0.25, 1.0, curve: Curves.easeOutCubic),
+        parent: _entranceController,
+        curve: const Interval(0.2, 1.0, curve: Curves.easeOutCubic),
       ),
     );
 
-    _introController.forward();
+    _entranceController.forward();
     _syncCustomerState();
   }
 
-  void _onScanTick() {
-    final step = (_scanController.value * _securitySteps.length).floor() %
+  void _onOrbitalTick() {
+    final step = (_orbitalController.value * _securitySteps.length).floor() %
         _securitySteps.length;
-    if (step != _securityStepIndex && mounted) {
-      setState(() => _securityStepIndex = step);
+    if (step != _statusStepIndex && mounted) {
+      setState(() => _statusStepIndex = step);
     }
   }
 
@@ -108,7 +105,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     try {
       await Future.wait<void>([
         ref.read(journeyControllerProvider.notifier).syncCustomerState(),
-        Future<void>.delayed(const Duration(milliseconds: 2100)),
+        Future<void>.delayed(const Duration(milliseconds: 2200)),
       ]);
 
       if (!mounted) return;
@@ -119,17 +116,17 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       setState(() {
         _isSyncing = false;
         _errorMessage =
-            'We could not verify your connection. Please check your internet and try again.';
+            'We could not verify your connection. Please check your network and try again.';
       });
     }
   }
 
   @override
   void dispose() {
-    _scanController.removeListener(_onScanTick);
-    _introController.dispose();
+    _orbitalController.removeListener(_onOrbitalTick);
+    _entranceController.dispose();
+    _orbitalController.dispose();
     _radarController.dispose();
-    _scanController.dispose();
     _floatController.dispose();
     super.dispose();
   }
@@ -137,86 +134,98 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   @override
   Widget build(BuildContext context) {
     final screenSize = MediaQuery.of(context).size;
-    // Expansive logo crest footprint (38% to 48% of screen width)
-    final heroCrestSize = (screenSize.width * 0.44).clamp(160.0, 205.0);
+    final crestSize = (screenSize.width * 0.42).clamp(150.0, 195.0);
 
     return Scaffold(
-      backgroundColor: const Color(0xFF032B2B),
+      backgroundColor: AppTheme.primaryDeepTeal,
       body: Stack(
         children: [
-          // Background Gradient matching the fintech emerald reference
+          // Background Gradient matching Finley Theme
           const Positioned.fill(
             child: DecoratedBox(
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
+                gradient: AppTheme.primaryGradient,
+              ),
+            ),
+          ),
+
+          // Central Ambient Radial Glow
+          Positioned(
+            top: screenSize.height * 0.24,
+            left: screenSize.width * 0.08,
+            child: Container(
+              width: screenSize.width * 0.84,
+              height: screenSize.width * 0.84,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
                   colors: [
-                    Color(0xFF022629),
-                    Color(0xFF04383B),
-                    Color(0xFF03262A),
+                    AppTheme.accentMint.withValues(alpha: 0.16),
+                    AppTheme.primaryTeal.withValues(alpha: 0.06),
+                    Colors.transparent,
                   ],
-                  stops: [0.0, 0.52, 1.0],
+                  stops: const [0.0, 0.48, 1.0],
                 ),
               ),
             ),
           ),
 
-          // Central Radial Ambient Glow behind the logo
-          Positioned.fill(
-            child: Center(
-              child: Container(
-                width: screenSize.width * 0.95,
-                height: screenSize.width * 0.95,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: RadialGradient(
-                    colors: [
-                      AppTheme.accentCyan.withValues(alpha: 0.18),
-                      AppTheme.accentMint.withValues(alpha: 0.06),
-                      Colors.transparent,
-                    ],
-                    stops: const [0.0, 0.45, 1.0],
-                  ),
-                ),
-              ),
-            ),
+          // Floating Coin Accents
+          Positioned(
+            top: screenSize.height * 0.14,
+            left: 28,
+            child: _buildFloatingRupee(size: 38),
+          ),
+          Positioned(
+            top: screenSize.height * 0.16,
+            right: 28,
+            child: _buildFloatingRupee(size: 46),
+          ),
+          Positioned(
+            bottom: screenSize.height * 0.22,
+            right: 32,
+            child: _buildFloatingRupee(size: 34),
+          ),
+          Positioned(
+            bottom: screenSize.height * 0.24,
+            left: 36,
+            child: _buildFloatingRupee(size: 30),
           ),
 
-          // Main Layout Content
+          // Foreground Information
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
               child: Column(
                 children: [
-                  // Top Right Security Badge
+                  // Top Partner Pill
                   FadeTransition(
                     opacity: _fadeAnimation,
                     child: const Align(
                       alignment: Alignment.topRight,
-                      child: _TopSecurityBadge(),
+                      child: _TopPartnerBadge(),
                     ),
                   ),
 
-                  // Center Hero Logo Crest & Typography
+                  // Center Hero Display
                   Expanded(
                     child: Center(
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          // Hero Shield Crest with Radar Rings
                           ScaleTransition(
-                            scale: _logoScaleAnimation,
+                            scale: _scaleAnimation,
                             child: AnimatedBuilder(
                               animation: _floatController,
                               builder: (context, child) {
-                                final floatY = math.sin(_floatController.value * math.pi) * -6;
+                                final floatY =
+                                    math.sin(_floatController.value * math.pi) * -6;
                                 return Transform.translate(
                                   offset: Offset(0, floatY),
                                   child: child,
                                 );
                               },
-                              child: _buildHeroLogoCrest(heroCrestSize),
+                              child: _buildHeroLogoCrest(crestSize),
                             ),
                           ),
 
@@ -224,31 +233,31 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
 
                           // Brand Typography
                           SlideTransition(
-                            position: _textSlideAnimation,
+                            position: _slideAnimation,
                             child: FadeTransition(
                               opacity: _fadeAnimation,
                               child: Column(
                                 children: [
                                   const Text(
-                                    'Finle',
+                                    'Finley',
                                     textAlign: TextAlign.center,
                                     style: TextStyle(
                                       color: Colors.white,
-                                      fontSize: 44,
+                                      fontSize: 42,
                                       fontWeight: FontWeight.w900,
                                       letterSpacing: -1.2,
-                                      height: 1.05,
+                                      height: 1.0,
                                     ),
                                   ),
                                   const SizedBox(height: 6),
                                   Text(
-                                    'PERSONAL LOANS',
+                                    'DIGITAL PERSONAL LOANS',
                                     textAlign: TextAlign.center,
                                     style: TextStyle(
-                                      color: Colors.white.withValues(alpha: 0.95),
-                                      fontSize: 14,
+                                      color: AppTheme.accentMint.withValues(alpha: 0.9),
+                                      fontSize: 12,
                                       fontWeight: FontWeight.w800,
-                                      letterSpacing: 3.8,
+                                      letterSpacing: 3.2,
                                     ),
                                   ),
                                 ],
@@ -258,22 +267,22 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
 
                           const SizedBox(height: 38),
 
-                          // Dynamic Holographic Scanner / Error Card
+                          // Radar / Error Display
                           AnimatedSwitcher(
-                            duration: const Duration(milliseconds: 320),
+                            duration: const Duration(milliseconds: 280),
                             child: _errorMessage != null
-                                ? _buildErrorBottomSheet()
-                                : _buildHolographicRadarScanner(),
+                                ? _buildErrorCard()
+                                : _buildStatusIndicator(),
                           ),
                         ],
                       ),
                     ),
                   ),
 
-                  // Bottom "POWERED BY FINTREE FINANCE"
+                  // Bottom Regulatory Strip
                   FadeTransition(
                     opacity: _fadeAnimation,
-                    child: _buildBottomPoweredBy(),
+                    child: _buildBottomFooter(),
                   ),
                 ],
               ),
@@ -284,20 +293,19 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     );
   }
 
-  /// Prominent, high-impact Logo Shield Crest surrounded by concentric radar waves
   Widget _buildHeroLogoCrest(double size) {
     return SizedBox(
-      width: size + 80,
-      height: size + 80,
+      width: size + 60,
+      height: size + 60,
       child: Stack(
         alignment: Alignment.center,
         children: [
-          // Concentric Radiating Radar Waves
+          // Radar ripples
           AnimatedBuilder(
             animation: _radarController,
             builder: (context, _) {
               return CustomPaint(
-                size: Size(size + 80, size + 80),
+                size: Size(size + 60, size + 60),
                 painter: _RadarWavesPainter(
                   progress: _radarController.value,
                   baseColor: AppTheme.accentMint,
@@ -306,19 +314,19 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
             },
           ),
 
-          // Outer Emerald Holographic Glow Ring
+          // Outer halo
           Container(
-            width: size + 16,
-            height: size + 16,
+            width: size + 14,
+            height: size + 14,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               border: Border.all(
                 color: AppTheme.accentMint.withValues(alpha: 0.35),
-                width: 1.5,
+                width: 1.4,
               ),
               boxShadow: [
                 BoxShadow(
-                  color: AppTheme.accentCyan.withValues(alpha: 0.22),
+                  color: AppTheme.accentCyan.withValues(alpha: 0.25),
                   blurRadius: 28,
                   spreadRadius: 2,
                 ),
@@ -326,55 +334,30 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
             ),
           ),
 
-          // Emerald Glass Shield & Embossed Logo Container
+          // Logo card
           Container(
             width: size,
             height: size,
             padding: const EdgeInsets.all(22),
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              gradient: RadialGradient(
-                center: const Alignment(-0.25, -0.35),
-                radius: 0.9,
-                colors: [
-                  const Color(0xFF1BE5B5).withValues(alpha: 0.25),
-                  const Color(0xFF034D48).withValues(alpha: 0.85),
-                  const Color(0xFF022A2B),
-                ],
-              ),
-              border: Border.all(
-                color: const Color(0xFF4EECD0).withValues(alpha: 0.65),
-                width: 2.2,
-              ),
+              color: Colors.white,
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withValues(alpha: 0.45),
-                  blurRadius: 36,
-                  offset: const Offset(0, 16),
-                ),
-                BoxShadow(
-                  color: AppTheme.accentCyan.withValues(alpha: 0.30),
-                  blurRadius: 30,
-                  spreadRadius: 3,
+                  blurRadius: 32,
+                  offset: const Offset(0, 14),
                 ),
               ],
             ),
-            child: ClipOval(
-              child: Container(
-                color: Colors.white,
-                padding: const EdgeInsets.all(16),
-                child: Image.asset(
-                  'lib/assets/images/Logo.png',
-                  fit: BoxFit.contain,
-                  errorBuilder: (_, __, ___) {
-                    return const Center(
-                      child: Icon(
-                        Icons.shield_rounded,
-                        size: 64,
-                        color: AppTheme.primaryTeal,
-                      ),
-                    );
-                  },
+            child: Image.asset(
+              'lib/assets/images/Logo.png',
+              fit: BoxFit.contain,
+              errorBuilder: (_, __, ___) => Center(
+                child: Icon(
+                  Icons.spa_rounded,
+                  color: AppTheme.primaryTeal,
+                  size: 64,
                 ),
               ),
             ),
@@ -384,40 +367,35 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     );
   }
 
-  /// 3D Elliptical Holographic Scanner
-  Widget _buildHolographicRadarScanner() {
+  Widget _buildStatusIndicator() {
     return Column(
-      key: const ValueKey('scanner-active'),
+      key: const ValueKey('status-normal'),
       mainAxisSize: MainAxisSize.min,
       children: [
-        // Status Step Text
         AnimatedSwitcher(
-          duration: const Duration(milliseconds: 260),
+          duration: const Duration(milliseconds: 250),
           child: Text(
-            _securitySteps[_securityStepIndex],
-            key: ValueKey<int>(_securityStepIndex),
+            _securitySteps[_statusStepIndex],
+            key: ValueKey<int>(_statusStepIndex),
             style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.85),
+              color: Colors.white.withValues(alpha: 0.88),
               fontSize: 13,
-              fontWeight: FontWeight.w500,
+              fontWeight: FontWeight.w600,
               letterSpacing: 0.2,
             ),
           ),
         ),
-
         const SizedBox(height: 14),
-
-        // 3D Perspective Elliptical Holographic Spinner
         SizedBox(
-          width: 190,
-          height: 52,
+          width: 170,
+          height: 38,
           child: AnimatedBuilder(
-            animation: _scanController,
+            animation: _orbitalController,
             builder: (context, _) {
               return CustomPaint(
-                painter: _HolographicEllipsePainter(
-                  rotationProgress: _scanController.value,
-                  glowColor: AppTheme.accentMint,
+                painter: _HolographicArcPainter(
+                  progress: _orbitalController.value,
+                  accentColor: AppTheme.accentMint,
                 ),
               );
             },
@@ -427,17 +405,22 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     );
   }
 
-  /// Refined Error Card
-  Widget _buildErrorBottomSheet() {
+  Widget _buildErrorCard() {
     return Container(
-      key: const ValueKey('scanner-error'),
+      key: const ValueKey('status-error'),
       width: double.infinity,
-      constraints: const BoxConstraints(maxWidth: 340),
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      constraints: const BoxConstraints(maxWidth: 320),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppTheme.surfaceWhite,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: AppTheme.elevatedShadow,
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.25),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -453,10 +436,10 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                 child: const Icon(
                   Icons.wifi_off_rounded,
                   color: AppTheme.errorRed,
-                  size: 20,
+                  size: 18,
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -465,7 +448,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                       'Connection Issue',
                       style: TextStyle(
                         color: AppTheme.textDarkPrimary,
-                        fontSize: 15,
+                        fontSize: 14,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
@@ -474,7 +457,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                       _errorMessage ?? 'Unable to connect to service.',
                       style: const TextStyle(
                         color: AppTheme.textDarkSecondary,
-                        fontSize: 11.5,
+                        fontSize: 11,
                         height: 1.3,
                       ),
                       maxLines: 2,
@@ -487,21 +470,22 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
           const SizedBox(height: 14),
           SizedBox(
             width: double.infinity,
-            height: 44,
-            child: FilledButton.icon(
+            height: 42,
+            child: ElevatedButton.icon(
               onPressed: _isSyncing ? null : _syncCustomerState,
-              style: FilledButton.styleFrom(
+              style: ElevatedButton.styleFrom(
                 backgroundColor: AppTheme.primaryTeal,
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(10),
                 ),
+                elevation: 0,
               ),
-              icon: const Icon(Icons.refresh_rounded, size: 18),
+              icon: const Icon(Icons.refresh_rounded, size: 16),
               label: const Text(
                 'Retry Connection',
                 style: TextStyle(
-                  fontSize: 13,
+                  fontSize: 12.5,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -512,75 +496,101 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     );
   }
 
-  /// Bottom Footer "POWERED BY FINTREE FINANCE"
-  Widget _buildBottomPoweredBy() {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
+  Widget _buildBottomFooter() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Text(
-              'POWERED BY',
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.42),
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 1.4,
+        Text(
+          'POWERED BY ',
+          style: TextStyle(
+            color: Colors.white.withValues(alpha: 0.45),
+            fontSize: 10,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 1.2,
+          ),
+        ),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: const Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.account_balance_rounded,
+                size: 11,
+                color: AppTheme.accentMint,
               ),
-            ),
-            const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.10),
-                borderRadius: BorderRadius.circular(6),
+              SizedBox(width: 4),
+              Text(
+                'FINTREE FINANCE',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.6,
+                ),
               ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(
-                    Icons.account_balance_rounded,
-                    size: 11,
-                    color: AppTheme.accentMint,
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    'FINTREE FINANCE',
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.90),
-                      fontSize: 10.5,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0.8,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ],
     );
   }
+
+  Widget _buildFloatingRupee({required double size}) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: const RadialGradient(
+          colors: [
+            Color(0xFFFFE082),
+            Color(0xFFFFB300),
+            Color(0xFFF57F17),
+          ],
+          stops: [0.0, 0.7, 1.0],
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.35),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Center(
+        child: Text(
+          '₹',
+          style: TextStyle(
+            color: const Color(0xFF5D4037),
+            fontSize: size * 0.52,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      ),
+    );
+  }
 }
 
-/// Top Right Security Pill ("Secured by Fintree")
-class _TopSecurityBadge extends StatelessWidget {
-  const _TopSecurityBadge();
+class _TopPartnerBadge extends StatelessWidget {
+  const _TopPartnerBadge();
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(30),
+        borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.18),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
+            color: Colors.black.withValues(alpha: 0.16),
+            blurRadius: 12,
+            offset: const Offset(0, 3),
           ),
         ],
       ),
@@ -589,16 +599,16 @@ class _TopSecurityBadge extends StatelessWidget {
         children: [
           Icon(
             Icons.verified_rounded,
-            size: 16,
-            color: Color(0xFF049E7C),
+            size: 14,
+            color: AppTheme.primaryTeal,
           ),
-          SizedBox(width: 6),
+          SizedBox(width: 5),
           Text(
-            'Secured by Fintree',
+            'RBI NBFC Partner',
             style: TextStyle(
-              color: Color(0xFF0F172A),
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
+              color: AppTheme.textDarkPrimary,
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
               letterSpacing: -0.1,
             ),
           ),
@@ -608,31 +618,26 @@ class _TopSecurityBadge extends StatelessWidget {
   }
 }
 
-/// Custom painter rendering concentric pulsing radar rings behind the main logo
 class _RadarWavesPainter extends CustomPainter {
   final double progress;
   final Color baseColor;
 
-  _RadarWavesPainter({
-    required this.progress,
-    required this.baseColor,
-  });
+  _RadarWavesPainter({required this.progress, required this.baseColor});
 
   @override
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
     final maxRadius = size.width / 2;
 
-    const ringCount = 3;
-    for (int i = 0; i < ringCount; i++) {
-      final ringProgress = (progress + (i / ringCount)) % 1.0;
-      final radius = (maxRadius * 0.65) + (maxRadius * 0.35 * ringProgress);
-      final alpha = (1.0 - ringProgress) * 0.38;
+    for (int i = 0; i < 3; i++) {
+      final ringProgress = (progress + (i / 3)) % 1.0;
+      final radius = (maxRadius * 0.6) + (maxRadius * 0.4 * ringProgress);
+      final alpha = (1.0 - ringProgress) * 0.35;
 
       final paint = Paint()
         ..color = baseColor.withValues(alpha: alpha)
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.4;
+        ..strokeWidth = 1.5;
 
       canvas.drawCircle(center, radius, paint);
     }
@@ -643,84 +648,43 @@ class _RadarWavesPainter extends CustomPainter {
       oldDelegate.progress != progress;
 }
 
-/// Custom painter for the bottom holographic 3D radar scanner ring
-class _HolographicEllipsePainter extends CustomPainter {
-  final double rotationProgress;
-  final Color glowColor;
+class _HolographicArcPainter extends CustomPainter {
+  final double progress;
+  final Color accentColor;
 
-  _HolographicEllipsePainter({
-    required this.rotationProgress,
-    required this.glowColor,
+  _HolographicArcPainter({
+    required this.progress,
+    required this.accentColor,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
-    final outerRect = Rect.fromCenter(
+    final rect = Rect.fromCenter(
       center: center,
       width: size.width,
       height: size.height,
     );
-    final innerRect = Rect.fromCenter(
-      center: center,
-      width: size.width * 0.58,
-      height: size.height * 0.58,
-    );
 
-    // Inner subtle base ellipse
-    final basePaint = Paint()
-      ..color = glowColor.withValues(alpha: 0.20)
+    final trackPaint = Paint()
+      ..color = accentColor.withValues(alpha: 0.15)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.6;
-    canvas.drawOval(innerRect, basePaint);
+      ..strokeWidth = 1.5;
+    canvas.drawOval(rect, trackPaint);
 
-    // Outer subtle track ellipse
-    final outerTrackPaint = Paint()
-      ..color = glowColor.withValues(alpha: 0.12)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.2;
-    canvas.drawOval(outerRect, outerTrackPaint);
-
-    // Glowing orbital sweep arc on outer ellipse
-    final sweepAngle = math.pi * 0.85;
-    final startAngle = (rotationProgress * 2 * math.pi) - (sweepAngle / 2);
+    final sweepAngle = math.pi * 0.8;
+    final startAngle = (progress * 2 * math.pi) - (sweepAngle / 2);
 
     final sweepPaint = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 4.0
+      ..strokeWidth = 3.5
       ..strokeCap = StrokeCap.round
-      ..shader = SweepGradient(
-        startAngle: 0.0,
-        endAngle: math.pi * 2,
-        colors: [
-          glowColor.withValues(alpha: 0.0),
-          glowColor.withValues(alpha: 0.95),
-          Colors.white,
-        ],
-        stops: const [0.0, 0.8, 1.0],
-        transform: GradientRotation(startAngle),
-      ).createShader(outerRect);
+      ..color = accentColor;
 
-    canvas.drawArc(outerRect, startAngle, sweepAngle, false, sweepPaint);
-
-    // Small glowing head dot
-    final headAngle = startAngle + sweepAngle;
-    final dotX = center.dx + (outerRect.width / 2) * math.cos(headAngle);
-    final dotY = center.dy + (outerRect.height / 2) * math.sin(headAngle);
-
-    final dotPaint = Paint()
-      ..color = Colors.white
-      ..style = PaintingStyle.fill;
-    canvas.drawCircle(Offset(dotX, dotY), 3.2, dotPaint);
-
-    // Dot glow
-    final dotGlowPaint = Paint()
-      ..color = glowColor.withValues(alpha: 0.6)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5);
-    canvas.drawCircle(Offset(dotX, dotY), 6.0, dotGlowPaint);
+    canvas.drawArc(rect, startAngle, sweepAngle, false, sweepPaint);
   }
 
   @override
-  bool shouldRepaint(covariant _HolographicEllipsePainter oldDelegate) =>
-      oldDelegate.rotationProgress != rotationProgress;
+  bool shouldRepaint(covariant _HolographicArcPainter oldDelegate) =>
+      oldDelegate.progress != progress;
 }
