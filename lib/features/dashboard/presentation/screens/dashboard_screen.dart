@@ -10,6 +10,8 @@ import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_status_badge.dart';
 import '../../../auth/presentation/auth_controller.dart';
 import '../journey_controller.dart';
+import '../../../../core/providers/notifications_provider.dart';
+import '../widgets/notification_center_modal.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
@@ -196,6 +198,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         customer?.latestLoanStatus == 'DISBURSED' ||
         customer?.latestLoanStatus == 'FULLY_PAID';
 
+    final loanStatus = _readText(postApproval?.loan?.status ?? customer?.latestLoanStatus, '').toUpperCase();
+    final isFullyPaid = loanStatus == 'FULLY_PAID' || loanStatus == 'CLOSED';
+
     final hasActiveLoan = (customer?.latestLan?.toString().isNotEmpty ?? false) &&
         (workflow?.offerAccepted == true || customer?.latestApplicationStatus == 'LENDER_APPROVED');
 
@@ -265,8 +270,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 const SizedBox(height: 24),
 
                 // ── 6. Personal Loan Promotional Card ───────────────────────
-                _buildPersonalLoanPromoCard(journeyState),
-                const SizedBox(height: 24),
+                if (!isDisbursed || isFullyPaid) ...[
+                  _buildPersonalLoanPromoCard(journeyState),
+                  const SizedBox(height: 24),
+                ],
 
                 // ── 7. Smart Credit Perks & Readiness Hub ──────────────────
                 _buildSmartCreditPerksHub(),
@@ -334,43 +341,61 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             ],
           ),
         ),
-        Stack(
-          clipBehavior: Clip.none,
-          children: [
-            Material(
-              color: Colors.white,
-              shape: const CircleBorder(),
-              child: InkWell(
-                onTap: () => _openRoute('/application/status'),
-                customBorder: const CircleBorder(),
-                child: Container(
-                  width: 42,
-                  height: 42,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(color: const Color(0xFFE2E8F0)),
-                  ),
-                  child: const Icon(
-                    Icons.notifications_none_rounded,
-                    color: Color(0xFF0F172A),
-                    size: 21,
+        Consumer(
+          builder: (context, ref, child) {
+            final unreadCount = ref.watch(notificationsProvider).unreadCount;
+            return Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Material(
+                  color: Colors.white,
+                  shape: const CircleBorder(),
+                  child: InkWell(
+                    onTap: () => NotificationCenterModal.show(context),
+                    customBorder: const CircleBorder(),
+                    child: Container(
+                      width: 42,
+                      height: 42,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                      ),
+                      child: const Icon(
+                        Icons.notifications_none_rounded,
+                        color: Color(0xFF0F172A),
+                        size: 21,
+                      ),
+                    ),
                   ),
                 ),
-              ),
-            ),
-            Positioned(
-              top: 2,
-              right: 2,
-              child: Container(
-                width: 9,
-                height: 9,
-                decoration: const BoxDecoration(
-                  color: Color(0xFFEF4444),
-                  shape: BoxShape.circle,
-                ),
-              ),
-            ),
-          ],
+                if (unreadCount > 0)
+                  Positioned(
+                    top: -2,
+                    right: -2,
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFEF4444),
+                        shape: BoxShape.circle,
+                      ),
+                      constraints: const BoxConstraints(
+                        minWidth: 18,
+                        minHeight: 18,
+                      ),
+                      child: Text(
+                        '$unreadCount',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
+              ],
+            );
+          },
         ),
         const SizedBox(width: 8),
         Material(
@@ -657,7 +682,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       );
     }
 
-    final num? rawApproved = postApproval?.loan?.approvedAmount ?? postApproval?.offer?.approvedAmount;
+    final num? rawApproved = postApproval?.loan?.approvedAmount ?? postApproval?.loan?.disbursalAmount ?? postApproval?.offer?.approvedAmount;
     final double? approvedAmount = (rawApproved != null && rawApproved > 0) ? rawApproved.toDouble() : null;
     final lenderName = _readText(postApproval?.lender?.name, 'Fintree Finance Private Limited');
     final acceptedTenure = offer?.acceptedTenureDays ?? 90;
@@ -1074,7 +1099,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final lender = postApproval?.lender;
     final bank = postApproval?.bank;
 
-    final num? rawApproved = loan?.approvedAmount ?? offer?.approvedAmount;
+    final num? rawApproved = loan?.approvedAmount ?? loan?.disbursalAmount ?? offer?.approvedAmount;
     final double? approvedAmount = (rawApproved != null && rawApproved > 0) ? rawApproved.toDouble() : null;
     final emiAmount = offer?.acceptedEmiAmount;
     final lenderName = _readText(lender?.name, customer?.allocatedLenderName ?? 'Fintree Finance Private Limited');
@@ -1342,7 +1367,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
     final lan = _readText(loan?.lan ?? customer?.latestLan, '');
     final status = _readText(loan?.status ?? customer?.latestLoanStatus, 'DISBURSED').toUpperCase();
-    final num? rawApproved = loan?.approvedAmount ?? offer?.approvedAmount;
+    final num? rawApproved = loan?.approvedAmount ?? loan?.disbursalAmount ?? offer?.approvedAmount;
     final double? approvedAmount = (rawApproved != null && rawApproved > 0) ? rawApproved.toDouble() : null;
     final lenderName = _readText(lender?.name, 'Fintree Finance Private Limited');
     final utr = _readText(loan?.disbursalUtr, 'N/A');
@@ -2631,23 +2656,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   ),
                   const SizedBox(height: 20),
 
-                  // Update Profile Action Button
-                  ElevatedButton.icon(
-                    onPressed: () {
-                      Navigator.pop(ctx);
-                      _openRoute('/onboarding/profile');
-                    },
-                    icon: const Icon(Icons.edit_note_rounded, size: 20),
-                    label: const Text('Update Profile & Income Details', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF0F5A47),
-                      foregroundColor: Colors.white,
-                      minimumSize: const Size(double.infinity, 50),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                      elevation: 0,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
 
                   // Sign Out Action Button
                   OutlinedButton.icon(

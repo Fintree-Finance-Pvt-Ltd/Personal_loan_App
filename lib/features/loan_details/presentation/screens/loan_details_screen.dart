@@ -12,6 +12,7 @@ import '../../../../core/utils/currency_utils.dart';
 import '../../../../core/widgets/app_loader.dart';
 import '../../../../core/widgets/app_status_badge.dart';
 import '../../../../core/widgets/app_header.dart';
+import '../../../../core/services/push_notification_service.dart';
 import '../../../dashboard/presentation/journey_controller.dart';
 
 class LoanDetailsScreen extends ConsumerStatefulWidget {
@@ -84,6 +85,28 @@ class _LoanDetailsScreenState extends ConsumerState<LoanDetailsScreen> {
         setState(() {
           _loanDetailsData = data is Map<String, dynamic> ? data : null;
         });
+
+        // Schedule EMI Reminders (3 days before, 1 day before, and due date with Pay Now button)
+        if (_loanDetailsData != null) {
+          final loanMap = _loanDetailsData!['loan'] as Map<String, dynamic>?;
+          final nextEmi = _loanDetailsData!['nextEmi'] as Map<String, dynamic>? ?? loanMap;
+          if (nextEmi != null) {
+            final rawAmount = nextEmi['amount'] ?? nextEmi['emiAmount'] ?? nextEmi['nextEmiAmount'];
+            final rawDueDate = nextEmi['dueDate'] ?? nextEmi['nextEmiDueDate'];
+            if (rawAmount != null && rawDueDate != null) {
+              final amount = (rawAmount is num) ? rawAmount.toDouble() : double.tryParse(rawAmount.toString()) ?? 0.0;
+              final dueDate = DateTime.tryParse(rawDueDate.toString());
+              if (dueDate != null && amount > 0) {
+                PushNotificationService().scheduleEmiReminders(
+                  lan: widget.lan,
+                  amount: amount,
+                  dueDate: dueDate,
+                );
+              }
+            }
+          }
+        }
+
         _checkAndStartPolling();
       }
     } catch (e) {
@@ -173,8 +196,10 @@ class _LoanDetailsScreenState extends ConsumerState<LoanDetailsScreen> {
     final isDisbursed = status == 'DISBURSED' || status == 'FULLY_PAID' || disbursalStatus == 'DISBURSED';
 
     final num? rawApproved = apiLoan?['approvedAmount'] ??
+        apiLoan?['disbursedAmount'] ??
         apiLoan?['amount'] ??
         fallbackLoan?.approvedAmount ??
+        fallbackLoan?.disbursalAmount ??
         fallbackOffer?.approvedAmount;
 
     final double? approvedAmount = (rawApproved != null && rawApproved.toDouble() > 0)
@@ -195,6 +220,54 @@ class _LoanDetailsScreenState extends ConsumerState<LoanDetailsScreen> {
     final num? rawNextEmi = summary?['nextEmiAmount'] ?? fallbackOffer?.acceptedEmiAmount;
     final double? nextEmiAmount = (rawNextEmi != null && rawNextEmi.toDouble() > 0) ? rawNextEmi.toDouble() : null;
     final nextDueDate = summary?['nextDueDate']?.toString();
+
+    // Construct effective RPS list if rawRpsList is empty but loan is disbursed or has approved amount
+    List<Map<String, dynamic>> effectiveRpsList = rpsList.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+
+    if (effectiveRpsList.isEmpty && (isDisbursed || approvedAmount != null || disbursedAmount != null)) {
+      final double baseAmt = (approvedAmount != null && approvedAmount > 0)
+          ? approvedAmount
+          : ((disbursedAmount != null && disbursedAmount > 0) ? disbursedAmount : 0.0);
+
+      if (baseAmt > 0) {
+        final num? tenureNum = apiLoan?['tenure'] ?? fallbackOffer?.acceptedTenureDays ?? 40;
+        final int tenureDays = (tenureNum != null && tenureNum > 0) ? tenureNum.toInt() : 40;
+        final num? interestNum = apiLoan?['interestRate'] ?? fallbackOffer?.acceptedInterestRate ?? 1;
+        final double interestRatePercent = (interestNum != null && interestNum > 0) ? interestNum.toDouble() : 1.0;
+
+        final double totalInterest = (baseAmt * interestRatePercent * tenureDays) / 3650.0;
+        final double emiVal = (nextEmiAmount != null && nextEmiAmount > 0) ? nextEmiAmount : (baseAmt + totalInterest);
+
+        final rawDisbursalDate = apiLoan?['disbursalDate'] ?? fallbackLoan?.disbursalCompletedAt ?? fallbackLoan?.disbursalDate;
+        DateTime startDate = DateTime.now();
+        if (rawDisbursalDate != null && rawDisbursalDate.toString().isNotEmpty) {
+          final parsed = DateTime.tryParse(rawDisbursalDate.toString());
+          if (parsed != null) startDate = parsed;
+        }
+
+        DateTime dueDt = startDate.add(Duration(days: tenureDays));
+        if (nextDueDate != null && nextDueDate.isNotEmpty) {
+          final parsedDue = DateTime.tryParse(nextDueDate.toString());
+          if (parsedDue != null) dueDt = parsedDue;
+        }
+
+        final bool isPaid = totalOutstanding == 0 || (totalPaid != null && totalPaid >= emiVal);
+        final bool isOverdue = !isPaid && DateTime.now().isAfter(dueDt);
+        final String pStatus = isPaid ? 'PAID' : (isOverdue ? 'OVERDUE' : 'UNPAID');
+
+        effectiveRpsList = [
+          {
+            'installmentNumber': 1,
+            'emi': emiVal,
+            'remainingAmount': totalOutstanding ?? (isPaid ? 0.0 : emiVal),
+            'dueDate': dueDt.toIso8601String(),
+            'paymentStatus': pStatus,
+            'principalAmount': baseAmt,
+            'interestAmount': totalInterest,
+          }
+        ];
+      }
+    }
 
     String headerAmountText = 'Pending Confirmation';
     String headerSubText = 'Syncing Loan Details with Lender';
@@ -487,7 +560,7 @@ class _LoanDetailsScreenState extends ConsumerState<LoanDetailsScreen> {
                         title: 'Repayment Schedule (RPS)',
                         icon: Icons.calendar_month_rounded,
                         children: [
-                          if (rpsList.isEmpty)
+                          if (effectiveRpsList.isEmpty)
                             Padding(
                               padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
                               child: Row(
@@ -506,8 +579,7 @@ class _LoanDetailsScreenState extends ConsumerState<LoanDetailsScreen> {
                               ),
                             )
                           else
-                            ...rpsList.map((rpsItem) {
-                              final itemMap = rpsItem as Map<String, dynamic>;
+                            ...effectiveRpsList.map((itemMap) {
                               final instNum = itemMap['installmentNumber'] ?? 1;
                               final emi = (itemMap['emi'] ?? 0).toDouble();
                               final remaining = (itemMap['remainingAmount'] ?? emi).toDouble();
@@ -590,7 +662,7 @@ class _LoanDetailsScreenState extends ConsumerState<LoanDetailsScreen> {
                         children: [
                           _row('Loan Account No. (LAN)', widget.lan),
                           _row('Application No.', apiLoan?['applicationNumber'] ?? fallbackLoan?.applicationNumber ?? '—'),
-                          _row('Lender', apiLoan?['lenderName'] ?? postApproval?.lender?.name ?? customer?.allocatedLenderName ?? 'Fintree Finance Private Limited'),
+                          _row('Lender', apiLoan?['lenderName'] ?? postApproval?.lender.name ?? customer?.allocatedLenderName ?? 'Fintree Finance Private Limited'),
                           _row(
                             'Interest Rate',
                             (apiLoan?['interestRate'] != null || fallbackOffer?.acceptedInterestRate != null)

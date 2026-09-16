@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "467841777771",
+    "project_id": "personalloanapp-5b58b",
+    "storage_bucket": "personalloanapp-5b58b.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:467841777771:android:9c45016bd360cb6686312e",
+        "android_client_info": {
+          "package_name": "com.finley"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDlnFxy00SGDnnKBDDg994S8u0nxdFg7ys"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:467841777771:android:9c45016bd360cb6686312e",
+        "android_client_info": {
+          "package_name": "com.plcustomer.pl_customer_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDlnFxy00SGDnnKBDDg994S8u0nxdFg7ys"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

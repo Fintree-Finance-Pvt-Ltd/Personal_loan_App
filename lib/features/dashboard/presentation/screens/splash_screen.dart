@@ -1,5 +1,5 @@
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -14,12 +14,8 @@ class SplashScreen extends ConsumerStatefulWidget {
 }
 
 class _SplashScreenState extends ConsumerState<SplashScreen>
-    with TickerProviderStateMixin {
+    with SingleTickerProviderStateMixin {
   late final AnimationController _entranceController;
-  late final AnimationController _orbitalController;
-  late final AnimationController _radarController;
-  late final AnimationController _floatController;
-
   late final Animation<double> _fadeAnimation;
   late final Animation<double> _scaleAnimation;
   late final Animation<Offset> _slideAnimation;
@@ -29,68 +25,63 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   int _statusStepIndex = 0;
 
   static const List<String> _securitySteps = [
-    'Verifying Secure Gateway...',
-    'Authenticating Device Profile...',
-    'Loading Finley Portal...',
+    'Verifying secure channel...',
+    'Authenticating profile...',
+    'Preparing your dashboard...',
   ];
 
   @override
   void initState() {
     super.initState();
 
-    _entranceController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1000),
+    // Set immersive light-on-dark system navigation
+    SystemChrome.setSystemUIOverlayStyle(
+      const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.light,
+        systemNavigationBarColor: AppTheme.primaryDeepTeal,
+        systemNavigationBarIconBrightness: Brightness.light,
+      ),
     );
 
-    _orbitalController = AnimationController(
+    _entranceController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 2000),
-    )..repeat();
-
-    _orbitalController.addListener(_onOrbitalTick);
-
-    _radarController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 2600),
-    )..repeat();
-
-    _floatController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 3200),
-    )..repeat(reverse: true);
+      duration: const Duration(milliseconds: 900),
+    );
 
     _fadeAnimation = CurvedAnimation(
       parent: _entranceController,
-      curve: const Interval(0.0, 0.85, curve: Curves.easeOut),
+      curve: const Interval(0.0, 0.75, curve: Curves.easeOut),
     );
 
-    _scaleAnimation = Tween<double>(begin: 0.72, end: 1.0).animate(
+    _scaleAnimation = Tween<double>(begin: 0.88, end: 1.0).animate(
       CurvedAnimation(
         parent: _entranceController,
-        curve: const Interval(0.0, 0.85, curve: Curves.easeOutBack),
+        curve: const Interval(0.0, 0.8, curve: Curves.easeOutCubic),
       ),
     );
 
     _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, 0.2),
+      begin: const Offset(0, 0.12),
       end: Offset.zero,
     ).animate(
       CurvedAnimation(
         parent: _entranceController,
-        curve: const Interval(0.2, 1.0, curve: Curves.easeOutCubic),
+        curve: const Interval(0.15, 0.9, curve: Curves.easeOutCubic),
       ),
     );
 
     _entranceController.forward();
+    _startStatusSequence();
     _syncCustomerState();
   }
 
-  void _onOrbitalTick() {
-    final step = (_orbitalController.value * _securitySteps.length).floor() %
-        _securitySteps.length;
-    if (step != _statusStepIndex && mounted) {
-      setState(() => _statusStepIndex = step);
+  void _startStatusSequence() async {
+    for (int i = 0; i < _securitySteps.length; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 700));
+      if (mounted && _isSyncing && _errorMessage == null) {
+        setState(() => _statusStepIndex = i);
+      }
     }
   }
 
@@ -105,7 +96,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     try {
       await Future.wait<void>([
         ref.read(journeyControllerProvider.notifier).syncCustomerState(),
-        Future<void>.delayed(const Duration(milliseconds: 2200)),
+        Future<void>.delayed(const Duration(milliseconds: 2100)),
       ]);
 
       if (!mounted) return;
@@ -116,176 +107,123 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       setState(() {
         _isSyncing = false;
         _errorMessage =
-            'We could not verify your connection. Please check your network and try again.';
+            'Unable to establish a secure connection. Please verify your network.';
       });
     }
   }
 
   @override
   void dispose() {
-    _orbitalController.removeListener(_onOrbitalTick);
     _entranceController.dispose();
-    _orbitalController.dispose();
-    _radarController.dispose();
-    _floatController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final screenSize = MediaQuery.of(context).size;
-    final crestSize = (screenSize.width * 0.42).clamp(150.0, 195.0);
+    final size = MediaQuery.of(context).size;
 
     return Scaffold(
       backgroundColor: AppTheme.primaryDeepTeal,
       body: Stack(
+        alignment: Alignment.center,
         children: [
-          // Background Gradient matching Finley Theme
-          const Positioned.fill(
+          // Elegant dark ambient backdrop
+          Positioned.fill(
             child: DecoratedBox(
               decoration: BoxDecoration(
-                gradient: AppTheme.primaryGradient,
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    AppTheme.primaryDeepTeal,
+                    AppTheme.primaryDeepTeal.withValues(alpha: 0.96),
+                    const Color(0xFF031614),
+                  ],
+                ),
               ),
             ),
           ),
 
-          // Central Ambient Radial Glow
+          // Soft central radial bloom
           Positioned(
-            top: screenSize.height * 0.24,
-            left: screenSize.width * 0.08,
+            top: size.height * 0.28,
             child: Container(
-              width: screenSize.width * 0.84,
-              height: screenSize.width * 0.84,
+              width: size.width * 0.9,
+              height: size.width * 0.9,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: RadialGradient(
                   colors: [
-                    AppTheme.accentMint.withValues(alpha: 0.16),
-                    AppTheme.primaryTeal.withValues(alpha: 0.06),
+                    AppTheme.accentMint.withValues(alpha: 0.08),
+                    AppTheme.primaryTeal.withValues(alpha: 0.03),
                     Colors.transparent,
                   ],
-                  stops: const [0.0, 0.48, 1.0],
+                  stops: const [0.0, 0.5, 1.0],
                 ),
               ),
             ),
           ),
 
-          // Floating Coin Accents
-          Positioned(
-            top: screenSize.height * 0.14,
-            left: 28,
-            child: _buildFloatingRupee(size: 38),
-          ),
-          Positioned(
-            top: screenSize.height * 0.16,
-            right: 28,
-            child: _buildFloatingRupee(size: 46),
-          ),
-          Positioned(
-            bottom: screenSize.height * 0.22,
-            right: 32,
-            child: _buildFloatingRupee(size: 34),
-          ),
-          Positioned(
-            bottom: screenSize.height * 0.24,
-            left: 36,
-            child: _buildFloatingRupee(size: 30),
-          ),
-
-          // Foreground Information
+          // Main Content
           SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-              child: Column(
-                children: [
-                  // Top Partner Pill
-                  FadeTransition(
-                    opacity: _fadeAnimation,
-                    child: const Align(
-                      alignment: Alignment.topRight,
-                      child: _TopPartnerBadge(),
+            child: Column(
+              children: [
+                // Top discreet accreditation
+                FadeTransition(
+                  opacity: _fadeAnimation,
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 14),
+                    child: _buildTopTrustTag(),
+                  ),
+                ),
+
+                // Centered Brand Focus
+                Expanded(
+                  child: Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        ScaleTransition(
+                          scale: _scaleAnimation,
+                          child: FadeTransition(
+                            opacity: _fadeAnimation,
+                            child: _buildBrandMark(),
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        SlideTransition(
+                          position: _slideAnimation,
+                          child: FadeTransition(
+                            opacity: _fadeAnimation,
+                            child: _buildBrandTypography(),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
+                ),
 
-                  // Center Hero Display
-                  Expanded(
-                    child: Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          ScaleTransition(
-                            scale: _scaleAnimation,
-                            child: AnimatedBuilder(
-                              animation: _floatController,
-                              builder: (context, child) {
-                                final floatY =
-                                    math.sin(_floatController.value * math.pi) * -6;
-                                return Transform.translate(
-                                  offset: Offset(0, floatY),
-                                  child: child,
-                                );
-                              },
-                              child: _buildHeroLogoCrest(crestSize),
-                            ),
-                          ),
-
-                          const SizedBox(height: 28),
-
-                          // Brand Typography
-                          SlideTransition(
-                            position: _slideAnimation,
-                            child: FadeTransition(
-                              opacity: _fadeAnimation,
-                              child: Column(
-                                children: [
-                                  const Text(
-                                    'Finley',
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 42,
-                                      fontWeight: FontWeight.w900,
-                                      letterSpacing: -1.2,
-                                      height: 1.0,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 6),
-                                  Text(
-                                    'DIGITAL PERSONAL LOANS',
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(
-                                      color: AppTheme.accentMint.withValues(alpha: 0.9),
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w800,
-                                      letterSpacing: 3.2,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-
-                          const SizedBox(height: 38),
-
-                          // Radar / Error Display
-                          AnimatedSwitcher(
-                            duration: const Duration(milliseconds: 280),
-                            child: _errorMessage != null
-                                ? _buildErrorCard()
-                                : _buildStatusIndicator(),
-                          ),
-                        ],
+                // Bottom State Loader & Regulatory Footer
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 20),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 250),
+                        child: _errorMessage != null
+                            ? _buildErrorPanel()
+                            : _buildProgressStatus(),
                       ),
-                    ),
+                      const SizedBox(height: 28),
+                      FadeTransition(
+                        opacity: _fadeAnimation,
+                        child: _buildInstitutionalFooter(),
+                      ),
+                    ],
                   ),
-
-                  // Bottom Regulatory Strip
-                  FadeTransition(
-                    opacity: _fadeAnimation,
-                    child: _buildBottomFooter(),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ],
@@ -293,73 +231,33 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     );
   }
 
-  Widget _buildHeroLogoCrest(double size) {
-    return SizedBox(
-      width: size + 60,
-      height: size + 60,
-      child: Stack(
-        alignment: Alignment.center,
+  Widget _buildTopTrustTag() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4.5),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(100),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.09),
+          width: 0.8,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          // Radar ripples
-          AnimatedBuilder(
-            animation: _radarController,
-            builder: (context, _) {
-              return CustomPaint(
-                size: Size(size + 60, size + 60),
-                painter: _RadarWavesPainter(
-                  progress: _radarController.value,
-                  baseColor: AppTheme.accentMint,
-                ),
-              );
-            },
+          Icon(
+            Icons.shield_outlined,
+            size: 11,
+            color: AppTheme.accentMint.withValues(alpha: 0.9),
           ),
-
-          // Outer halo
-          Container(
-            width: size + 14,
-            height: size + 14,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(
-                color: AppTheme.accentMint.withValues(alpha: 0.35),
-                width: 1.4,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: AppTheme.accentCyan.withValues(alpha: 0.25),
-                  blurRadius: 28,
-                  spreadRadius: 2,
-                ),
-              ],
-            ),
-          ),
-
-          // Logo card
-          Container(
-            width: size,
-            height: size,
-            padding: const EdgeInsets.all(22),
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: Colors.white,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.45),
-                  blurRadius: 32,
-                  offset: const Offset(0, 14),
-                ),
-              ],
-            ),
-            child: Image.asset(
-              'lib/assets/images/Logo.png',
-              fit: BoxFit.contain,
-              errorBuilder: (_, __, ___) => Center(
-                child: Icon(
-                  Icons.spa_rounded,
-                  color: AppTheme.primaryTeal,
-                  size: 64,
-                ),
-              ),
+          const SizedBox(width: 5),
+          Text(
+            'BANK-GRADE SECURITY',
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.72),
+              fontSize: 9.5,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.9,
             ),
           ),
         ],
@@ -367,126 +265,160 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     );
   }
 
-  Widget _buildStatusIndicator() {
-    return Column(
-      key: const ValueKey('status-normal'),
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        AnimatedSwitcher(
-          duration: const Duration(milliseconds: 250),
-          child: Text(
-            _securitySteps[_statusStepIndex],
-            key: ValueKey<int>(_statusStepIndex),
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.88),
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 0.2,
-            ),
+  Widget _buildBrandMark() {
+    return Container(
+      width: 104,
+      height: 104,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(28),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.22),
+            blurRadius: 36,
+            offset: const Offset(0, 16),
+          ),
+          BoxShadow(
+            color: AppTheme.accentMint.withValues(alpha: 0.12),
+            blurRadius: 20,
+            spreadRadius: -4,
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Image.asset(
+          'lib/assets/images/Logo.png',
+          fit: BoxFit.contain,
+          errorBuilder: (_, __, ___) => const Icon(
+            Icons.account_balance_wallet_rounded,
+            color: AppTheme.primaryDeepTeal,
+            size: 44,
           ),
         ),
-        const SizedBox(height: 14),
-        SizedBox(
-          width: 170,
-          height: 38,
-          child: AnimatedBuilder(
-            animation: _orbitalController,
-            builder: (context, _) {
-              return CustomPaint(
-                painter: _HolographicArcPainter(
-                  progress: _orbitalController.value,
-                  accentColor: AppTheme.accentMint,
-                ),
-              );
-            },
+      ),
+    );
+  }
+
+  Widget _buildBrandTypography() {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Text(
+          'Finley',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 34,
+            fontWeight: FontWeight.w800,
+            letterSpacing: -0.6,
+            height: 1.1,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'INSTANT DIGITAL CREDIT',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: AppTheme.accentMint.withValues(alpha: 0.85),
+            fontSize: 10.5,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 2.4,
           ),
         ),
       ],
     );
   }
 
-  Widget _buildErrorCard() {
-    return Container(
-      key: const ValueKey('status-error'),
-      width: double.infinity,
-      constraints: const BoxConstraints(maxWidth: 320),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.25),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
+  Widget _buildProgressStatus() {
+    return Column(
+      key: const ValueKey('normal-loader'),
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Sleek micro progress track
+        ClipRRect(
+          borderRadius: BorderRadius.circular(3),
+          child: SizedBox(
+            width: 130,
+            height: 2.5,
+            child: LinearProgressIndicator(
+              backgroundColor: Colors.white.withValues(alpha: 0.1),
+              valueColor: AlwaysStoppedAnimation<Color>(AppTheme.accentMint),
+            ),
           ),
-        ],
+        ),
+        const SizedBox(height: 14),
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 200),
+          child: Text(
+            _securitySteps[_statusStepIndex],
+            key: ValueKey<int>(_statusStepIndex),
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.55),
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              letterSpacing: 0.2,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildErrorPanel() {
+    return Container(
+      key: const ValueKey('error-card'),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF142422),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.08),
+        ),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Row(
             children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: const BoxDecoration(
-                  color: AppTheme.errorBg,
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.wifi_off_rounded,
-                  color: AppTheme.errorRed,
-                  size: 18,
-                ),
+              const Icon(
+                Icons.cloud_off_rounded,
+                color: Color(0xFFFFA280),
+                size: 18,
               ),
               const SizedBox(width: 10),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Connection Issue',
-                      style: TextStyle(
-                        color: AppTheme.textDarkPrimary,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      _errorMessage ?? 'Unable to connect to service.',
-                      style: const TextStyle(
-                        color: AppTheme.textDarkSecondary,
-                        fontSize: 11,
-                        height: 1.3,
-                      ),
-                      maxLines: 2,
-                    ),
-                  ],
+                child: Text(
+                  _errorMessage ?? 'Network unreachable.',
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.8),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w400,
+                    height: 1.3,
+                  ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 12),
           SizedBox(
             width: double.infinity,
-            height: 42,
-            child: ElevatedButton.icon(
+            height: 36,
+            child: TextButton(
               onPressed: _isSyncing ? null : _syncCustomerState,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.primaryTeal,
-                foregroundColor: Colors.white,
+              style: TextButton.styleFrom(
+                backgroundColor: Colors.white.withValues(alpha: 0.08),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(8),
                 ),
-                elevation: 0,
               ),
-              icon: const Icon(Icons.refresh_rounded, size: 16),
-              label: const Text(
-                'Retry Connection',
+              child: const Text(
+                'Tap to Retry',
                 style: TextStyle(
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ),
@@ -496,195 +428,38 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     );
   }
 
-  Widget _buildBottomFooter() {
+  Widget _buildInstitutionalFooter() {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         Text(
-          'POWERED BY ',
+          'LENDING PARTNER',
           style: TextStyle(
-            color: Colors.white.withValues(alpha: 0.45),
-            fontSize: 10,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 1.2,
+            color: Colors.white.withValues(alpha: 0.35),
+            fontSize: 9.5,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 1.1,
           ),
         ),
+        const SizedBox(width: 6),
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+          width: 3,
+          height: 3,
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(6),
+            shape: BoxShape.circle,
+            color: Colors.white.withValues(alpha: 0.2),
           ),
-          child: const Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.account_balance_rounded,
-                size: 11,
-                color: AppTheme.accentMint,
-              ),
-              SizedBox(width: 4),
-              Text(
-                'FINTREE FINANCE',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0.6,
-                ),
-              ),
-            ],
+        ),
+        const SizedBox(width: 6),
+        Text(
+          'Fintree Finance (RBI Reg. NBFC)',
+          style: TextStyle(
+            color: Colors.white.withValues(alpha: 0.7),
+            fontSize: 10,
+            fontWeight: FontWeight.w600,
           ),
         ),
       ],
     );
   }
-
-  Widget _buildFloatingRupee({required double size}) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: const RadialGradient(
-          colors: [
-            Color(0xFFFFE082),
-            Color(0xFFFFB300),
-            Color(0xFFF57F17),
-          ],
-          stops: [0.0, 0.7, 1.0],
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.35),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Center(
-        child: Text(
-          '₹',
-          style: TextStyle(
-            color: const Color(0xFF5D4037),
-            fontSize: size * 0.52,
-            fontWeight: FontWeight.w900,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _TopPartnerBadge extends StatelessWidget {
-  const _TopPartnerBadge();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.16),
-            blurRadius: 12,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: const Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.verified_rounded,
-            size: 14,
-            color: AppTheme.primaryTeal,
-          ),
-          SizedBox(width: 5),
-          Text(
-            'RBI NBFC Partner',
-            style: TextStyle(
-              color: AppTheme.textDarkPrimary,
-              fontSize: 11,
-              fontWeight: FontWeight.w800,
-              letterSpacing: -0.1,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _RadarWavesPainter extends CustomPainter {
-  final double progress;
-  final Color baseColor;
-
-  _RadarWavesPainter({required this.progress, required this.baseColor});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final maxRadius = size.width / 2;
-
-    for (int i = 0; i < 3; i++) {
-      final ringProgress = (progress + (i / 3)) % 1.0;
-      final radius = (maxRadius * 0.6) + (maxRadius * 0.4 * ringProgress);
-      final alpha = (1.0 - ringProgress) * 0.35;
-
-      final paint = Paint()
-        ..color = baseColor.withValues(alpha: alpha)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.5;
-
-      canvas.drawCircle(center, radius, paint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _RadarWavesPainter oldDelegate) =>
-      oldDelegate.progress != progress;
-}
-
-class _HolographicArcPainter extends CustomPainter {
-  final double progress;
-  final Color accentColor;
-
-  _HolographicArcPainter({
-    required this.progress,
-    required this.accentColor,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final rect = Rect.fromCenter(
-      center: center,
-      width: size.width,
-      height: size.height,
-    );
-
-    final trackPaint = Paint()
-      ..color = accentColor.withValues(alpha: 0.15)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.5;
-    canvas.drawOval(rect, trackPaint);
-
-    final sweepAngle = math.pi * 0.8;
-    final startAngle = (progress * 2 * math.pi) - (sweepAngle / 2);
-
-    final sweepPaint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 3.5
-      ..strokeCap = StrokeCap.round
-      ..color = accentColor;
-
-    canvas.drawArc(rect, startAngle, sweepAngle, false, sweepPaint);
-  }
-
-  @override
-  bool shouldRepaint(covariant _HolographicArcPainter oldDelegate) =>
-      oldDelegate.progress != progress;
 }

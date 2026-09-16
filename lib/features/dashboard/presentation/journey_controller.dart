@@ -3,6 +3,8 @@ import '../../../core/models/customer_model.dart';
 import '../../../core/models/post_approval_model.dart';
 import '../../../core/providers/providers.dart';
 
+import '../../../core/services/push_notification_service.dart';
+
 class JourneyState {
   final bool isLoading;
   final String? errorMessage;
@@ -93,6 +95,24 @@ class JourneyController extends StateNotifier<JourneyState> {
       PostApprovalJourneyModel? postApproval;
       String nextRoute = '/dashboard';
 
+      final effectiveLan = customer.latestLan ?? customer.platformLan ?? '';
+      if (effectiveLan.isNotEmpty) {
+        try {
+          await storage.saveActiveLan(effectiveLan);
+          final postApprovalRes = await apiClient.get('/customer/loans/$effectiveLan/post-approval?customerId=$customerId');
+          dynamic rawPostData = postApprovalRes;
+          if (rawPostData is Map<String, dynamic> && rawPostData['data'] != null) {
+            rawPostData = rawPostData['data'];
+          }
+          if (rawPostData is Map<String, dynamic> && rawPostData['data'] != null) {
+            rawPostData = rawPostData['data'];
+          }
+          postApproval = PostApprovalJourneyModel.fromJson(rawPostData is Map<String, dynamic> ? rawPostData : postApprovalRes);
+        } catch (e) {
+          // Graceful fallback if post-approval API fails
+        }
+      }
+
       final livePhotoDone = customer.updateReadinessReasons.isEmpty ||
           !customer.updateReadinessReasons.contains('LIVE_PHOTO_NOT_VERIFIED');
 
@@ -120,7 +140,6 @@ class JourneyController extends StateNotifier<JourneyState> {
         nextRoute = '/onboarding/account-aggregator';
       } else if (customer.nextPermittedStep == 'PRE_APPROVAL_OFFER_SELECTION' ||
                  customer.latestApplicationStatus == 'LENDER_PRE_APPROVED') {
-        final effectiveLan = customer.latestLan ?? customer.platformLan ?? '';
         nextRoute = effectiveLan.isNotEmpty ? '/loan/$effectiveLan/offer?isPreApproval=true' : '/onboarding/offer';
       } else if (customer.latestApplicationStatus == null ||
                  customer.latestApplicationStatus == 'DRAFT' ||
@@ -132,22 +151,33 @@ class JourneyController extends StateNotifier<JourneyState> {
                  customer.nextPermittedStep == 'LENDER_DECISION_PROCESSING' ||
                  customer.nextPermittedStep == 'APPROVAL_PROCESSING') {
         nextRoute = '/application/status';
-      } else if (customer.latestApplicationStatus == 'LENDER_APPROVED' && (customer.latestLan != null || customer.platformLan != null)) {
-        final effectiveLan = (customer.latestLan ?? customer.platformLan)!;
-        await storage.saveActiveLan(effectiveLan);
-        final postApprovalRes = await apiClient.get('/customer/loans/$effectiveLan/post-approval?customerId=$customerId');
-        
-        dynamic rawPostData = postApprovalRes;
-        if (rawPostData is Map<String, dynamic> && rawPostData['data'] != null) {
-          rawPostData = rawPostData['data'];
-        }
-        
-        postApproval = PostApprovalJourneyModel.fromJson(rawPostData is Map<String, dynamic> ? rawPostData : postApprovalRes);
-        final step = postApproval.workflow.currentStep;
+      } else if (customer.latestLoanStatus == 'DISBURSED' ||
+                 customer.latestApplicationStatus == 'DISBURSED' ||
+                 customer.nextPermittedStep == 'DASHBOARD' ||
+                 customer.nextPermittedStep == 'SERVICING' ||
+                 postApproval?.workflow.currentStep == 'DISBURSED' ||
+                 postApproval?.workflow.currentStep == 'COMPLETED') {
+        nextRoute = '/dashboard';
+      } else if (customer.latestApplicationStatus == 'LENDER_APPROVED' && effectiveLan.isNotEmpty) {
+        final step = postApproval?.workflow.currentStep ?? 'APPROVAL_SUMMARY';
         nextRoute = _mapPostApprovalStepToRoute(step, effectiveLan);
+
+        // Check if loan was newly approved and trigger notification
+        if (state.customer?.latestApplicationStatus != 'LENDER_APPROVED') {
+          PushNotificationService().sendLoanApprovedNotification(
+            lan: effectiveLan,
+            loanAmount: postApproval?.loan.approvedAmount?.toDouble() ?? postApproval?.offer.approvedAmount?.toDouble(),
+          );
+        }
       } else {
         nextRoute = '/dashboard';
       }
+
+      // Schedule universal 2-hour stage drop-off recovery notification for nextRoute
+      PushNotificationService().scheduleStageDropoffRecovery(
+        targetRoute: nextRoute,
+        lan: customer.latestLan ?? customer.platformLan,
+      );
 
       state = state.copyWith(
         isLoading: false,
@@ -181,9 +211,11 @@ class JourneyController extends StateNotifier<JourneyState> {
         return '/loan/$lan/esign';
       case 'READY_FOR_DISBURSAL':
         return '/loan/$lan/disbursal';
-      case 'DISBURSAL_PROCESSING':
       case 'DISBURSED':
-        return '/loan/$lan/loan-details';
+      case 'COMPLETED':
+        return '/dashboard';
+      case 'DISBURSAL_PROCESSING':
+        return '/loan/$lan/disbursal';
       default:
         return '/loan/$lan/bank';
     }

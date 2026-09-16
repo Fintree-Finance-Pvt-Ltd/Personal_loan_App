@@ -10,6 +10,7 @@ import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_loader.dart';
 import '../../../../core/widgets/app_status_badge.dart';
 import '../../../../core/widgets/app_header.dart';
+import '../../../../core/services/push_notification_service.dart';
 import '../../../dashboard/presentation/journey_controller.dart';
 
 class KfsScreen extends ConsumerStatefulWidget {
@@ -32,6 +33,10 @@ class _KfsScreenState extends ConsumerState<KfsScreen> {
   void initState() {
     super.initState();
     _generateKfs();
+    PushNotificationService().scheduleDropoffRecovery(
+      lan: widget.lan,
+      step: 'kfs',
+    );
   }
 
   void _generateKfs() async {
@@ -104,6 +109,7 @@ class _KfsScreenState extends ConsumerState<KfsScreen> {
       );
 
       await ref.read(journeyControllerProvider.notifier).syncCustomerState();
+      await PushNotificationService().cancelDropoffRecovery('kfs');
 
       if (mounted) {
         context.push('/loan/${widget.lan}/mandate');

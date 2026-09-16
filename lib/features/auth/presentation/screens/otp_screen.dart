@@ -11,6 +11,7 @@ import '../../../../app/theme.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/utils/formatters.dart';
 import '../../../../core/utils/validators.dart';
+import '../../../../core/services/push_notification_service.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_header.dart';
 import '../../../dashboard/presentation/journey_controller.dart';
@@ -215,6 +216,11 @@ class _OtpScreenState extends ConsumerState<OtpScreen>
 
     if (customer == null || !mounted) return;
 
+    // Send automated successful login push notification
+    PushNotificationService().sendLoginSuccessNotification(
+      userName: customer.fullName,
+    );
+
     await ref
         .read(journeyControllerProvider.notifier)
         .syncCustomerState();
@@ -383,13 +389,7 @@ class _OtpScreenState extends ConsumerState<OtpScreen>
             },
           ),
         ),
-        const SizedBox(height: 16),
-        SvgPicture.asset(
-          'lib/assets/images/illustrations/Enter OTP-cuate.svg',
-          height: 130,
-          fit: BoxFit.contain,
-        ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 24),
 
         // Flat Stylized Headline
         // ShaderMask(

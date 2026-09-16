@@ -21,6 +21,14 @@ class CustomerApi {
     return _extractData(res);
   }
 
+  Future<Map<String, dynamic>> updateFcmToken(String customerId, String fcmToken) async {
+    final res = await _apiClient.post(
+      '/customer/$customerId/fcm-token',
+      data: {'fcmToken': fcmToken},
+    );
+    return _extractData(res);
+  }
+
   Future<Map<String, dynamic>> updateBasicDetails(
     String customerId,
     Map<String, dynamic> data,

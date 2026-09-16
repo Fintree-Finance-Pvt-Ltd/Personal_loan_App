@@ -33,6 +33,17 @@ class SecureStorageService {
 
   Future<String?> getActiveLan() async => await _storage.read(key: _keyActiveLan);
 
+  Future<bool> isLoanApprovedNotified(String lan) async {
+    final key = 'loan_approved_notified_${lan.isEmpty ? 'default' : lan}';
+    final val = await _storage.read(key: key);
+    return val == 'true';
+  }
+
+  Future<void> markLoanApprovedNotified(String lan) async {
+    final key = 'loan_approved_notified_${lan.isEmpty ? 'default' : lan}';
+    await _storage.write(key: key, value: 'true');
+  }
+
   Future<void> clearSession() async {
     await _storage.deleteAll();
   }
