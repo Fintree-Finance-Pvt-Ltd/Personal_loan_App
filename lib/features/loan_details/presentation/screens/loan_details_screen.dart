@@ -8,6 +8,7 @@ import 'package:dio/dio.dart';
 import '../../../../core/api/api_exception.dart';
 import '../../../../app/theme.dart';
 import '../../../../core/providers/providers.dart';
+import '../../../../core/providers/locale_provider.dart';
 import '../../../../core/utils/currency_utils.dart';
 import '../../../../core/widgets/app_loader.dart';
 import '../../../../core/widgets/app_status_badge.dart';
@@ -179,6 +180,7 @@ class _LoanDetailsScreenState extends ConsumerState<LoanDetailsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final tr = ref.watch(appLocalizationsProvider);
     final postApproval = ref.watch(journeyControllerProvider).postApproval;
     final fallbackLoan = postApproval?.loan;
     final fallbackOffer = postApproval?.offer;
@@ -269,18 +271,18 @@ class _LoanDetailsScreenState extends ConsumerState<LoanDetailsScreen> {
       }
     }
 
-    String headerAmountText = 'Pending Confirmation';
-    String headerSubText = 'Syncing Loan Details with Lender';
+    String headerAmountText = tr.tr('pending_confirmation');
+    String headerSubText = tr.tr('syncing_details');
 
     if (totalOutstanding != null) {
       headerAmountText = CurrencyUtils.formatAmount(totalOutstanding);
-      headerSubText = 'Total Outstanding Amount';
+      headerSubText = tr.tr('total_outstanding');
     } else if (disbursedAmount != null) {
       headerAmountText = CurrencyUtils.formatAmount(disbursedAmount);
-      headerSubText = 'Disbursed Loan Amount';
+      headerSubText = tr.tr('disbursed_loan_amount');
     } else if (approvedAmount != null) {
       headerAmountText = CurrencyUtils.formatAmount(approvedAmount);
-      headerSubText = 'Sanctioned Loan Amount';
+      headerSubText = tr.tr('sanctioned_amount');
     }
 
     return Scaffold(
@@ -328,7 +330,7 @@ class _LoanDetailsScreenState extends ConsumerState<LoanDetailsScreen> {
                               height: 160,
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
-                                color: Colors.white.withOpacity(0.06),
+                                color: Colors.white.withValues(alpha: 0.06),
                               ),
                             ),
                           ),
@@ -345,8 +347,8 @@ class _LoanDetailsScreenState extends ConsumerState<LoanDetailsScreen> {
                                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                                         decoration: BoxDecoration(
                                           color: isDisbursed
-                                              ? Colors.greenAccent.withOpacity(0.25)
-                                              : Colors.orangeAccent.withOpacity(0.25),
+                                              ? Colors.greenAccent.withValues(alpha: 0.25)
+                                              : Colors.orangeAccent.withValues(alpha: 0.25),
                                           borderRadius: BorderRadius.circular(20),
                                           border: Border.all(
                                             color: isDisbursed ? Colors.greenAccent : Colors.orangeAccent,
@@ -354,7 +356,7 @@ class _LoanDetailsScreenState extends ConsumerState<LoanDetailsScreen> {
                                           ),
                                         ),
                                         child: Text(
-                                          isDisbursed ? '✓ ACTIVE LOAN - DISBURSED' : '⏳ PROCESSING',
+                                          isDisbursed ? tr.tr('active_loan_badge') : '⏳ ${tr.tr('processing')}',
                                           style: TextStyle(
                                             color: isDisbursed ? Colors.greenAccent : Colors.orangeAccent,
                                             fontSize: 11,
@@ -380,7 +382,7 @@ class _LoanDetailsScreenState extends ConsumerState<LoanDetailsScreen> {
                                       Text(
                                         widget.lan,
                                         style: TextStyle(
-                                          color: Colors.white.withOpacity(0.75),
+                                          color: Colors.white.withValues(alpha: 0.75),
                                           fontSize: 13,
                                         ),
                                       ),
@@ -389,15 +391,15 @@ class _LoanDetailsScreenState extends ConsumerState<LoanDetailsScreen> {
                                         onTap: () {
                                           Clipboard.setData(ClipboardData(text: widget.lan));
                                           ScaffoldMessenger.of(context).showSnackBar(
-                                            const SnackBar(
-                                              content: Text('LAN copied to clipboard'),
-                                              duration: Duration(seconds: 2),
+                                            SnackBar(
+                                              content: Text(tr.tr('lan_copied')),
+                                              duration: const Duration(seconds: 2),
                                             ),
                                           );
                                         },
                                         child: Icon(
                                           Icons.copy_rounded,
-                                          color: Colors.white.withOpacity(0.6),
+                                          color: Colors.white.withValues(alpha: 0.6),
                                           size: 14,
                                         ),
                                       ),
@@ -416,7 +418,7 @@ class _LoanDetailsScreenState extends ConsumerState<LoanDetailsScreen> {
                                   Text(
                                     headerSubText,
                                     style: TextStyle(
-                                      color: Colors.white.withOpacity(0.7),
+                                      color: Colors.white.withValues(alpha: 0.7),
                                       fontSize: 12,
                                     ),
                                   ),
@@ -471,9 +473,9 @@ class _LoanDetailsScreenState extends ConsumerState<LoanDetailsScreen> {
                                             color: const Color(0xFFFEF3C7),
                                             borderRadius: BorderRadius.circular(12),
                                           ),
-                                          child: const Text(
-                                            '⏳ STATEMENT SYNC IN PROGRESS',
-                                            style: TextStyle(
+                                          child: Text(
+                                            '⏳ ${tr.tr('statement_sync_in_progress')}',
+                                            style: const TextStyle(
                                               fontSize: 9.5,
                                               fontWeight: FontWeight.w800,
                                               color: Color(0xFFD97706),
@@ -483,8 +485,8 @@ class _LoanDetailsScreenState extends ConsumerState<LoanDetailsScreen> {
                                         const SizedBox(height: 6),
                                         Text(
                                           approvedAmount != null
-                                              ? 'Sanctioned Amount: ${CurrencyUtils.formatAmount(approvedAmount)}'
-                                              : 'Sanctioned Amount: Pending Confirmation',
+                                              ? '${tr.tr('sanctioned_amount')}: ${CurrencyUtils.formatAmount(approvedAmount)}'
+                                              : '${tr.tr('sanctioned_amount')}: ${tr.tr('pending_confirmation')}',
                                           style: const TextStyle(
                                             fontSize: 14,
                                             fontWeight: FontWeight.w800,
@@ -492,9 +494,9 @@ class _LoanDetailsScreenState extends ConsumerState<LoanDetailsScreen> {
                                           ),
                                         ),
                                         const SizedBox(height: 2),
-                                        const Text(
-                                          'Final RPS schedule & UTR reference statement are being updated.',
-                                          style: TextStyle(fontSize: 11.5, color: Color(0xFF64748B), height: 1.3),
+                                        Text(
+                                          tr.tr('statement_sync_desc'),
+                                          style: const TextStyle(fontSize: 11.5, color: Color(0xFF64748B), height: 1.3),
                                         ),
                                       ],
                                     ),
@@ -507,7 +509,7 @@ class _LoanDetailsScreenState extends ConsumerState<LoanDetailsScreen> {
                                 child: OutlinedButton.icon(
                                   onPressed: _fetchLoanDetails,
                                   icon: const Icon(Icons.refresh_rounded, size: 18),
-                                  label: const Text('Refresh Disbursal Details'),
+                                  label: Text(tr.tr('refresh_disbursal_details')),
                                   style: OutlinedButton.styleFrom(
                                     foregroundColor: const Color(0xFF0F5A47),
                                     side: const BorderSide(color: Color(0xFF0F5A47)),
@@ -526,18 +528,18 @@ class _LoanDetailsScreenState extends ConsumerState<LoanDetailsScreen> {
                         children: [
                           Expanded(
                             child: _summaryBox(
-                              title: 'Next Due EMI',
+                              title: tr.tr('next_due_emi'),
                               val: nextEmiAmount != null ? CurrencyUtils.formatAmount(nextEmiAmount) : '—',
-                              sub: nextDueDate != null ? 'Due: ${_formatDate(nextDueDate)}' : 'No dues pending',
+                              sub: nextDueDate != null ? '${tr.tr("due_date")}: ${_formatDate(nextDueDate)}' : tr.tr('no_dues_pending'),
                               color: AppTheme.primaryTeal,
                             ),
                           ),
                           const SizedBox(width: 12),
                           Expanded(
                             child: _summaryBox(
-                              title: 'Total Paid',
+                              title: tr.tr('total_paid'),
                               val: totalPaid != null ? CurrencyUtils.formatAmount(totalPaid) : '—',
-                              sub: overdueAmount > 0 ? 'Overdue: ${CurrencyUtils.formatAmount(overdueAmount)}' : 'On schedule',
+                              sub: overdueAmount > 0 ? '${tr.tr("overdue")}: ${CurrencyUtils.formatAmount(overdueAmount)}' : tr.tr('on_schedule'),
                               color: overdueAmount > 0 ? AppTheme.errorRed : AppTheme.successGreen,
                             ),
                           ),
@@ -557,7 +559,7 @@ class _LoanDetailsScreenState extends ConsumerState<LoanDetailsScreen> {
 
                       // ── Repayment Schedule (RPS) ────────────────────
                       _sectionCard(
-                        title: 'Repayment Schedule (RPS)',
+                        title: tr.tr('repayment_schedule'),
                         icon: Icons.calendar_month_rounded,
                         children: [
                           if (effectiveRpsList.isEmpty)
@@ -570,8 +572,8 @@ class _LoanDetailsScreenState extends ConsumerState<LoanDetailsScreen> {
                                   Expanded(
                                     child: Text(
                                       approvedAmount != null
-                                          ? 'Repayment schedule for ${CurrencyUtils.formatAmount(approvedAmount)} will be populated as soon as final UTR statement is synced.'
-                                          : 'Repayment schedule will be populated as soon as loan details are confirmed by lender.',
+                                          ? '${tr.tr('repayment_schedule_for')} ${CurrencyUtils.formatAmount(approvedAmount)} ${tr.tr('rps_populated_utr_synced')}'
+                                          : tr.tr('repayment_schedule_populated_lender'),
                                       style: const TextStyle(fontSize: 12.5, color: AppTheme.textDarkSecondary, height: 1.35),
                                     ),
                                   ),
@@ -605,12 +607,12 @@ class _LoanDetailsScreenState extends ConsumerState<LoanDetailsScreen> {
                                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                       children: [
                                         Text(
-                                          'Installment #$instNum',
+                                          '${tr.tr("installment")} #$instNum',
                                           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                                         ),
                                         AppStatusBadge(
                                           status: pStatus,
-                                          label: isPaid ? 'PAID' : (isOverdue ? 'OVERDUE' : 'UNPAID'),
+                                          label: isPaid ? tr.tr('paid') : (isOverdue ? tr.tr('overdue') : tr.tr('unpaid')),
                                         ),
                                       ],
                                     ),
@@ -622,12 +624,12 @@ class _LoanDetailsScreenState extends ConsumerState<LoanDetailsScreen> {
                                           crossAxisAlignment: CrossAxisAlignment.start,
                                           children: [
                                             Text(
-                                              'Due Date: ${_formatDate(dueDateStr)}',
+                                              '${tr.tr("due_date")}: ${_formatDate(dueDateStr)}',
                                               style: const TextStyle(fontSize: 12, color: AppTheme.textDarkSecondary),
                                             ),
                                             const SizedBox(height: 2),
                                             Text(
-                                              'EMI Amount: ${CurrencyUtils.formatAmount(emi)}',
+                                              '${tr.tr("emi_amount")}: ${CurrencyUtils.formatAmount(emi)}',
                                               style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
                                             ),
                                           ],
@@ -643,7 +645,7 @@ class _LoanDetailsScreenState extends ConsumerState<LoanDetailsScreen> {
                                               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                             ),
-                                            child: const Text('Pay Now', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                                            child: Text(tr.tr('pay_now'), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                                           ),
                                       ],
                                     ),
@@ -657,38 +659,38 @@ class _LoanDetailsScreenState extends ConsumerState<LoanDetailsScreen> {
 
                       // ── Loan Details ────────────────────────────────
                       _sectionCard(
-                        title: 'Loan Account Summary',
+                        title: tr.tr('loan_account_summary'),
                         icon: Icons.receipt_long_rounded,
                         children: [
-                          _row('Loan Account No. (LAN)', widget.lan),
-                          _row('Application No.', apiLoan?['applicationNumber'] ?? fallbackLoan?.applicationNumber ?? '—'),
-                          _row('Lender', apiLoan?['lenderName'] ?? postApproval?.lender.name ?? customer?.allocatedLenderName ?? 'Fintree Finance Private Limited'),
+                          _row(tr.tr('loan_account_no'), widget.lan),
+                          _row(tr.tr('application_no'), apiLoan?['applicationNumber'] ?? fallbackLoan?.applicationNumber ?? '—'),
+                          _row(tr.tr('lender'), apiLoan?['lenderName'] ?? postApproval?.lender.name ?? customer?.allocatedLenderName ?? 'Fintree Finance Private Limited'),
                           _row(
-                            'Interest Rate',
+                            tr.tr('interest_rate'),
                             (apiLoan?['interestRate'] != null || fallbackOffer?.acceptedInterestRate != null)
                                 ? '${apiLoan?['interestRate'] ?? fallbackOffer?.acceptedInterestRate}% p.a.'
-                                : 'Pending Confirmation',
+                                : tr.tr('pending_confirmation'),
                           ),
                           _row(
-                            'Tenure',
+                            tr.tr('tenure'),
                             (apiLoan?['tenure'] != null || fallbackOffer?.acceptedTenureDays != null)
-                                ? '${apiLoan?['tenure'] ?? fallbackOffer?.acceptedTenureDays} Days'
-                                : 'Pending Confirmation',
+                                ? '${apiLoan?['tenure'] ?? fallbackOffer?.acceptedTenureDays} ${tr.tr("days")}'
+                                : tr.tr('pending_confirmation'),
                           ),
-                          _row('Repayment Frequency', apiLoan?['repaymentFrequency'] ?? 'MONTHLY'),
+                          _row(tr.tr('repayment_frequency'), apiLoan?['repaymentFrequency'] ?? tr.tr('monthly')),
                         ],
                       ),
                       const SizedBox(height: 16),
 
                       // ── Bank Account ────────────────────────────────
                       _sectionCard(
-                        title: 'Disbursal Bank Account',
+                        title: tr.tr('disbursal_bank_account'),
                         icon: Icons.account_balance_rounded,
                         children: [
-                          _row('Bank Name', bank?.bankName ?? '—'),
-                          _row('Account Holder', bank?.accountHolderName ?? '—'),
+                          _row(tr.tr('bank_name'), bank?.bankName ?? '—'),
+                          _row(tr.tr('account_holder'), bank?.accountHolderName ?? '—'),
                           _row('Account No.', _maskAcc(bank?.accountMasked)),
-                          _row('IFSC Code', bank?.ifsc ?? '—'),
+                          _row(tr.tr('ifsc_code'), bank?.ifsc ?? '—'),
                         ],
                       ),
                       const SizedBox(height: 16),
@@ -767,9 +769,9 @@ class _LoanDetailsScreenState extends ConsumerState<LoanDetailsScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: color.withOpacity(0.3), width: 1.5),
+        border: Border.all(color: color.withValues(alpha: 0.3), width: 1.5),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 8, offset: const Offset(0, 3)),
+          BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: const Offset(0, 3)),
         ],
       ),
       child: Column(
@@ -779,7 +781,7 @@ class _LoanDetailsScreenState extends ConsumerState<LoanDetailsScreen> {
           const SizedBox(height: 4),
           Text(val, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: color)),
           const SizedBox(height: 2),
-          Text(sub, style: TextStyle(fontSize: 11, color: color.withOpacity(0.8), fontWeight: FontWeight.w500)),
+          Text(sub, style: TextStyle(fontSize: 11, color: color.withValues(alpha: 0.8), fontWeight: FontWeight.w500)),
         ],
       ),
     );
@@ -803,7 +805,7 @@ class _LoanDetailsScreenState extends ConsumerState<LoanDetailsScreen> {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: AppTheme.successGreen.withOpacity(0.15),
+                  color: AppTheme.successGreen.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: const Icon(Icons.check_circle_rounded, color: AppTheme.successGreen, size: 24),
@@ -828,7 +830,7 @@ class _LoanDetailsScreenState extends ConsumerState<LoanDetailsScreen> {
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.7),
+              color: Colors.white.withValues(alpha: 0.7),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Column(
@@ -867,7 +869,7 @@ class _LoanDetailsScreenState extends ConsumerState<LoanDetailsScreen> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 3)),
+          BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 3)),
         ],
       ),
       child: Column(

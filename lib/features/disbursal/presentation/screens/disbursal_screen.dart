@@ -212,7 +212,7 @@ class _DisbursalScreenState extends ConsumerState<DisbursalScreen> {
                             Container(
                               padding: const EdgeInsets.all(10),
                               decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.2),
+                                color: Colors.white.withValues(alpha: 0.2),
                                 borderRadius: BorderRadius.circular(14),
                               ),
                               child: const Icon(
@@ -240,7 +240,7 @@ class _DisbursalScreenState extends ConsumerState<DisbursalScreen> {
                                 Text(
                                   loan?.lan ?? widget.lan,
                                   style: TextStyle(
-                                    color: Colors.white.withOpacity(0.8),
+                                    color: Colors.white.withValues(alpha: 0.8),
                                     fontSize: 13,
                                   ),
                                 ),
@@ -252,7 +252,7 @@ class _DisbursalScreenState extends ConsumerState<DisbursalScreen> {
                         Text(
                           isDisbursed ? 'Net Credited Amount' : 'Net Amount to be Credited',
                           style: TextStyle(
-                            color: Colors.white.withOpacity(0.75),
+                            color: Colors.white.withValues(alpha: 0.75),
                             fontSize: 13,
                           ),
                         ),
@@ -310,7 +310,7 @@ class _DisbursalScreenState extends ConsumerState<DisbursalScreen> {
                               Text(
                                 'The funds have been transferred to your bank account via LMS.',
                                 style: TextStyle(
-                                  color: AppTheme.successDarkGreen.withOpacity(0.9),
+                                  color: AppTheme.successDarkGreen.withValues(alpha: 0.9),
                                   fontSize: 12,
                                 ),
                               ),
@@ -331,9 +331,9 @@ class _DisbursalScreenState extends ConsumerState<DisbursalScreen> {
                       borderRadius: BorderRadius.circular(14),
                       border: Border.all(color: const Color(0xFFF59E0B), width: 1),
                     ),
-                    child: Row(
+                    child: const Row(
                       children: [
-                        const SizedBox(
+                        SizedBox(
                           width: 24,
                           height: 24,
                           child: CircularProgressIndicator(
@@ -341,12 +341,12 @@ class _DisbursalScreenState extends ConsumerState<DisbursalScreen> {
                             valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFD97706)),
                           ),
                         ),
-                        const SizedBox(width: 14),
+                        SizedBox(width: 14),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text(
+                              Text(
                                 'Disbursal Processing & LMS Integration',
                                 style: TextStyle(
                                   fontWeight: FontWeight.bold,
@@ -354,8 +354,8 @@ class _DisbursalScreenState extends ConsumerState<DisbursalScreen> {
                                   fontSize: 14,
                                 ),
                               ),
-                              const SizedBox(height: 2),
-                              const Text(
+                              SizedBox(height: 2),
+                              Text(
                                 'Your request was dispatched to LMS. Awaiting bank payout confirmation webhook.',
                                 style: TextStyle(
                                   color: Color(0xFFB45309),
@@ -382,8 +382,8 @@ class _DisbursalScreenState extends ConsumerState<DisbursalScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(
-                          children: const [
+                        const Row(
+                          children: [
                             Icon(Icons.warning_amber_rounded, color: Color(0xFFDC2626), size: 24),
                             SizedBox(width: 8),
                             Text(
@@ -424,8 +424,8 @@ class _DisbursalScreenState extends ConsumerState<DisbursalScreen> {
                                 ),
                                 InkWell(
                                   onTap: () => context.push(step['route']!),
-                                  child: Row(
-                                    children: const [
+                                  child: const Row(
+                                    children: [
                                       Text(
                                         'Complete Step',
                                         style: TextStyle(
@@ -456,15 +456,15 @@ class _DisbursalScreenState extends ConsumerState<DisbursalScreen> {
                       borderRadius: BorderRadius.circular(14),
                       border: Border.all(color: AppTheme.successGreen, width: 1),
                     ),
-                    child: Row(
+                    child: const Row(
                       children: [
-                        const Icon(Icons.verified_rounded, color: AppTheme.successGreen, size: 28),
-                        const SizedBox(width: 12),
+                        Icon(Icons.verified_rounded, color: AppTheme.successGreen, size: 28),
+                        SizedBox(width: 12),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text(
+                              Text(
                                 'All milestones completed!',
                                 style: TextStyle(
                                   fontWeight: FontWeight.bold,
@@ -472,7 +472,7 @@ class _DisbursalScreenState extends ConsumerState<DisbursalScreen> {
                                   fontSize: 14,
                                 ),
                               ),
-                              const SizedBox(height: 2),
+                              SizedBox(height: 2),
                               Text(
                                 'Your loan is ready for instant LMS disbursal transfer to your bank account.',
                                 style: TextStyle(color: AppTheme.successDarkGreen, fontSize: 12),
@@ -589,7 +589,7 @@ class _DisbursalScreenState extends ConsumerState<DisbursalScreen> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),

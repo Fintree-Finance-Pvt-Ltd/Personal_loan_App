@@ -344,7 +344,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
             height: 2.5,
             child: LinearProgressIndicator(
               backgroundColor: Colors.white.withValues(alpha: 0.1),
-              valueColor: AlwaysStoppedAnimation<Color>(AppTheme.accentMint),
+              valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.accentMint),
             ),
           ),
         ),

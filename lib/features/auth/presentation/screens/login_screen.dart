@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../app/theme.dart';
+import '../../../../core/providers/locale_provider.dart';
 import '../../../../core/utils/validators.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../auth_controller.dart';
@@ -137,9 +138,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                       const SizedBox(height: 8),
 
                           // Heading
-                          const Text(
-                            'Sign In With',
-                            style: TextStyle(
+                          Text(
+                            ref.watch(appLocalizationsProvider).tr('login_title'),
+                            style: const TextStyle(
                               color: AppTheme.textDarkPrimary,
                               fontSize: 28,
                               fontWeight: FontWeight.w900,
@@ -147,9 +148,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                             ),
                           ),
                           const SizedBox(height: 4),
-                          const Text(
-                            'Enter your mobile number to receive a secure OTP.',
-                            style: TextStyle(
+                          Text(
+                            ref.watch(appLocalizationsProvider).tr('login_subtitle'),
+                            style: const TextStyle(
                               color: AppTheme.textDarkSecondary,
                               fontSize: 13,
                               height: 1.4,
@@ -159,9 +160,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                           const SizedBox(height: 24),
 
                           // Mobile Number Label
-                          const Text(
-                            'Mobile Number',
-                            style: TextStyle(
+                          Text(
+                            ref.watch(appLocalizationsProvider).tr('mobile_number'),
+                            style: const TextStyle(
                               color: AppTheme.textDarkPrimary,
                               fontSize: 13,
                               fontWeight: FontWeight.w700,
@@ -198,7 +199,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                             width: double.infinity,
                             height: 52,
                             child: AppButton(
-                              text: 'Request OTP',
+                              text: ref.watch(appLocalizationsProvider).tr('get_otp'),
                               isLoading: state.isLoading,
                               onPressed: _submit,
                               icon: Icons.arrow_forward_rounded,
@@ -538,11 +539,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
             ),
           ),
           const SizedBox(width: 10),
-          Expanded(
+          const Expanded(
             child: Text.rich(
               TextSpan(
                 text: 'I agree to Finley\'s ',
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 11.5,
                   color: AppTheme.textDarkSecondary,
                   height: 1.35,
@@ -555,7 +556,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  const TextSpan(text: ' and acknowledge the '),
+                  TextSpan(text: ' and acknowledge the '),
                   TextSpan(
                     text: 'Privacy Policy',
                     style: TextStyle(
@@ -563,7 +564,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  const TextSpan(text: '.'),
+                  TextSpan(text: '.'),
                 ],
               ),
             ),

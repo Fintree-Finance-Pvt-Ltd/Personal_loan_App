@@ -325,7 +325,7 @@ class _FullyPaidLoanReviewScreenState
                   borderRadius: BorderRadius.circular(24),
                   boxShadow: [
                     BoxShadow(
-                      color: AppTheme.primaryTeal.withOpacity(0.3),
+                      color: AppTheme.primaryTeal.withValues(alpha: 0.3),
                       blurRadius: 18,
                       offset: const Offset(0, 6),
                     ),
@@ -378,7 +378,7 @@ class _FullyPaidLoanReviewScreenState
                                 'LAN: $lan',
                                 style: TextStyle(
                                   fontSize: 13,
-                                  color: Colors.white.withOpacity(0.85),
+                                  color: Colors.white.withValues(alpha: 0.85),
                                 ),
                               ),
                               const SizedBox(height: 4),
@@ -393,7 +393,7 @@ class _FullyPaidLoanReviewScreenState
                               const SizedBox(height: 4),
                               Text(
                                 'Fully Repaid • Zero Outstanding',
-                                style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.8)),
+                                style: TextStyle(fontSize: 12, color: Colors.white.withValues(alpha: 0.8)),
                               ),
                             ],
                           ),
@@ -516,20 +516,20 @@ class _FullyPaidLoanReviewScreenState
                   decoration: BoxDecoration(
                     color: AppTheme.primaryLightTeal,
                     borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: AppTheme.primaryTeal.withOpacity(0.3)),
+                    border: Border.all(color: AppTheme.primaryTeal.withValues(alpha: 0.3)),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
+                      const Row(
                         children: [
-                          const Icon(Icons.workspace_premium_rounded,
+                          Icon(Icons.workspace_premium_rounded,
                               color: AppTheme.primaryTeal, size: 24),
-                          const SizedBox(width: 10),
+                          SizedBox(width: 10),
                           Expanded(
                             child: Text(
                               'GREEN FLAG: Eligible for Revised Repeat Loan!',
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 15,
                                 color: AppTheme.primaryDarkTeal,
@@ -549,7 +549,7 @@ class _FullyPaidLoanReviewScreenState
                       const SizedBox(height: 14),
                       _benefitRow(
                           'Enhanced Limit: Up to ${CurrencyUtils.formatAmount(revisedLoanLimit)} (${multiplier}x Multiplier Applied)'),
-                      _benefitRow('Tier Status: Premier Repeat Borrower (${completedLoans} Completed Loan${completedLoans > 1 ? 's' : ''})'),
+                      _benefitRow('Tier Status: Premier Repeat Borrower ($completedLoans Completed Loan${completedLoans > 1 ? 's' : ''})'),
                       _benefitRow('Special Benefit: Reduced Interest & Instant Approval'),
                       _benefitRow('Fast-Track Disbursal: Immediate Transfer to Saved Account'),
                       const SizedBox(height: 20),
@@ -620,7 +620,7 @@ class _FullyPaidLoanReviewScreenState
                   decoration: BoxDecoration(
                     color: AppTheme.errorBg,
                     borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: AppTheme.errorRed.withOpacity(0.3)),
+                    border: Border.all(color: AppTheme.errorRed.withValues(alpha: 0.3)),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,

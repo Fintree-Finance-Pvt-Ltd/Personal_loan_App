@@ -13,6 +13,7 @@ import '../../../../core/providers/providers.dart';
 import '../../../../core/services/push_notification_service.dart';
 import '../../../../core/models/customer_model.dart';
 import '../../../../core/models/post_approval_model.dart';
+import '../../../../core/providers/locale_provider.dart';
 import '../../../dashboard/presentation/journey_controller.dart';
 
 
@@ -134,11 +135,13 @@ class _ApplicationStatusScreenState extends ConsumerState<ApplicationStatusScree
         journeyState.postApproval?.workflow.currentStep == 'DISBURSED' ||
         journeyState.postApproval?.loan.disbursalCompletedAt != null;
 
+    final tr = ref.watch(appLocalizationsProvider);
+
     return Scaffold(
       appBar: AppHeader(
         title: isProcessing
-            ? 'Underwriting in Progress'
-            : (isDisbursed ? 'Loan Disbursed' : 'Application Status'),
+            ? tr.tr('underwriting_in_progress')
+            : (isDisbursed ? tr.tr('loan_disbursed') : tr.tr('application_status')),
         actions: [
           IconButton(icon: const Icon(Icons.refresh), onPressed: _refresh),
         ],
@@ -489,6 +492,7 @@ class _ApplicationStatusScreenState extends ConsumerState<ApplicationStatusScree
     PostApprovalJourneyModel? postApproval,
     String lan,
   ) {
+    final tr = ref.watch(appLocalizationsProvider);
     final loan = postApproval?.loan;
     final bank = postApproval?.bank;
     final num? rawAmt = loan?.disbursalAmount ?? loan?.approvedAmount ?? postApproval?.offer.approvedAmount;
@@ -516,7 +520,7 @@ class _ApplicationStatusScreenState extends ConsumerState<ApplicationStatusScree
             borderRadius: BorderRadius.circular(24),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF064E3B).withOpacity(0.3),
+                color: const Color(0xFF064E3B).withValues(alpha: 0.3),
                 blurRadius: 20,
                 offset: const Offset(0, 10),
               ),
@@ -527,7 +531,7 @@ class _ApplicationStatusScreenState extends ConsumerState<ApplicationStatusScree
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.15),
+                  color: Colors.white.withValues(alpha: 0.15),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(
@@ -537,9 +541,9 @@ class _ApplicationStatusScreenState extends ConsumerState<ApplicationStatusScree
                 ),
               ),
               const SizedBox(height: 14),
-              const Text(
-                'Loan Disbursed Successfully! 🎉',
-                style: TextStyle(
+              Text(
+                tr.tr('loan_disbursed_celebration'),
+                style: const TextStyle(
                   color: Colors.white,
                   fontSize: 20,
                   fontWeight: FontWeight.w900,
@@ -549,9 +553,9 @@ class _ApplicationStatusScreenState extends ConsumerState<ApplicationStatusScree
               ),
               const SizedBox(height: 6),
               Text(
-                'Funds have been credited directly to your bank account.',
+                tr.tr('funds_credited_msg'),
                 style: TextStyle(
-                  color: Colors.white.withOpacity(0.85),
+                  color: Colors.white.withValues(alpha: 0.85),
                   fontSize: 12.5,
                 ),
                 textAlign: TextAlign.center,
@@ -560,9 +564,9 @@ class _ApplicationStatusScreenState extends ConsumerState<ApplicationStatusScree
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.1),
+                  color: Colors.white.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.white.withOpacity(0.15)),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
                 ),
                 child: Column(
                   children: [
@@ -570,8 +574,8 @@ class _ApplicationStatusScreenState extends ConsumerState<ApplicationStatusScree
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          'Disbursed Net Amount',
-                          style: TextStyle(color: Colors.white.withOpacity(0.75), fontSize: 12),
+                          tr.tr('net_disbursed_amount'),
+                          style: TextStyle(color: Colors.white.withValues(alpha: 0.75), fontSize: 12),
                         ),
                         const SizedBox(width: 8),
                         Flexible(
@@ -588,8 +592,8 @@ class _ApplicationStatusScreenState extends ConsumerState<ApplicationStatusScree
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          'UTR Reference',
-                          style: TextStyle(color: Colors.white.withOpacity(0.75), fontSize: 12),
+                          tr.tr('utr_reference'),
+                          style: TextStyle(color: Colors.white.withValues(alpha: 0.75), fontSize: 12),
                         ),
                         const SizedBox(width: 8),
                         Flexible(
@@ -632,8 +636,8 @@ class _ApplicationStatusScreenState extends ConsumerState<ApplicationStatusScree
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Destination Bank',
-                            style: TextStyle(color: Colors.white.withOpacity(0.75), fontSize: 12),
+                            tr.tr('destination_bank'),
+                            style: TextStyle(color: Colors.white.withValues(alpha: 0.75), fontSize: 12),
                           ),
                           const SizedBox(width: 12),
                           Expanded(
@@ -658,9 +662,9 @@ class _ApplicationStatusScreenState extends ConsumerState<ApplicationStatusScree
                     child: ElevatedButton.icon(
                       onPressed: () => context.push('/loan/${lan.isNotEmpty ? lan : 'FTPL00000011'}/loan-details'),
                       icon: const Icon(Icons.receipt_long_rounded, size: 16),
-                      label: const Text(
-                        'View RPS Schedule',
-                        style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold),
+                      label: Text(
+                        tr.tr('view_rps'),
+                        style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),

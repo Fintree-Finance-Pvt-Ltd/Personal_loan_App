@@ -5,6 +5,7 @@ import 'package:webview_flutter/webview_flutter.dart';
 import 'package:dio/dio.dart';
 import '../../../../core/api/api_exception.dart';
 import '../../../../app/theme.dart';
+import '../../../../core/providers/locale_provider.dart';
 import '../../../../core/providers/providers.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_loader.dart';
@@ -232,7 +233,7 @@ class _DigilockerScreenState extends ConsumerState<DigilockerScreen> {
     if (_verificationUrl != null && !isVerified) {
       return Scaffold(
         appBar: AppHeader(
-          title: 'DigiLocker Verification',
+          title: ref.watch(appLocalizationsProvider).tr('digilocker_title'),
           onBackPressed: () {
             setState(() {
               _verificationUrl = null;

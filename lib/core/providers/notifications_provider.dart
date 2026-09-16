@@ -127,7 +127,7 @@ class NotificationsNotifier extends StateNotifier<NotificationsState> {
         AppNotificationModel(
           id: 'notif_emi_due_$lan',
           title: 'EMI Installment Due Soon 📅',
-          body: '1st EMI installment of ${CurrencyUtils.formatAmount(emiAmount)} is due on $formattedDueDate. Pay early to maintain 100% CIBIL score.',
+          body: '1st EMI installment of ${CurrencyUtils.formatAmount(emiAmount)} is due on $formattedDueDate.',
           category: NotificationCategory.emi,
           timestamp: now.subtract(const Duration(hours: 3)),
           isRead: false,
@@ -135,27 +135,8 @@ class NotificationsNotifier extends StateNotifier<NotificationsState> {
           actionLabel: 'Pay EMI',
           amount: emiAmount,
         ),
-        AppNotificationModel(
-          id: 'notif_mandate_$lan',
-          title: 'E-Mandate Auto-Debit Active 🏦',
-          body: 'E-NACH auto-debit mandate successfully registered with $bankDisplay for hassle-free repayment.',
-          category: NotificationCategory.system,
-          timestamp: now.subtract(const Duration(days: 1)),
-          isRead: true,
-          actionLabel: 'View Mandate',
-        ),
-        AppNotificationModel(
-          id: 'notif_offer_$lan',
-          title: 'Repeat Limit Boost Unlocked! 🚀',
-          body: 'Complete timely repayment of LAN $lan to double your credit limit up to ${CurrencyUtils.formatAmount(amount * 2)} on your next loan!',
-          category: NotificationCategory.offer,
-          timestamp: now.subtract(const Duration(days: 2)),
-          isRead: true,
-          route: '/dashboard',
-          actionLabel: 'Check Offer',
-        ),
       ];
-    } else {
+    } else if (appStatus.isNotEmpty) {
       final lenderName = postApproval?.lender.name ?? 'Fintree Finance';
       initialList = [
         AppNotificationModel(
@@ -168,15 +149,9 @@ class NotificationsNotifier extends StateNotifier<NotificationsState> {
           route: '/application/status',
           actionLabel: 'Check Status',
         ),
-        AppNotificationModel(
-          id: 'notif_welcome_$lan',
-          title: 'Welcome to $lenderName! 👋',
-          body: 'Get instant paperless loans up to ₹50,000 with 100% digital verification.',
-          category: NotificationCategory.system,
-          timestamp: now.subtract(const Duration(days: 1)),
-          isRead: true,
-        ),
       ];
+    } else {
+      initialList = [];
     }
 
     state = NotificationsState(

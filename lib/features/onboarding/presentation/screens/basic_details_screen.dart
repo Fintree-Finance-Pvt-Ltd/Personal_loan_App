@@ -7,6 +7,7 @@ import 'package:dio/dio.dart';
 import 'package:http_parser/http_parser.dart';
 import '../../../../core/api/api_exception.dart';
 import '../../../../app/theme.dart';
+import '../../../../core/providers/locale_provider.dart';
 import '../../../../core/providers/providers.dart';
 import '../../../../core/utils/formatters.dart';
 import '../../../../core/utils/validators.dart';
@@ -504,9 +505,11 @@ class _BasicDetailsScreenState extends ConsumerState<BasicDetailsScreen> {
     }
     final isPanVerified = customer?.panVerified == true;
 
+    final tr = ref.watch(appLocalizationsProvider);
+
     return Scaffold(
-      appBar: const AppHeader(
-        title: 'Personal Details',
+      appBar: AppHeader(
+        title: tr.tr('basic_details_title'),
         fallbackRoute: '/onboarding/pan',
       ),
       body: SafeArea(

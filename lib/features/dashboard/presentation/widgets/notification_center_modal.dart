@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../../../app/theme.dart';
 import '../../../../core/models/app_notification_model.dart';
 import '../../../../core/providers/notifications_provider.dart';
+import '../../../../core/providers/locale_provider.dart';
+import '../../../../core/localization/app_localizations.dart';
 
 class NotificationCenterModal extends ConsumerWidget {
   const NotificationCenterModal({super.key});
@@ -24,6 +25,8 @@ class NotificationCenterModal extends ConsumerWidget {
     final notifier = ref.read(notificationsProvider.notifier);
     final items = state.filteredItems;
     final unreadCount = state.unreadCount;
+
+    final tr = ref.watch(appLocalizationsProvider);
 
     return Container(
       height: MediaQuery.of(context).size.height * 0.82,
@@ -50,9 +53,9 @@ class NotificationCenterModal extends ConsumerWidget {
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
             child: Row(
               children: [
-                const Text(
-                  'Notifications',
-                  style: TextStyle(
+                Text(
+                  tr.tr('notifications'),
+                  style: const TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.w800,
                     color: Color(0xFF0F172A),
@@ -81,9 +84,9 @@ class NotificationCenterModal extends ConsumerWidget {
                 if (unreadCount > 0)
                   TextButton(
                     onPressed: () => notifier.markAllAsRead(),
-                    child: const Text(
-                      'Mark all read',
-                      style: TextStyle(
+                    child: Text(
+                      tr.tr('mark_all_read'),
+                      style: const TextStyle(
                         color: Color(0xFF0D9488),
                         fontSize: 13,
                         fontWeight: FontWeight.w700,
@@ -104,11 +107,11 @@ class NotificationCenterModal extends ConsumerWidget {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Row(
               children: [
-                _buildFilterChip(context, ref, NotificationCategory.all, 'All'),
-                _buildFilterChip(context, ref, NotificationCategory.loan, 'Loans'),
-                _buildFilterChip(context, ref, NotificationCategory.emi, 'EMI Due'),
-                _buildFilterChip(context, ref, NotificationCategory.offer, 'Offers'),
-                _buildFilterChip(context, ref, NotificationCategory.system, 'System'),
+                _buildFilterChip(context, ref, NotificationCategory.all, tr.tr('all')),
+                _buildFilterChip(context, ref, NotificationCategory.loan, tr.tr('loans')),
+                _buildFilterChip(context, ref, NotificationCategory.emi, tr.tr('emi_due')),
+                _buildFilterChip(context, ref, NotificationCategory.offer, tr.tr('offers')),
+                _buildFilterChip(context, ref, NotificationCategory.system, tr.tr('system')),
               ],
             ),
           ),
@@ -118,7 +121,7 @@ class NotificationCenterModal extends ConsumerWidget {
           // Notifications List
           Expanded(
             child: items.isEmpty
-                ? _buildEmptyState()
+                ? _buildEmptyState(tr)
                 : ListView.separated(
                     padding: const EdgeInsets.all(16),
                     itemCount: items.length,
@@ -139,9 +142,9 @@ class NotificationCenterModal extends ConsumerWidget {
                 child: TextButton.icon(
                   onPressed: () => notifier.clearAll(),
                   icon: const Icon(Icons.delete_sweep_rounded, size: 18, color: Color(0xFF94A3B8)),
-                  label: const Text(
-                    'Clear All Notifications',
-                    style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13, fontWeight: FontWeight.w600),
+                  label: Text(
+                    tr.tr('clear_all'),
+                    style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13, fontWeight: FontWeight.w600),
                   ),
                 ),
               ),
@@ -232,7 +235,7 @@ class NotificationCenterModal extends ConsumerWidget {
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: notif.categoryColor.withOpacity(0.12),
+                    color: notif.categoryColor.withValues(alpha: 0.12),
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
@@ -372,7 +375,7 @@ class NotificationCenterModal extends ConsumerWidget {
     );
   }
 
-  Widget _buildEmptyState() {
+  Widget _buildEmptyState(AppLocalizations tr) {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -390,18 +393,18 @@ class NotificationCenterModal extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: 16),
-          const Text(
-            'All caught up! 🎉',
-            style: TextStyle(
+          Text(
+            tr.tr('all_caught_up'),
+            style: const TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.w800,
               color: Color(0xFF0F172A),
             ),
           ),
           const SizedBox(height: 6),
-          const Text(
-            'You have no new notifications right now.',
-            style: TextStyle(
+          Text(
+            tr.tr('no_new_notifications'),
+            style: const TextStyle(
               fontSize: 13,
               color: Color(0xFF64748B),
             ),

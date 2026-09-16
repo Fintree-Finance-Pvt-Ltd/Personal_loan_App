@@ -3,12 +3,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import 'package:smart_auth/smart_auth.dart';
 
 import '../../../../app/theme.dart';
 import '../../../../core/constants/app_constants.dart';
+import '../../../../core/providers/locale_provider.dart';
 import '../../../../core/utils/formatters.dart';
 import '../../../../core/utils/validators.dart';
 import '../../../../core/services/push_notification_service.dart';
@@ -274,7 +274,7 @@ class _OtpScreenState extends ConsumerState<OtpScreen>
     return Scaffold(
       backgroundColor: AppTheme.backgroundLight,
       appBar: AppHeader(
-        title: 'OTP Verification',
+        title: ref.watch(appLocalizationsProvider).tr('verify_otp_title'),
         onBackPressed: _goBack,
       ),
       body: SafeArea(

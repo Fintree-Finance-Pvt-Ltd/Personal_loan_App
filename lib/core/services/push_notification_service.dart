@@ -167,14 +167,14 @@ class PushNotificationService {
 
     final String route = message.data['route'] ?? '/dashboard';
 
-    final AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
       emiChannelId,
       emiChannelName,
       icon: '@mipmap/launcher_icon',
       importance: Importance.max,
       priority: Priority.high,
       actions: <AndroidNotificationAction>[
-        const AndroidNotificationAction(
+        AndroidNotificationAction(
           payNowActionId,
           'Pay Now',
           showsUserInterface: true,
@@ -186,7 +186,7 @@ class PushNotificationService {
       categoryIdentifier: 'EMI_REMINDER_CATEGORY',
     );
 
-    final NotificationDetails platformDetails = NotificationDetails(
+    const NotificationDetails platformDetails = NotificationDetails(
       android: androidDetails,
       iOS: iosDetails,
     );
@@ -218,18 +218,18 @@ class PushNotificationService {
 
     final scheduledDate = tz.TZDateTime.now(tz.local).add(delay);
 
-    final AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
       dropoffChannelId,
       dropoffChannelName,
       icon: '@mipmap/launcher_icon',
       importance: Importance.high,
       priority: Priority.high,
-      styleInformation: const BigTextStyleInformation(''),
+      styleInformation: BigTextStyleInformation(''),
     );
 
     const DarwinNotificationDetails iosDetails = DarwinNotificationDetails();
 
-    final NotificationDetails platformDetails = NotificationDetails(
+    const NotificationDetails platformDetails = NotificationDetails(
       android: androidDetails,
       iOS: iosDetails,
     );
@@ -423,14 +423,14 @@ class PushNotificationService {
     final String route = '/loan/$lan/repay';
     final formattedAmount = '₹${amount.toStringAsFixed(0)}';
 
-    final AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
       emiChannelId,
       emiChannelName,
       icon: '@mipmap/launcher_icon',
       importance: Importance.max,
       priority: Priority.high,
       actions: <AndroidNotificationAction>[
-        const AndroidNotificationAction(
+        AndroidNotificationAction(
           payNowActionId,
           'Pay Now',
           showsUserInterface: true,
@@ -442,7 +442,7 @@ class PushNotificationService {
       categoryIdentifier: 'EMI_REMINDER_CATEGORY',
     );
 
-    final NotificationDetails platformDetails = NotificationDetails(
+    const NotificationDetails platformDetails = NotificationDetails(
       android: androidDetails,
       iOS: iosDetails,
     );

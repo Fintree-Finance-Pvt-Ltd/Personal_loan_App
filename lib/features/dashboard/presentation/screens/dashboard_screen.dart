@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../../app/theme.dart';
 import '../../../../core/models/lender_offer_multiplier.dart';
 import '../../../../core/utils/currency_utils.dart';
 import '../../../../core/widgets/app_button.dart';
@@ -11,6 +10,7 @@ import '../../../../core/widgets/app_status_badge.dart';
 import '../../../auth/presentation/auth_controller.dart';
 import '../journey_controller.dart';
 import '../../../../core/providers/notifications_provider.dart';
+import '../../../../core/providers/locale_provider.dart';
 import '../widgets/notification_center_modal.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
@@ -21,7 +21,8 @@ class DashboardScreen extends ConsumerStatefulWidget {
 }
 
 class _DashboardScreenState extends ConsumerState<DashboardScreen> {
-  int _selectedTab = 0; // 0: Loan Overview / Post-approval, 1: Application / My Loans
+  int _selectedTab =
+      0; // 0: Loan Overview / Post-approval, 1: Application / My Loans
   int _selectedNavIndex = 0;
 
   Future<void> _refreshDashboard() async {
@@ -67,20 +68,20 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                const Text(
-                  'Logout from your account?',
+                Text(
+                  ref.watch(appLocalizationsProvider).tr('logout_title'),
                   textAlign: TextAlign.center,
-                  style: TextStyle(
+                  style: const TextStyle(
                     color: Color(0xFF0F172A),
                     fontSize: 19,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
                 const SizedBox(height: 8),
-                const Text(
-                  'You will need to verify your mobile number again to access your loan journey.',
+                Text(
+                  ref.watch(appLocalizationsProvider).tr('logout_message'),
                   textAlign: TextAlign.center,
-                  style: TextStyle(
+                  style: const TextStyle(
                     color: Color(0xFF64748B),
                     fontSize: 13,
                     height: 1.5,
@@ -99,9 +100,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                             borderRadius: BorderRadius.circular(14),
                           ),
                         ),
-                        child: const Text(
-                          'Cancel',
-                          style: TextStyle(
+                        child: Text(
+                          ref.watch(appLocalizationsProvider).tr('cancel'),
+                          style: const TextStyle(
                             color: Color(0xFF475569),
                             fontWeight: FontWeight.w700,
                           ),
@@ -119,9 +120,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                             borderRadius: BorderRadius.circular(14),
                           ),
                         ),
-                        child: const Text(
-                          'Logout',
-                          style: TextStyle(
+                        child: Text(
+                          ref.watch(appLocalizationsProvider).tr('logout'),
+                          style: const TextStyle(
                             fontWeight: FontWeight.w700,
                           ),
                         ),
@@ -159,23 +160,40 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         .trim()
         .split(' ')
         .where((word) => word.isNotEmpty)
-        .map((word) => '${word[0].toUpperCase()}${word.substring(1).toLowerCase()}')
+        .map((word) =>
+            '${word[0].toUpperCase()}${word.substring(1).toLowerCase()}')
         .join(' ');
   }
 
   String _getPrimaryButtonLabel(JourneyState state) {
     final route = state.targetRoute;
-    if (route.contains('/offer')) return 'Review Approved Loan Offer';
-    if (route.contains('/digilocker')) return 'Complete DigiLocker KYC';
-    if (route.contains('/address')) return 'Confirm Residence Address';
-    if (route.contains('/bank')) return 'Verify Bank Account';
-    if (route.contains('/kfs')) return 'Review & Accept KFS';
-    if (route.contains('/mandate')) return 'Register e-NACH Mandate';
-    if (route.contains('/esign')) return 'Complete Agreement e-Sign';
-    if (route.contains('/disbursal')) return 'View Disbursal Status';
-    if (route.contains('/application/status')) return 'Check Application Status';
-    if (route.contains('/onboarding')) return 'Continue Loan Application';
-    return 'Start Application';
+    if (route.contains('/offer'))
+      return ref
+          .watch(appLocalizationsProvider)
+          .tr('review_approved_loan_offer');
+    if (route.contains('/digilocker'))
+      return ref.watch(appLocalizationsProvider).tr('complete_digilocker_kyc');
+    if (route.contains('/address'))
+      return ref
+          .watch(appLocalizationsProvider)
+          .tr('confirm_residence_address');
+    if (route.contains('/bank'))
+      return ref.watch(appLocalizationsProvider).tr('verify_bank_account');
+    if (route.contains('/kfs'))
+      return ref.watch(appLocalizationsProvider).tr('review_accept_kfs');
+    if (route.contains('/mandate'))
+      return ref.watch(appLocalizationsProvider).tr('register_enach_mandate');
+    if (route.contains('/esign'))
+      return ref.watch(appLocalizationsProvider).tr('complete_agreement_esign');
+    if (route.contains('/disbursal'))
+      return ref.watch(appLocalizationsProvider).tr('view_disbursal_status');
+    if (route.contains('/application/status'))
+      return ref.watch(appLocalizationsProvider).tr('check_application_status');
+    if (route.contains('/onboarding'))
+      return ref
+          .watch(appLocalizationsProvider)
+          .tr('continue_loan_application');
+    return ref.watch(appLocalizationsProvider).tr('start_application');
   }
 
   @override
@@ -188,21 +206,28 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final workflow = postApproval?.workflow;
 
     final customerName = _readText(customer?.fullName, 'Rohit Sharma');
-    final applicationStatus = _readText(customer?.latestApplicationStatus, 'IN_PROGRESS');
+    final applicationStatus =
+        _readText(customer?.latestApplicationStatus, 'IN_PROGRESS');
 
     final disbursalStatus = _readText(workflow?.disbursalStatus, 'NOT_STARTED');
     final currentStep = _readText(workflow?.currentStep, 'APPROVAL_SUMMARY');
     final isDisbursed = currentStep == 'DISBURSED' ||
         disbursalStatus == 'DISBURSED' ||
-        postApproval?.loan?.disbursalCompletedAt != null ||
+        postApproval?.loan.disbursalCompletedAt != null ||
         customer?.latestLoanStatus == 'DISBURSED' ||
         customer?.latestLoanStatus == 'FULLY_PAID';
 
-    final loanStatus = _readText(postApproval?.loan?.status ?? customer?.latestLoanStatus, '').toUpperCase();
+    final loanStatus =
+        _readText(postApproval?.loan.status ?? customer?.latestLoanStatus, '')
+            .toUpperCase();
     final isFullyPaid = loanStatus == 'FULLY_PAID' || loanStatus == 'CLOSED';
 
-    final hasActiveLoan = (customer?.latestLan?.toString().isNotEmpty ?? false) &&
-        (workflow?.offerAccepted == true || customer?.latestApplicationStatus == 'LENDER_APPROVED');
+    final hasActiveLoan =
+        (customer?.latestLan?.toString().isNotEmpty ?? false) &&
+            (workflow?.offerAccepted == true ||
+                customer?.latestApplicationStatus == 'LENDER_APPROVED');
+
+    final tr = ref.watch(appLocalizationsProvider);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
@@ -277,6 +302,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
                 // ── 7. Smart Credit Perks & Readiness Hub ──────────────────
                 _buildSmartCreditPerksHub(),
+                //const SizedBox(height: 24),
+
+                // ── 8. Refer & Earn Cashback Banner ─────────────────────────
+                //_buildReferralDashboardCard(),
                 const SizedBox(height: 28),
               ],
             ),
@@ -318,9 +347,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'Hello,',
-                style: TextStyle(
+              Text(
+                ref.watch(appLocalizationsProvider).tr('hello'),
+                style: const TextStyle(
                   color: Color(0xFF64748B),
                   fontSize: 12.5,
                   fontWeight: FontWeight.w500,
@@ -433,7 +462,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF0A4436).withOpacity(0.18),
+            color: const Color(0xFF0A4436).withValues(alpha: 0.18),
             blurRadius: 18,
             offset: const Offset(0, 8),
           ),
@@ -451,7 +480,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 height: 140,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: Colors.white.withOpacity(0.04),
+                  color: Colors.white.withValues(alpha: 0.04),
                 ),
               ),
             ),
@@ -461,9 +490,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Text(
-                    'Make your financial\ngoals a reality',
-                    style: TextStyle(
+                  Text(
+                    ref.watch(appLocalizationsProvider).tr('hero_title'),
+                    style: const TextStyle(
                       color: Colors.white,
                       fontSize: 20,
                       height: 1.25,
@@ -473,9 +502,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   ),
                   const SizedBox(height: 10),
                   Text(
-                    'Quick. Transparent. Reliable.',
+                    ref.watch(appLocalizationsProvider).tr('hero_subtitle'),
                     style: TextStyle(
-                      color: Colors.white.withOpacity(0.80),
+                      color: Colors.white.withValues(alpha: 0.80),
                       fontSize: 12.5,
                       fontWeight: FontWeight.w500,
                     ),
@@ -504,8 +533,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     required bool hasActiveLoan,
     required bool isDisbursed,
   }) {
-    final applicationCount = (customer?.latestApplicationId != null) ? '1' : '0';
-    final approvedCount = (hasActiveLoan || customer?.latestApplicationStatus == 'LENDER_APPROVED') ? '1' : '0';
+    final applicationCount =
+        (customer?.latestApplicationId != null) ? '1' : '0';
+    final approvedCount = (hasActiveLoan ||
+            customer?.latestApplicationStatus == 'LENDER_APPROVED')
+        ? '1'
+        : '0';
     final activeLoanCount = isDisbursed ? '1' : '0';
 
     return Column(
@@ -513,9 +546,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text(
-              'Loan Overview',
-              style: TextStyle(
+            Text(
+              ref.watch(appLocalizationsProvider).tr('loan_overview'),
+              style: const TextStyle(
                 color: Color(0xFF0F172A),
                 fontSize: 16,
                 fontWeight: FontWeight.w800,
@@ -523,18 +556,18 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             ),
             InkWell(
               onTap: () => _openRoute('/application/status'),
-              child: const Row(
+              child: Row(
                 children: [
                   Text(
-                    'View All',
-                    style: TextStyle(
+                    ref.watch(appLocalizationsProvider).tr('view_all'),
+                    style: const TextStyle(
                       color: Color(0xFF0F5A47),
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
-                  SizedBox(width: 2),
-                  Icon(
+                  const SizedBox(width: 2),
+                  const Icon(
                     Icons.chevron_right_rounded,
                     size: 18,
                     color: Color(0xFF0F5A47),
@@ -550,7 +583,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             Expanded(
               child: _OverviewStatCard(
                 count: applicationCount,
-                label: 'Application',
+                label: ref.watch(appLocalizationsProvider).tr('application'),
                 icon: Icons.description_outlined,
                 iconColor: const Color(0xFF10B981),
                 bgColor: const Color(0xFFECFDF5),
@@ -560,7 +593,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             Expanded(
               child: _OverviewStatCard(
                 count: approvedCount,
-                label: 'Approved',
+                label: ref.watch(appLocalizationsProvider).tr('approved'),
                 icon: Icons.verified_outlined,
                 iconColor: const Color(0xFFF59E0B),
                 bgColor: const Color(0xFFFFFBEB),
@@ -570,7 +603,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             Expanded(
               child: _OverviewStatCard(
                 count: activeLoanCount,
-                label: 'Active Loan',
+                label: ref.watch(appLocalizationsProvider).tr('active_loan'),
                 icon: Icons.account_balance_wallet_outlined,
                 iconColor: const Color(0xFF3B82F6),
                 bgColor: const Color(0xFFEFF6FF),
@@ -600,14 +633,24 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 duration: const Duration(milliseconds: 200),
                 padding: const EdgeInsets.symmetric(vertical: 10),
                 decoration: BoxDecoration(
-                  color: _selectedTab == 0 ? const Color(0xFF0F5A47) : Colors.transparent,
+                  color: _selectedTab == 0
+                      ? const Color(0xFF0F5A47)
+                      : Colors.transparent,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Center(
                   child: Text(
-                    isDisbursed ? 'Loan Overview' : 'Loan Journey',
+                    isDisbursed
+                        ? ref
+                            .watch(appLocalizationsProvider)
+                            .tr('loan_overview')
+                        : ref
+                            .watch(appLocalizationsProvider)
+                            .tr('loan_journey'),
                     style: TextStyle(
-                      color: _selectedTab == 0 ? Colors.white : const Color(0xFF475569),
+                      color: _selectedTab == 0
+                          ? Colors.white
+                          : const Color(0xFF475569),
                       fontSize: 12.5,
                       fontWeight: FontWeight.w700,
                     ),
@@ -624,14 +667,22 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 duration: const Duration(milliseconds: 200),
                 padding: const EdgeInsets.symmetric(vertical: 10),
                 decoration: BoxDecoration(
-                  color: _selectedTab == 1 ? const Color(0xFF0F5A47) : Colors.transparent,
+                  color: _selectedTab == 1
+                      ? const Color(0xFF0F5A47)
+                      : Colors.transparent,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Center(
                   child: Text(
-                    isDisbursed ? 'My Loans' : 'Application',
+                    isDisbursed
+                        ? ref.watch(appLocalizationsProvider).tr('my_loans')
+                        : ref
+                            .watch(appLocalizationsProvider)
+                            .tr('application_tab'),
                     style: TextStyle(
-                      color: _selectedTab == 1 ? Colors.white : const Color(0xFF475569),
+                      color: _selectedTab == 1
+                          ? Colors.white
+                          : const Color(0xFF475569),
                       fontSize: 12.5,
                       fontWeight: FontWeight.w700,
                     ),
@@ -682,9 +733,14 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       );
     }
 
-    final num? rawApproved = postApproval?.loan?.approvedAmount ?? postApproval?.loan?.disbursalAmount ?? postApproval?.offer?.approvedAmount;
-    final double? approvedAmount = (rawApproved != null && rawApproved > 0) ? rawApproved.toDouble() : null;
-    final lenderName = _readText(postApproval?.lender?.name, 'Fintree Finance Private Limited');
+    final num? rawApproved = postApproval?.loan?.approvedAmount ??
+        postApproval?.loan?.disbursalAmount ??
+        postApproval?.offer?.approvedAmount;
+    final double? approvedAmount = (rawApproved != null && rawApproved > 0)
+        ? rawApproved.toDouble()
+        : null;
+    final lenderName = _readText(
+        postApproval?.lender?.name, 'Fintree Finance Private Limited');
     final acceptedTenure = offer?.acceptedTenureDays ?? 90;
     final acceptedEmi = offer?.acceptedEmiAmount;
     final bankName = _readText(bank?.bankName, 'Bank account');
@@ -693,40 +749,42 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final steps = <_JourneyStep>[
       _JourneyStep(
         number: 1,
-        title: 'Verify bank account',
-        subtitle: 'Complete penny-drop verification for disbursal account',
+        title: ref.watch(appLocalizationsProvider).tr('verify_bank_step'),
+        subtitle:
+            ref.watch(appLocalizationsProvider).tr('verify_bank_step_sub'),
         icon: Icons.account_balance_outlined,
         isCompleted: workflow?.bankVerified == true,
         route: '/loan/$lan/bank',
       ),
       _JourneyStep(
         number: 2,
-        title: 'Accept Key Fact Statement',
-        subtitle: 'Review interest, charges and repayment terms',
+        title: ref.watch(appLocalizationsProvider).tr('accept_kfs_step'),
+        subtitle: ref.watch(appLocalizationsProvider).tr('accept_kfs_step_sub'),
         icon: Icons.fact_check_outlined,
         isCompleted: workflow?.kfsAccepted == true,
         route: '/loan/$lan/kfs',
       ),
       _JourneyStep(
         number: 3,
-        title: 'Register e-NACH mandate',
-        subtitle: 'Set up automatic EMI repayment from your bank account',
+        title: ref.watch(appLocalizationsProvider).tr('register_mandate_step'),
+        subtitle:
+            ref.watch(appLocalizationsProvider).tr('register_mandate_step_sub'),
         icon: Icons.sync_alt_rounded,
         isCompleted: workflow?.mandateCompleted == true,
         route: '/loan/$lan/mandate',
       ),
       _JourneyStep(
         number: 4,
-        title: 'e-Sign loan agreement',
-        subtitle: 'Digitally sign RBI compliant loan documentation',
+        title: ref.watch(appLocalizationsProvider).tr('esign_step'),
+        subtitle: ref.watch(appLocalizationsProvider).tr('esign_step_sub'),
         icon: Icons.draw_outlined,
         isCompleted: workflow?.esignCompleted == true,
         route: '/loan/$lan/esign',
       ),
       _JourneyStep(
         number: 5,
-        title: 'Disbursal',
-        subtitle: 'Track direct bank account funds transfer',
+        title: ref.watch(appLocalizationsProvider).tr('disbursal_step'),
+        subtitle: ref.watch(appLocalizationsProvider).tr('disbursal_step_sub'),
         icon: Icons.currency_rupee_rounded,
         isCompleted: workflow?.readyForDisbursal == true,
         route: '/loan/$lan/disbursal',
@@ -748,7 +806,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             borderRadius: BorderRadius.circular(22),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF033F45).withOpacity(0.18),
+                color: const Color(0xFF033F45).withValues(alpha: 0.18),
                 blurRadius: 20,
                 offset: const Offset(0, 8),
               ),
@@ -764,9 +822,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'APPROVED LOAN',
+                        ref.watch(appLocalizationsProvider).tr('approved_loan'),
                         style: TextStyle(
-                          color: Colors.white.withOpacity(0.7),
+                          color: Colors.white.withValues(alpha: 0.7),
                           fontSize: 10.5,
                           fontWeight: FontWeight.w700,
                           letterSpacing: 0.8,
@@ -774,7 +832,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        approvedAmount != null ? CurrencyUtils.formatAmount(approvedAmount) : 'Pending Confirmation',
+                        approvedAmount != null
+                            ? CurrencyUtils.formatAmount(approvedAmount)
+                            : ref
+                                .watch(appLocalizationsProvider)
+                                .tr('pending_confirmation_label'),
                         style: TextStyle(
                           color: Colors.white,
                           fontSize: approvedAmount != null ? 28 : 20,
@@ -787,7 +849,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.12),
+                      color: Colors.white.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(14),
                     ),
                     child: const Icon(
@@ -804,7 +866,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  color: Colors.white.withOpacity(0.8),
+                  color: Colors.white.withValues(alpha: 0.8),
                   fontSize: 12,
                   fontWeight: FontWeight.w500,
                 ),
@@ -813,9 +875,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.08),
+                  color: Colors.white.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: Colors.white.withOpacity(0.12)),
+                  border:
+                      Border.all(color: Colors.white.withValues(alpha: 0.12)),
                 ),
                 child: Column(
                   children: [
@@ -824,35 +887,44 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         Expanded(
                           child: _LoanSummaryMetric(
                             icon: Icons.schedule_rounded,
-                            label: 'Tenure',
+                            label: ref
+                                .watch(appLocalizationsProvider)
+                                .tr('tenure'),
                             value: '$acceptedTenure days',
                           ),
                         ),
                         Container(
                           width: 1,
                           height: 32,
-                          color: Colors.white.withOpacity(0.15),
+                          color: Colors.white.withValues(alpha: 0.15),
                         ),
                         Expanded(
                           child: _LoanSummaryMetric(
                             icon: Icons.payments_outlined,
-                            label: 'Monthly EMI',
+                            label: ref
+                                .watch(appLocalizationsProvider)
+                                .tr('monthly_emi'),
                             value: acceptedEmi == null
-                                ? 'To be confirmed'
-                                : CurrencyUtils.formatAmount(acceptedEmi, showDecimals: true),
+                                ? ref
+                                    .watch(appLocalizationsProvider)
+                                    .tr('to_be_confirmed')
+                                : CurrencyUtils.formatAmount(acceptedEmi,
+                                    showDecimals: true),
                           ),
                         ),
                       ],
                     ),
                     if (accountMasked.isNotEmpty) ...[
                       const SizedBox(height: 10),
-                      Divider(height: 1, color: Colors.white.withOpacity(0.12)),
+                      Divider(
+                          height: 1,
+                          color: Colors.white.withValues(alpha: 0.12)),
                       const SizedBox(height: 10),
                       Row(
                         children: [
                           Icon(
                             Icons.verified_rounded,
-                            color: Colors.white.withOpacity(0.9),
+                            color: Colors.white.withValues(alpha: 0.9),
                             size: 16,
                           ),
                           const SizedBox(width: 6),
@@ -861,7 +933,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                               '$bankName • $accountMasked',
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
-                                color: Colors.white.withOpacity(0.85),
+                                color: Colors.white.withValues(alpha: 0.85),
                                 fontSize: 11.5,
                                 fontWeight: FontWeight.w600,
                               ),
@@ -880,15 +952,16 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   Text(
                     'LAN: $lan',
                     style: TextStyle(
-                      color: Colors.white.withOpacity(0.7),
+                      color: Colors.white.withValues(alpha: 0.7),
                       fontSize: 11.5,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.14),
+                      color: Colors.white.withValues(alpha: 0.14),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
@@ -939,22 +1012,26 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       ),
                     ),
                     const SizedBox(width: 12),
-                    const Expanded(
+                    Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Your next step',
-                            style: TextStyle(
+                            ref
+                                .watch(appLocalizationsProvider)
+                                .tr('your_next_step'),
+                            style: const TextStyle(
                               color: Color(0xFF0F172A),
                               fontSize: 15,
                               fontWeight: FontWeight.w800,
                             ),
                           ),
-                          SizedBox(height: 2),
+                          const SizedBox(height: 2),
                           Text(
-                            'Complete this step to move closer to disbursal.',
-                            style: TextStyle(
+                            ref
+                                .watch(appLocalizationsProvider)
+                                .tr('complete_step_disbursal'),
+                            style: const TextStyle(
                               color: Color(0xFF64748B),
                               fontSize: 11.5,
                             ),
@@ -980,7 +1057,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'Loan Journey ($completedCount of ${steps.length} completed)',
+                ref.watch(appLocalizationsProvider).tr(
+                    'loan_journey_progress', {
+                  'completed': '$completedCount',
+                  'total': '${steps.length}'
+                }),
                 style: const TextStyle(
                   color: Color(0xFF0F172A),
                   fontSize: 14,
@@ -1004,18 +1085,24 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               value: progress,
               minHeight: 6,
               backgroundColor: const Color(0xFFE2E8F0),
-              valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF0F5A47)),
+              valueColor:
+                  const AlwaysStoppedAnimation<Color>(Color(0xFF0F5A47)),
             ),
           ),
           const SizedBox(height: 14),
-          ...steps.sublist(0, (completedCount + 1).clamp(0, steps.length)).asMap().entries.map(
+          ...steps
+              .sublist(0, (completedCount + 1).clamp(0, steps.length))
+              .asMap()
+              .entries
+              .map(
             (entry) {
               final step = entry.value;
               final isCurrent = journeyState.targetRoute == step.route;
               return _JourneyStepTile(
                 step: step,
                 isCurrent: isCurrent,
-                isLast: entry.key == (completedCount + 1).clamp(0, steps.length) - 1,
+                isLast: entry.key ==
+                    (completedCount + 1).clamp(0, steps.length) - 1,
                 onTap: () => _openRoute(step.route),
               );
             },
@@ -1080,7 +1167,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           ),
           const SizedBox(height: 14),
           AppButton(
-            text: 'View Loan Details',
+            text: ref.watch(appLocalizationsProvider).tr('view_loan_details'),
             onPressed: () => _openRoute('/loan/$lan/loan-details'),
             icon: Icons.receipt_long_rounded,
           ),
@@ -1099,10 +1186,14 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final lender = postApproval?.lender;
     final bank = postApproval?.bank;
 
-    final num? rawApproved = loan?.approvedAmount ?? loan?.disbursalAmount ?? offer?.approvedAmount;
-    final double? approvedAmount = (rawApproved != null && rawApproved > 0) ? rawApproved.toDouble() : null;
+    final num? rawApproved =
+        loan?.approvedAmount ?? loan?.disbursalAmount ?? offer?.approvedAmount;
+    final double? approvedAmount = (rawApproved != null && rawApproved > 0)
+        ? rawApproved.toDouble()
+        : null;
     final emiAmount = offer?.acceptedEmiAmount;
-    final lenderName = _readText(lender?.name, customer?.allocatedLenderName ?? 'Fintree Finance Private Limited');
+    final lenderName = _readText(lender?.name,
+        customer?.allocatedLenderName ?? 'Fintree Finance Private Limited');
     final utr = _readText(loan?.disbursalUtr, 'N/A');
     final bankName = _readText(bank?.bankName, 'Bank account');
     final accountMasked = _readText(bank?.accountMasked, '');
@@ -1112,7 +1203,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.3)),
+        border:
+            Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.3)),
         boxShadow: [
           BoxShadow(
             color: const Color(0xFF10B981).withValues(alpha: 0.08),
@@ -1145,23 +1237,27 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   ),
                 ),
                 const SizedBox(width: 10),
-                const Expanded(
+                Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'ACTIVE DISBURSED LOAN',
-                        style: TextStyle(
+                        ref
+                            .watch(appLocalizationsProvider)
+                            .tr('active_disbursed_loan'),
+                        style: const TextStyle(
                           color: Color(0xFF34D399),
                           fontSize: 10.5,
                           fontWeight: FontWeight.w800,
                           letterSpacing: 0.8,
                         ),
                       ),
-                      SizedBox(height: 2),
+                      const SizedBox(height: 2),
                       Text(
-                        'Funds credited to your bank account',
-                        style: TextStyle(
+                        ref
+                            .watch(appLocalizationsProvider)
+                            .tr('funds_credited_bank'),
+                        style: const TextStyle(
                           color: Colors.white,
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
@@ -1171,14 +1267,15 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   ),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
                     color: const Color(0xFF059669),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Text(
-                    'DISBURSED',
-                    style: TextStyle(
+                  child: Text(
+                    ref.watch(appLocalizationsProvider).tr('disbursed'),
+                    style: const TextStyle(
                       color: Colors.white,
                       fontSize: 10,
                       fontWeight: FontWeight.w800,
@@ -1200,9 +1297,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'Disbursed Amount',
-                          style: TextStyle(
+                        Text(
+                          ref
+                              .watch(appLocalizationsProvider)
+                              .tr('disbursed_amount'),
+                          style: const TextStyle(
                             color: Color(0xFF64748B),
                             fontSize: 11.5,
                             fontWeight: FontWeight.w500,
@@ -1210,7 +1309,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          approvedAmount != null ? CurrencyUtils.formatAmount(approvedAmount) : 'Pending Confirmation',
+                          approvedAmount != null
+                              ? CurrencyUtils.formatAmount(approvedAmount)
+                              : ref
+                                  .watch(appLocalizationsProvider)
+                                  .tr('pending_confirmation_label'),
                           style: TextStyle(
                             color: const Color(0xFF0F172A),
                             fontSize: approvedAmount != null ? 26 : 18,
@@ -1224,9 +1327,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
-                          const Text(
-                            'Monthly EMI',
-                            style: TextStyle(
+                          Text(
+                            ref
+                                .watch(appLocalizationsProvider)
+                                .tr('monthly_emi'),
+                            style: const TextStyle(
                               color: Color(0xFF64748B),
                               fontSize: 11.5,
                               fontWeight: FontWeight.w500,
@@ -1258,9 +1363,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text(
-                            'Loan Account (LAN)',
-                            style: TextStyle(color: Color(0xFF64748B), fontSize: 11.5),
+                          Text(
+                            ref
+                                .watch(appLocalizationsProvider)
+                                .tr('loan_account_lan'),
+                            style: const TextStyle(
+                                color: Color(0xFF64748B), fontSize: 11.5),
                           ),
                           Text(
                             lan.isNotEmpty ? lan : 'N/A',
@@ -1276,9 +1384,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text(
-                            'Lender',
-                            style: TextStyle(color: Color(0xFF64748B), fontSize: 11.5),
+                          Text(
+                            ref.watch(appLocalizationsProvider).tr('lender'),
+                            style: const TextStyle(
+                                color: Color(0xFF64748B), fontSize: 11.5),
                           ),
                           Text(
                             lenderName,
@@ -1295,9 +1404,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const Text(
-                              'Disbursal UTR',
-                              style: TextStyle(color: Color(0xFF64748B), fontSize: 11.5),
+                            Text(
+                              ref
+                                  .watch(appLocalizationsProvider)
+                                  .tr('disbursal_utr'),
+                              style: const TextStyle(
+                                  color: Color(0xFF64748B), fontSize: 11.5),
                             ),
                             Text(
                               utr,
@@ -1315,9 +1427,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const Text(
-                              'Credited Account',
-                              style: TextStyle(color: Color(0xFF64748B), fontSize: 11.5),
+                            Text(
+                              ref
+                                  .watch(appLocalizationsProvider)
+                                  .tr('credited_account'),
+                              style: const TextStyle(
+                                  color: Color(0xFF64748B), fontSize: 11.5),
                             ),
                             Text(
                               '$bankName • $accountMasked',
@@ -1335,13 +1450,17 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 ),
                 const SizedBox(height: 16),
                 AppButton(
-                  text: 'Pay EMI / Repay Loan',
+                  text: ref
+                      .watch(appLocalizationsProvider)
+                      .tr('pay_emi_repay_loan'),
                   onPressed: () => _openRoute('/loan/$lan/repay'),
                   icon: Icons.account_balance_wallet_rounded,
                 ),
                 const SizedBox(height: 8),
                 AppButton(
-                  text: 'View Full Loan Details & RPS',
+                  text: ref
+                      .watch(appLocalizationsProvider)
+                      .tr('view_full_loan_details_rps'),
                   isOutlined: true,
                   onPressed: () => _openRoute('/loan/$lan/loan-details'),
                   icon: Icons.receipt_long_rounded,
@@ -1366,18 +1485,27 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final lender = postApproval?.lender;
 
     final lan = _readText(loan?.lan ?? customer?.latestLan, '');
-    final status = _readText(loan?.status ?? customer?.latestLoanStatus, 'DISBURSED').toUpperCase();
-    final num? rawApproved = loan?.approvedAmount ?? loan?.disbursalAmount ?? offer?.approvedAmount;
-    final double? approvedAmount = (rawApproved != null && rawApproved > 0) ? rawApproved.toDouble() : null;
-    final lenderName = _readText(lender?.name, 'Fintree Finance Private Limited');
+    final status =
+        _readText(loan?.status ?? customer?.latestLoanStatus, 'DISBURSED')
+            .toUpperCase();
+    final num? rawApproved =
+        loan?.approvedAmount ?? loan?.disbursalAmount ?? offer?.approvedAmount;
+    final double? approvedAmount = (rawApproved != null && rawApproved > 0)
+        ? rawApproved.toDouble()
+        : null;
+    final lenderName =
+        _readText(lender?.name, 'Fintree Finance Private Limited');
     final utr = _readText(loan?.disbursalUtr, 'N/A');
     final isFullyPaid = status == 'FULLY_PAID' || status == 'CLOSED';
 
     final int completedLoansCount = (customer?.completedLoansCount ?? 0) > 0
         ? customer!.completedLoansCount
         : 1;
-    final double offerMultiplier = LenderMultiplierCalculator.getMultiplier(completedLoansCount);
-    final double revisedLoanLimit = LenderMultiplierCalculator.calculateRevisedLimit(approvedAmount ?? 0, completedLoansCount);
+    final double offerMultiplier =
+        LenderMultiplierCalculator.getMultiplier(completedLoansCount);
+    final double revisedLoanLimit =
+        LenderMultiplierCalculator.calculateRevisedLimit(
+            approvedAmount ?? 0, completedLoansCount);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1395,7 +1523,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.workspace_premium_rounded, color: Colors.amber, size: 24),
+                    const Icon(Icons.workspace_premium_rounded,
+                        color: Colors.amber, size: 24),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
@@ -1413,7 +1542,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 Text(
                   'Eligible for revised limit of ${CurrencyUtils.formatAmount(revisedLoanLimit)} with instant disbursal.',
                   style: TextStyle(
-                    color: Colors.white.withOpacity(0.85),
+                    color: Colors.white.withValues(alpha: 0.85),
                     fontSize: 12,
                   ),
                 ),
@@ -1423,9 +1552,14 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.white,
                     foregroundColor: const Color(0xFF065F46),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
                   ),
-                  child: const Text('Apply Repeat Loan', style: TextStyle(fontWeight: FontWeight.w800)),
+                  child: Text(
+                      ref
+                          .watch(appLocalizationsProvider)
+                          .tr('apply_repeat_loan'),
+                      style: const TextStyle(fontWeight: FontWeight.w800)),
                 ),
               ],
             ),
@@ -1490,7 +1624,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     ),
                     AppStatusBadge(
                       status: isFullyPaid ? 'FULLY_PAID' : 'DISBURSED',
-                      label: isFullyPaid ? 'Fully Paid' : 'Disbursed',
+                      label: isFullyPaid
+                          ? ref.watch(appLocalizationsProvider).tr('fully_paid')
+                          : ref.watch(appLocalizationsProvider).tr('disbursed'),
                     ),
                   ],
                 ),
@@ -1501,13 +1637,20 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'Approved Loan Amount',
-                          style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                        Text(
+                          ref
+                              .watch(appLocalizationsProvider)
+                              .tr('approved_loan_amount_label'),
+                          style: const TextStyle(
+                              fontSize: 11, color: Color(0xFF64748B)),
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          approvedAmount != null ? CurrencyUtils.formatAmount(approvedAmount) : 'Pending Confirmation',
+                          approvedAmount != null
+                              ? CurrencyUtils.formatAmount(approvedAmount)
+                              : ref
+                                  .watch(appLocalizationsProvider)
+                                  .tr('pending_confirmation_label'),
                           style: const TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.w800,
@@ -1519,9 +1662,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        const Text(
-                          'Destination Bank',
-                          style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                        Text(
+                          ref
+                              .watch(appLocalizationsProvider)
+                              .tr('destination_bank_label'),
+                          style: const TextStyle(
+                              fontSize: 11, color: Color(0xFF64748B)),
                         ),
                         const SizedBox(height: 2),
                         Text(
@@ -1538,7 +1684,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 ),
                 const SizedBox(height: 12),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: BoxDecoration(
                     color: const Color(0xFFF8FAFC),
                     borderRadius: BorderRadius.circular(10),
@@ -1548,16 +1695,25 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     children: [
                       Text(
                         'UTR: $utr',
-                        style: const TextStyle(fontSize: 11, color: Color(0xFF64748B), fontWeight: FontWeight.w600),
+                        style: const TextStyle(
+                            fontSize: 11,
+                            color: Color(0xFF64748B),
+                            fontWeight: FontWeight.w600),
                       ),
-                      const Row(
+                      Row(
                         children: [
                           Text(
-                            'View RPS',
-                            style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: Color(0xFF0F5A47)),
+                            ref
+                                .watch(appLocalizationsProvider)
+                                .tr('view_rps_label'),
+                            style: const TextStyle(
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF0F5A47)),
                           ),
                           SizedBox(width: 4),
-                          Icon(Icons.arrow_forward_ios_rounded, size: 10, color: Color(0xFF0F5A47)),
+                          Icon(Icons.arrow_forward_ios_rounded,
+                              size: 10, color: Color(0xFF0F5A47)),
                         ],
                       ),
                     ],
@@ -1576,13 +1732,16 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     required JourneyState journeyState,
     required dynamic customer,
   }) {
-    final applicationStatus = _readText(customer?.latestApplicationStatus, 'IN_PROGRESS');
+    final applicationStatus =
+        _readText(customer?.latestApplicationStatus, 'IN_PROGRESS');
     final fullName = _readText(customer?.fullName, 'Not provided');
     final email = _readText(customer?.email, 'Not provided');
     final panNumber = _readText(customer?.panNumber, 'Not provided');
     final employmentType = _readText(customer?.employmentType, 'Not provided');
-    final employerName = _readText(customer?.companyName ?? customer?.businessName, 'Not provided');
-    final residentialPincode = _readText(customer?.residentialPincode, 'Not provided');
+    final employerName = _readText(
+        customer?.companyName ?? customer?.businessName, 'Not provided');
+    final residentialPincode =
+        _readText(customer?.residentialPincode, 'Not provided');
     final monthlyIncome = customer?.monthlyIncome;
 
     final panVerified = customer?.panVerified == true;
@@ -1595,8 +1754,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         statusUpper.contains('SANCTION') ||
         statusUpper.contains('DISBURS');
 
-    final basicDetailsComplete = fullName != 'Not provided' && emailVerified == true;
-    final profileComplete = employmentType != 'Not provided' || monthlyIncome != null;
+    final basicDetailsComplete =
+        fullName != 'Not provided' && emailVerified == true;
+    final profileComplete =
+        employmentType != 'Not provided' || monthlyIncome != null;
     final assessmentFeePaid = customer?.assessmentFeePaid == true;
     final postApproval = journeyState.postApproval;
     final offerAccepted = postApproval?.workflow.offerAccepted == true;
@@ -1604,101 +1765,115 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final livenessComplete = customer != null &&
         !customer.updateReadinessReasons.contains('LIVENESS_NOT_VERIFIED');
     final digilockerComplete = customer != null &&
-        (customer.aadhaarVerified == true || customer.aadhaarKycStatus == 'VERIFIED');
+        (customer.aadhaarVerified == true ||
+            customer.aadhaarKycStatus == 'VERIFIED');
     final addressComplete = customer != null &&
         !customer.updateReadinessReasons.contains('ADDRESS_NOT_VERIFIED') &&
-        !customer.updateReadinessReasons.contains('RESIDENTIAL_ADDRESS_NOT_VERIFIED') &&
-        (customer.residentialCity != null && customer.residentialCity != 'Not provided');
+        !customer.updateReadinessReasons
+            .contains('RESIDENTIAL_ADDRESS_NOT_VERIFIED') &&
+        (customer.residentialCity != null &&
+            customer.residentialCity != 'Not provided');
     final aaComplete = customer != null &&
         (customer.aaVerified == true ||
-            ['SUCCESS', 'COMPLETED', 'VERIFIED'].contains(customer.aaStatus?.toUpperCase()) ||
-            ['SUCCESS', 'COMPLETED', 'VERIFIED'].contains(customer.accountAggregatorStatus?.toUpperCase()));
+            ['SUCCESS', 'COMPLETED', 'VERIFIED']
+                .contains(customer.aaStatus?.toUpperCase()) ||
+            ['SUCCESS', 'COMPLETED', 'VERIFIED']
+                .contains(customer.accountAggregatorStatus?.toUpperCase()));
 
     final applicationSteps = <_ApplicationStep>[
       _ApplicationStep(
         number: 1,
-        title: 'Basic personal details',
-        subtitle: 'Name, date of birth, gender and pincode',
+        title: ref.watch(appLocalizationsProvider).tr('step_basic_details'),
+        subtitle:
+            ref.watch(appLocalizationsProvider).tr('step_basic_details_sub'),
         icon: Icons.person_outline_rounded,
         route: '/onboarding/basic-details',
         isCompleted: applicationSubmitted || basicDetailsComplete,
       ),
       _ApplicationStep(
         number: 2,
-        title: 'PAN verification',
-        subtitle: 'Verify your Permanent Account Number',
+        title: ref.watch(appLocalizationsProvider).tr('step_pan_verification'),
+        subtitle:
+            ref.watch(appLocalizationsProvider).tr('step_pan_verification_sub'),
         icon: Icons.badge_outlined,
         route: '/onboarding/pan',
         isCompleted: applicationSubmitted || panVerified,
       ),
       _ApplicationStep(
         number: 3,
-        title: 'Lender & Assessment fee',
-        subtitle: 'Allocated lender and processing fee payment',
+        title: ref.watch(appLocalizationsProvider).tr('step_lender_assessment'),
+        subtitle: ref
+            .watch(appLocalizationsProvider)
+            .tr('step_lender_assessment_sub'),
         icon: Icons.payment_rounded,
         route: '/payment/processing-fee',
         isCompleted: applicationSubmitted || assessmentFeePaid,
       ),
       _ApplicationStep(
         number: 4,
-        title: 'Profile and income',
-        subtitle: 'Employment, income and organisation details',
+        title: ref.watch(appLocalizationsProvider).tr('step_profile_income'),
+        subtitle:
+            ref.watch(appLocalizationsProvider).tr('step_profile_income_sub'),
         icon: Icons.work_outline_rounded,
         route: '/onboarding/profile',
         isCompleted: applicationSubmitted || profileComplete,
       ),
       _ApplicationStep(
         number: 5,
-        title: 'Live photo',
-        subtitle: 'Selfie capture and liveness verification',
+        title: ref.watch(appLocalizationsProvider).tr('step_live_photo'),
+        subtitle: ref.watch(appLocalizationsProvider).tr('step_live_photo_sub'),
         icon: Icons.face_retouching_natural_outlined,
         route: '/onboarding/live-photo',
         isCompleted: applicationSubmitted || livenessComplete,
       ),
       _ApplicationStep(
         number: 6,
-        title: 'DigiLocker Aadhaar KYC',
-        subtitle: 'Secure Aadhaar verification through DigiLocker',
+        title: ref.watch(appLocalizationsProvider).tr('step_digilocker'),
+        subtitle: ref.watch(appLocalizationsProvider).tr('step_digilocker_sub'),
         icon: Icons.verified_user_outlined,
         route: '/onboarding/digilocker',
         isCompleted: applicationSubmitted || digilockerComplete,
       ),
       _ApplicationStep(
         number: 7,
-        title: 'Address confirmation',
-        subtitle: 'Review and confirm your residence address',
+        title: ref.watch(appLocalizationsProvider).tr('step_address'),
+        subtitle: ref.watch(appLocalizationsProvider).tr('step_address_sub'),
         icon: Icons.home_outlined,
         route: '/onboarding/address',
         isCompleted: applicationSubmitted || addressComplete,
       ),
       _ApplicationStep(
         number: 8,
-        title: 'Account Aggregator Verification',
-        subtitle: 'Connect bank account for statement analysis',
+        title: ref.watch(appLocalizationsProvider).tr('step_aa'),
+        subtitle: ref.watch(appLocalizationsProvider).tr('step_aa_sub'),
         icon: Icons.account_balance_outlined,
         route: '/onboarding/account-aggregator',
         isCompleted: applicationSubmitted || aaComplete,
       ),
       _ApplicationStep(
         number: 9,
-        title: 'Loan Offer Selection',
-        subtitle: 'Select loan tenure and review approved pricing',
+        title: ref.watch(appLocalizationsProvider).tr('step_loan_offer'),
+        subtitle: ref.watch(appLocalizationsProvider).tr('step_loan_offer_sub'),
         icon: Icons.local_offer_outlined,
         route: '/onboarding/offer',
         isCompleted: applicationSubmitted || offerAccepted,
       ),
       _ApplicationStep(
         number: 10,
-        title: 'Review and submit',
-        subtitle: 'Confirm the application before lender submission',
+        title: ref.watch(appLocalizationsProvider).tr('step_review_submit'),
+        subtitle:
+            ref.watch(appLocalizationsProvider).tr('step_review_submit_sub'),
         icon: Icons.task_alt_rounded,
         route: '/onboarding/review',
         isCompleted: applicationSubmitted,
       ),
     ];
 
-    final completedSteps = applicationSteps.where((step) => step.isCompleted).length;
-    final applicationProgress = applicationSteps.isEmpty ? 0.0 : completedSteps / applicationSteps.length;
+    final completedSteps =
+        applicationSteps.where((step) => step.isCompleted).length;
+    final applicationProgress = applicationSteps.isEmpty
+        ? 0.0
+        : completedSteps / applicationSteps.length;
 
     String? nextIncompleteRoute;
     for (final step in applicationSteps) {
@@ -1733,22 +1908,27 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                           height: 48,
                         ),
                         const SizedBox(width: 10),
-                        const Expanded(
+                        Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Application Dossier',
-                                style: TextStyle(
+                                ref
+                                    .watch(appLocalizationsProvider)
+                                    .tr('application_dossier'),
+                                style: const TextStyle(
                                   color: Color(0xFF0F172A),
                                   fontWeight: FontWeight.w800,
                                   fontSize: 16,
                                 ),
                               ),
-                              SizedBox(height: 2),
+                              const SizedBox(height: 2),
                               Text(
-                                'Personal Loan • Fintree Finance',
-                                style: TextStyle(color: Color(0xFF64748B), fontSize: 11.5),
+                                ref
+                                    .watch(appLocalizationsProvider)
+                                    .tr('personal_loan_fintree'),
+                                style: const TextStyle(
+                                    color: Color(0xFF64748B), fontSize: 11.5),
                               ),
                             ],
                           ),
@@ -1795,7 +1975,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   value: applicationProgress,
                   minHeight: 6,
                   backgroundColor: const Color(0xFFE2E8F0),
-                  valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF0F5A47)),
+                  valueColor:
+                      const AlwaysStoppedAnimation<Color>(Color(0xFF0F5A47)),
                 ),
               ),
               const SizedBox(height: 8),
@@ -1803,8 +1984,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    '$completedSteps of ${applicationSteps.length} steps completed',
-                    style: const TextStyle(color: Color(0xFF64748B), fontSize: 11.5),
+                    ref.watch(appLocalizationsProvider).tr('steps_completed', {
+                      'completed': '$completedSteps',
+                      'total': '${applicationSteps.length}'
+                    }),
+                    style: const TextStyle(
+                        color: Color(0xFF64748B), fontSize: 11.5),
                   ),
                   Text(
                     '${(applicationProgress * 100).round()}%',
@@ -1819,21 +2004,31 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               const SizedBox(height: 16),
               if (applicationSubmitted)
                 AppButton(
-                  text: 'View Application Status',
+                  text: ref
+                      .watch(appLocalizationsProvider)
+                      .tr('view_application_status'),
                   isOutlined: true,
                   onPressed: () => _openRoute('/application/status'),
                   icon: Icons.analytics_outlined,
                 )
               else if (nextIncompleteRoute != null)
                 AppButton(
-                  text: (nextIncompleteRoute == '/onboarding/basic-details' || emailVerified != true)
-                      ? 'Apply for Loan'
-                      : 'Resume Application',
+                  text: (nextIncompleteRoute == '/onboarding/basic-details' ||
+                          emailVerified != true)
+                      ? ref.watch(appLocalizationsProvider).tr('apply_for_loan')
+                      : ref
+                          .watch(appLocalizationsProvider)
+                          .tr('resume_application'),
                   onPressed: () async {
-                    await ref.read(journeyControllerProvider.notifier).syncCustomerState();
+                    await ref
+                        .read(journeyControllerProvider.notifier)
+                        .syncCustomerState();
                     if (mounted) {
-                      final target = ref.read(journeyControllerProvider).targetRoute;
-                      _openRoute((target.isNotEmpty && target != '/dashboard' && target != '/login')
+                      final target =
+                          ref.read(journeyControllerProvider).targetRoute;
+                      _openRoute((target.isNotEmpty &&
+                              target != '/dashboard' &&
+                              target != '/login')
                           ? target
                           : nextIncompleteRoute!);
                     }
@@ -1842,7 +2037,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 )
               else
                 AppButton(
-                  text: 'Review & Submit Application',
+                  text: ref
+                      .watch(appLocalizationsProvider)
+                      .tr('review_submit_application'),
                   onPressed: () => _openRoute('/onboarding/review'),
                   icon: Icons.arrow_forward_rounded,
                 ),
@@ -1863,24 +2060,41 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'Applicant Profile',
-                style: TextStyle(
+              Text(
+                ref.watch(appLocalizationsProvider).tr('applicant_profile'),
+                style: const TextStyle(
                   color: Color(0xFF0F172A),
                   fontWeight: FontWeight.w800,
                   fontSize: 15,
                 ),
               ),
               const Divider(height: 20, color: Color(0xFFF1F5F9)),
-              _ProfileDetailRow(icon: Icons.person_outline_rounded, label: 'Applicant Name', value: fullName),
-              _ProfileDetailRow(icon: Icons.email_outlined, label: 'Email Address', value: email),
-              _ProfileDetailRow(icon: Icons.badge_outlined, label: 'PAN Number', value: panNumber),
-              _ProfileDetailRow(icon: Icons.work_outline_rounded, label: 'Employment Type', value: employmentType),
-              _ProfileDetailRow(icon: Icons.business_outlined, label: 'Employer / Business', value: employerName),
+              _ProfileDetailRow(
+                  icon: Icons.person_outline_rounded,
+                  label: 'Applicant Name',
+                  value: fullName),
+              _ProfileDetailRow(
+                  icon: Icons.email_outlined,
+                  label: 'Email Address',
+                  value: email),
+              _ProfileDetailRow(
+                  icon: Icons.badge_outlined,
+                  label: 'PAN Number',
+                  value: panNumber),
+              _ProfileDetailRow(
+                  icon: Icons.work_outline_rounded,
+                  label: 'Employment Type',
+                  value: employmentType),
+              _ProfileDetailRow(
+                  icon: Icons.business_outlined,
+                  label: 'Employer / Business',
+                  value: employerName),
               _ProfileDetailRow(
                 icon: Icons.currency_rupee_rounded,
                 label: 'Monthly Net Income',
-                value: monthlyIncome == null ? 'Not provided' : CurrencyUtils.formatAmount(monthlyIncome),
+                value: monthlyIncome == null
+                    ? 'Not provided'
+                    : CurrencyUtils.formatAmount(monthlyIncome),
               ),
               _ProfileDetailRow(
                 icon: Icons.location_on_outlined,
@@ -1893,16 +2107,18 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         ),
         const SizedBox(height: 20),
 
-        const Text(
-          'Application Journey',
-          style: TextStyle(
+        Text(
+          ref.watch(appLocalizationsProvider).tr('application_journey'),
+          style: const TextStyle(
             color: Color(0xFF0F172A),
             fontWeight: FontWeight.w800,
             fontSize: 15,
           ),
         ),
         const SizedBox(height: 12),
-        ...applicationSteps.sublist(0, (completedSteps + 1).clamp(0, applicationSteps.length)).map(
+        ...applicationSteps
+            .sublist(0, (completedSteps + 1).clamp(0, applicationSteps.length))
+            .map(
           (step) {
             final isCurrent = journeyState.targetRoute == step.route;
             return _ApplicationStepTile(
@@ -1932,18 +2148,18 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Need a Personal Loan?',
-                  style: TextStyle(
+                Text(
+                  ref.watch(appLocalizationsProvider).tr('need_personal_loan'),
+                  style: const TextStyle(
                     color: Color(0xFF0F172A),
                     fontSize: 15,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
                 const SizedBox(height: 4),
-                const Text(
-                  'Get instant offers from multiple lenders with minimal documents.',
-                  style: TextStyle(
+                Text(
+                  ref.watch(appLocalizationsProvider).tr('get_instant_offers'),
+                  style: const TextStyle(
                     color: Color(0xFF64748B),
                     fontSize: 11.5,
                     height: 1.35,
@@ -1954,31 +2170,34 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   onTap: () {
                     final target = journeyState.targetRoute;
                     _openRoute(
-                      (target.isNotEmpty && target != '/dashboard' && target != '/login')
+                      (target.isNotEmpty &&
+                              target != '/dashboard' &&
+                              target != '/login')
                           ? target
                           : '/onboarding/basic-details',
                     );
                   },
                   borderRadius: BorderRadius.circular(8),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
                     decoration: BoxDecoration(
                       color: const Color(0xFF0F5A47),
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: const Row(
+                    child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
-                          'Apply Now',
-                          style: TextStyle(
+                          ref.watch(appLocalizationsProvider).tr('apply_now'),
+                          style: const TextStyle(
                             color: Colors.white,
                             fontSize: 12,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
-                        SizedBox(width: 4),
-                        Icon(
+                        const SizedBox(width: 4),
+                        const Icon(
                           Icons.chevron_right_rounded,
                           color: Colors.white,
                           size: 16,
@@ -2024,22 +2243,24 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Expanded(
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Smart Credit Benefits',
-                      style: TextStyle(
+                      ref
+                          .watch(appLocalizationsProvider)
+                          .tr('smart_credit_benefits'),
+                      style: const TextStyle(
                         color: Color(0xFF0F172A),
                         fontSize: 16,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
-                    SizedBox(height: 2),
+                    const SizedBox(height: 2),
                     Text(
-                      'Exclusive perks & approval readiness for your profile',
-                      style: TextStyle(
+                      ref.watch(appLocalizationsProvider).tr('exclusive_perks'),
+                      style: const TextStyle(
                         color: Color(0xFF64748B),
                         fontSize: 11.5,
                       ),
@@ -2048,13 +2269,14 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
                   color: const Color(0xFFECFDF5),
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(color: const Color(0xFFA7F3D0)),
                 ),
-                child: const Row(
+                child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(
@@ -2064,8 +2286,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     ),
                     SizedBox(width: 4),
                     Text(
-                      '98% High Odds',
-                      style: TextStyle(
+                      ref.watch(appLocalizationsProvider).tr('high_odds'),
+                      style: const TextStyle(
                         color: Color(0xFF059669),
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
@@ -2091,13 +2313,16 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Row(
+                      Row(
                         children: [
-                          Icon(Icons.speed_rounded, color: Color(0xFF34D399), size: 18),
-                          SizedBox(width: 6),
+                          const Icon(Icons.speed_rounded,
+                              color: Color(0xFF34D399), size: 18),
+                          const SizedBox(width: 6),
                           Text(
-                            'Approval Readiness: Excellent',
-                            style: TextStyle(
+                            ref
+                                .watch(appLocalizationsProvider)
+                                .tr('approval_readiness'),
+                            style: const TextStyle(
                               color: Colors.white,
                               fontSize: 12.5,
                               fontWeight: FontWeight.w700,
@@ -2112,13 +2337,16 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                           value: 0.88,
                           minHeight: 6,
                           backgroundColor: Color(0xFF063328),
-                          valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF34D399)),
+                          valueColor:
+                              AlwaysStoppedAnimation<Color>(Color(0xFF34D399)),
                         ),
                       ),
                       const SizedBox(height: 6),
-                      const Text(
-                        'Pre-verified for instant loan disbursement',
-                        style: TextStyle(
+                      Text(
+                        ref
+                            .watch(appLocalizationsProvider)
+                            .tr('pre_verified_instant'),
+                        style: const TextStyle(
                           color: Color(0xFFA7F3D0),
                           fontSize: 10.5,
                         ),
@@ -2141,8 +2369,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 child: _buildPerkCard(
                   icon: Icons.bolt_rounded,
                   iconColor: const Color(0xFFF59E0B),
-                  title: 'Instant 30s Disbursal',
-                  subtitle: 'Direct transfer upon eSign',
+                  title: ref
+                      .watch(appLocalizationsProvider)
+                      .tr('instant_disbursal'),
+                  subtitle: ref
+                      .watch(appLocalizationsProvider)
+                      .tr('direct_transfer_esign'),
                 ),
               ),
               const SizedBox(width: 10),
@@ -2150,8 +2382,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 child: _buildPerkCard(
                   icon: Icons.verified_user_rounded,
                   iconColor: const Color(0xFF10B981),
-                  title: 'Zero Foreclosure Fee',
-                  subtitle: 'Pay off anytime with 0% penalty',
+                  title: ref
+                      .watch(appLocalizationsProvider)
+                      .tr('zero_foreclosure'),
+                  subtitle:
+                      ref.watch(appLocalizationsProvider).tr('pay_off_anytime'),
                 ),
               ),
             ],
@@ -2163,8 +2398,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 child: _buildPerkCard(
                   icon: Icons.trending_up_rounded,
                   iconColor: const Color(0xFF6366F1),
-                  title: 'Tier Multiplier',
-                  subtitle: 'Higher limits on timely EMIs',
+                  title:
+                      ref.watch(appLocalizationsProvider).tr('tier_multiplier'),
+                  subtitle: ref
+                      .watch(appLocalizationsProvider)
+                      .tr('higher_limits_emi'),
                 ),
               ),
               const SizedBox(width: 10),
@@ -2172,8 +2410,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 child: _buildPerkCard(
                   icon: Icons.document_scanner_rounded,
                   iconColor: const Color(0xFFEC4899),
-                  title: '100% Digital KYC',
-                  subtitle: 'Paperless via DigiLocker & AA',
+                  title: ref.watch(appLocalizationsProvider).tr('digital_kyc'),
+                  subtitle: ref
+                      .watch(appLocalizationsProvider)
+                      .tr('paperless_digilocker'),
                 ),
               ),
             ],
@@ -2189,7 +2429,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: const Color(0xFFE2E8F0)),
               ),
-              child: const Row(
+              child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Row(
@@ -2201,8 +2441,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       ),
                       SizedBox(width: 8),
                       Text(
-                        'Have questions about credit perks?',
-                        style: TextStyle(
+                        ref
+                            .watch(appLocalizationsProvider)
+                            .tr('questions_credit_perks'),
+                        style: const TextStyle(
                           color: Color(0xFF334155),
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
@@ -2213,8 +2455,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   Row(
                     children: [
                       Text(
-                        'Support',
-                        style: TextStyle(
+                        ref.watch(appLocalizationsProvider).tr('support_label'),
+                        style: const TextStyle(
                           color: Color(0xFF0F5A47),
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
@@ -2291,9 +2533,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   }
 
   // ── Bottom Navigation Bar ─────────────────────────────────────────────────
-  Widget _buildBottomNavigationBar(BuildContext context, JourneyState journeyState) {
+  Widget _buildBottomNavigationBar(
+      BuildContext context, JourneyState journeyState) {
     final customer = journeyState.customer;
     final postApproval = journeyState.postApproval;
+    final tr = ref.watch(appLocalizationsProvider);
 
     return Container(
       decoration: const BoxDecoration(
@@ -2312,13 +2556,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               _buildBottomNavItem(
                 index: 0,
                 icon: Icons.home_filled,
-                label: 'Home',
+                label: tr.tr('home'),
                 onTap: () => setState(() => _selectedNavIndex = 0),
               ),
               _buildBottomNavItem(
                 index: 1,
                 icon: Icons.assignment_outlined,
-                label: 'Application',
+                label: tr.tr('application'),
                 onTap: () {
                   setState(() => _selectedNavIndex = 1);
                   _openRoute('/application/status');
@@ -2327,18 +2571,23 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               _buildBottomNavItem(
                 index: 2,
                 icon: Icons.account_balance_wallet_outlined,
-                label: 'Loan Details',
+                label: tr.tr('loan_details_nav'),
                 onTap: () {
                   setState(() => _selectedNavIndex = 2);
-                  final effectiveLan = customer?.latestLan ?? customer?.platformLan ?? postApproval?.loan?.lan ?? '';
+                  final effectiveLan = customer?.latestLan ??
+                      customer?.platformLan ??
+                      postApproval?.loan.lan ??
+                      '';
                   if (effectiveLan.isNotEmpty) {
-                    if (customer?.latestLoanStatus == 'FULLY_PAID' || customer?.latestLoanStatus == 'CLOSED') {
+                    if (customer?.latestLoanStatus == 'FULLY_PAID' ||
+                        customer?.latestLoanStatus == 'CLOSED') {
                       _openRoute('/loan/$effectiveLan/fully-paid-review');
                     } else {
                       _openRoute('/loan/$effectiveLan/loan-details');
                     }
-                  } else if (customer?.latestApplicationId != null && customer!.latestApplicationId!.isNotEmpty) {
-                    _openRoute('/loan/${customer.latestApplicationId}/loan-details');
+                  } else if ((customer?.latestApplicationId ?? '').isNotEmpty) {
+                    _openRoute(
+                        '/loan/${customer!.latestApplicationId}/loan-details');
                   } else {
                     _openRoute('/onboarding/offer');
                   }
@@ -2347,7 +2596,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               _buildBottomNavItem(
                 index: 3,
                 icon: Icons.person_outline_rounded,
-                label: 'Profile',
+                label: tr.tr('profile'),
                 onTap: () {
                   setState(() => _selectedNavIndex = 3);
                   _showCustomerProfileModal(context, journeyState);
@@ -2367,7 +2616,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     required VoidCallback onTap,
   }) {
     final isSelected = _selectedNavIndex == index;
-    final color = isSelected ? const Color(0xFF0F5A47) : const Color(0xFF94A3B8);
+    final color =
+        isSelected ? const Color(0xFF0F5A47) : const Color(0xFF94A3B8);
 
     return InkWell(
       onTap: onTap,
@@ -2392,7 +2642,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   }
 
   // ── Modals: Profile & Support ──────────────────────────────────────────────
-  void _showCustomerProfileModal(BuildContext context, JourneyState journeyState) {
+  void _showCustomerProfileModal(
+      BuildContext context, JourneyState journeyState) {
     final customer = journeyState.customer;
     final postApproval = journeyState.postApproval;
     final bank = postApproval?.bank;
@@ -2402,7 +2653,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final email = _readText(customer?.email, 'rohit@gmail.com');
     final pan = _readText(customer?.panNumber, 'ABCDE1234F');
     final employmentType = _readText(customer?.employmentType, 'Salaried');
-    final employerName = _readText(customer?.companyName ?? customer?.businessName, 'Private Enterprise');
+    final employerName = _readText(
+        customer?.companyName ?? customer?.businessName, 'Private Enterprise');
     final designation = _readText(customer?.designation, 'Senior Associate');
     final residenceStatus = _readText(customer?.residenceStatus, 'Owned');
     final pincode = _readText(customer?.residentialPincode, '401303');
@@ -2462,14 +2714,21 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                                 height: 62,
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
-                                  border: Border.all(color: const Color(0xFF34D399), width: 2.5),
+                                  border: Border.all(
+                                      color: const Color(0xFF34D399),
+                                      width: 2.5),
                                   gradient: const LinearGradient(
-                                    colors: [Color(0xFF10B981), Color(0xFF059669)],
+                                    colors: [
+                                      Color(0xFF10B981),
+                                      Color(0xFF059669)
+                                    ],
                                   ),
                                 ),
                                 child: Center(
                                   child: Text(
-                                    fullName.isNotEmpty ? fullName[0].toUpperCase() : 'C',
+                                    fullName.isNotEmpty
+                                        ? fullName[0].toUpperCase()
+                                        : 'C',
                                     style: const TextStyle(
                                       color: Colors.white,
                                       fontSize: 26,
@@ -2517,15 +2776,21 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                                     ),
                                     const SizedBox(width: 6),
                                     Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 7, vertical: 2.5),
                                       decoration: BoxDecoration(
-                                        color: const Color(0xFF34D399).withValues(alpha: 0.25),
+                                        color: const Color(0xFF34D399)
+                                            .withValues(alpha: 0.25),
                                         borderRadius: BorderRadius.circular(10),
-                                        border: Border.all(color: const Color(0xFF34D399), width: 0.8),
+                                        border: Border.all(
+                                            color: const Color(0xFF34D399),
+                                            width: 0.8),
                                       ),
-                                      child: const Text(
-                                        '✓ VERIFIED',
-                                        style: TextStyle(
+                                      child: Text(
+                                        ref
+                                            .watch(appLocalizationsProvider)
+                                            .tr('verified_badge'),
+                                        style: const TextStyle(
                                           color: Color(0xFF6EE7B7),
                                           fontSize: 9,
                                           fontWeight: FontWeight.w900,
@@ -2591,11 +2856,41 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceAround,
                       children: [
-                        _buildProfileMiniStat('Profile Score', '100% Verified', Icons.verified_user_rounded, const Color(0xFF10B981)),
-                        Container(width: 1, height: 32, color: const Color(0xFFE2E8F0)),
-                        _buildProfileMiniStat('KYC Status', 'DigiLocker OK', Icons.badge_rounded, const Color(0xFF0F5A47)),
-                        Container(width: 1, height: 32, color: const Color(0xFFE2E8F0)),
-                        _buildProfileMiniStat('Lender Tier', 'Prime Match', Icons.workspace_premium_rounded, const Color(0xFFD97706)),
+                        _buildProfileMiniStat(
+                            ref
+                                .watch(appLocalizationsProvider)
+                                .tr('profile_score'),
+                            ref
+                                .watch(appLocalizationsProvider)
+                                .tr('profile_verified'),
+                            Icons.verified_user_rounded,
+                            const Color(0xFF10B981)),
+                        Container(
+                            width: 1,
+                            height: 32,
+                            color: const Color(0xFFE2E8F0)),
+                        _buildProfileMiniStat(
+                            ref
+                                .watch(appLocalizationsProvider)
+                                .tr('kyc_status_label'),
+                            ref
+                                .watch(appLocalizationsProvider)
+                                .tr('digilocker_ok'),
+                            Icons.badge_rounded,
+                            const Color(0xFF0F5A47)),
+                        Container(
+                            width: 1,
+                            height: 32,
+                            color: const Color(0xFFE2E8F0)),
+                        _buildProfileMiniStat(
+                            ref
+                                .watch(appLocalizationsProvider)
+                                .tr('lender_tier'),
+                            ref
+                                .watch(appLocalizationsProvider)
+                                .tr('prime_match'),
+                            Icons.workspace_premium_rounded,
+                            const Color(0xFFD97706)),
                       ],
                     ),
                   ),
@@ -2603,26 +2898,57 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
                   // Section 1: Identity & KYC Details
                   _buildProfileSectionCard(
-                    title: 'Identity & KYC Details',
+                    title: ref
+                        .watch(appLocalizationsProvider)
+                        .tr('identity_kyc_details'),
                     icon: Icons.shield_rounded,
                     children: [
-                      _ProfileDetailRow(icon: Icons.person_rounded, label: 'Full Name', value: fullName),
-                      _ProfileDetailRow(icon: Icons.phone_iphone_rounded, label: 'Mobile Number', value: mobile),
-                      _ProfileDetailRow(icon: Icons.alternate_email_rounded, label: 'Email Address', value: email),
-                      _ProfileDetailRow(icon: Icons.subtitles_rounded, label: 'PAN Card Number', value: pan, trailingBadge: 'VERIFIED'),
-                      _ProfileDetailRow(icon: Icons.fingerprint_rounded, label: 'Aadhaar KYC', value: 'DigiLocker Linked', isVerified: true, showDivider: false),
+                      _ProfileDetailRow(
+                          icon: Icons.person_rounded,
+                          label: 'Full Name',
+                          value: fullName),
+                      _ProfileDetailRow(
+                          icon: Icons.phone_iphone_rounded,
+                          label: 'Mobile Number',
+                          value: mobile),
+                      _ProfileDetailRow(
+                          icon: Icons.alternate_email_rounded,
+                          label: 'Email Address',
+                          value: email),
+                      _ProfileDetailRow(
+                          icon: Icons.subtitles_rounded,
+                          label: 'PAN Card Number',
+                          value: pan,
+                          trailingBadge: 'VERIFIED'),
+                      const _ProfileDetailRow(
+                          icon: Icons.fingerprint_rounded,
+                          label: 'Aadhaar KYC',
+                          value: 'DigiLocker Linked',
+                          isVerified: true,
+                          showDivider: false),
                     ],
                   ),
                   const SizedBox(height: 14),
 
                   // Section 2: Employment & Financials
                   _buildProfileSectionCard(
-                    title: 'Employment & Financials',
+                    title: ref
+                        .watch(appLocalizationsProvider)
+                        .tr('employment_financials'),
                     icon: Icons.work_rounded,
                     children: [
-                      _ProfileDetailRow(icon: Icons.business_center_rounded, label: 'Employment Type', value: employmentType),
-                      _ProfileDetailRow(icon: Icons.apartment_rounded, label: 'Employer / Business', value: employerName),
-                      _ProfileDetailRow(icon: Icons.badge_rounded, label: 'Designation', value: designation),
+                      _ProfileDetailRow(
+                          icon: Icons.business_center_rounded,
+                          label: 'Employment Type',
+                          value: employmentType),
+                      _ProfileDetailRow(
+                          icon: Icons.apartment_rounded,
+                          label: 'Employer / Business',
+                          value: employerName),
+                      _ProfileDetailRow(
+                          icon: Icons.badge_rounded,
+                          label: 'Designation',
+                          value: designation),
                       _ProfileDetailRow(
                         icon: Icons.payments_rounded,
                         label: 'Monthly Income',
@@ -2636,11 +2962,19 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
                   // Section 3: Residence & Disbursal Account
                   _buildProfileSectionCard(
-                    title: 'Residence & Bank Details',
+                    title: ref
+                        .watch(appLocalizationsProvider)
+                        .tr('residence_bank_details'),
                     icon: Icons.location_city_rounded,
                     children: [
-                      _ProfileDetailRow(icon: Icons.home_rounded, label: 'Residence Status', value: residenceStatus),
-                      _ProfileDetailRow(icon: Icons.map_rounded, label: 'Residential Pincode', value: pincode),
+                      _ProfileDetailRow(
+                          icon: Icons.home_rounded,
+                          label: 'Residence Status',
+                          value: residenceStatus),
+                      _ProfileDetailRow(
+                          icon: Icons.map_rounded,
+                          label: 'Residential Pincode',
+                          value: pincode),
                       _ProfileDetailRow(
                         icon: Icons.account_balance_rounded,
                         label: 'Disbursal Bank',
@@ -2649,22 +2983,275 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       _ProfileDetailRow(
                         icon: Icons.credit_card_rounded,
                         label: 'Account Number',
-                        value: bank?.accountMasked != null ? 'XXXX XXXX ${bank!.accountMasked}' : 'Linked Account',
+                        value: bank?.accountMasked != null
+                            ? 'XXXX XXXX ${bank!.accountMasked}'
+                            : 'Linked Account',
                         showDivider: false,
                       ),
                     ],
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 16),
 
+                  // Section 4: Multi-Language Switcher (English & Hindi)
+                  Consumer(
+                    builder: (context, ref, child) {
+                      final currentLang = ref.watch(localeProvider);
+                      final notifier = ref.read(localeProvider.notifier);
+
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 16),
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.02),
+                              blurRadius: 8,
+                              offset: const Offset(0, 3),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(7),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF0F5A47)
+                                        .withValues(alpha: 0.1),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(Icons.language_rounded,
+                                      size: 18, color: Color(0xFF0F5A47)),
+                                ),
+                                const SizedBox(width: 10),
+                                Text(
+                                  currentLang == 'hi'
+                                      ? 'ऐप की भाषा (App Language)'
+                                      : 'App Language',
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w800,
+                                    color: Color(0xFF0F172A),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 14),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: InkWell(
+                                    onTap: () => notifier.setLanguage('en'),
+                                    borderRadius: BorderRadius.circular(12),
+                                    child: AnimatedContainer(
+                                      duration:
+                                          const Duration(milliseconds: 200),
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 10, horizontal: 12),
+                                      decoration: BoxDecoration(
+                                        color: currentLang == 'en'
+                                            ? const Color(0xFF0F172A)
+                                            : const Color(0xFFF1F5F9),
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(
+                                          color: currentLang == 'en'
+                                              ? const Color(0xFF0F172A)
+                                              : const Color(0xFFCBD5E1),
+                                        ),
+                                      ),
+                                      child: Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          const Text('🇬🇧 ',
+                                              style: TextStyle(fontSize: 16)),
+                                          Text(
+                                            'English',
+                                            style: TextStyle(
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.bold,
+                                              color: currentLang == 'en'
+                                                  ? Colors.white
+                                                  : const Color(0xFF334155),
+                                            ),
+                                          ),
+                                          if (currentLang == 'en') ...[
+                                            const SizedBox(width: 6),
+                                            const Icon(
+                                                Icons.check_circle_rounded,
+                                                size: 14,
+                                                color: Color(0xFF34D399)),
+                                          ],
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: InkWell(
+                                    onTap: () => notifier.setLanguage('hi'),
+                                    borderRadius: BorderRadius.circular(12),
+                                    child: AnimatedContainer(
+                                      duration:
+                                          const Duration(milliseconds: 200),
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 10, horizontal: 12),
+                                      decoration: BoxDecoration(
+                                        color: currentLang == 'hi'
+                                            ? const Color(0xFF0F172A)
+                                            : const Color(0xFFF1F5F9),
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(
+                                          color: currentLang == 'hi'
+                                              ? const Color(0xFF0F172A)
+                                              : const Color(0xFFCBD5E1),
+                                        ),
+                                      ),
+                                      child: Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          const Text('🇮🇳 ',
+                                              style: TextStyle(fontSize: 16)),
+                                          Text(
+                                            'हिंदी (Hindi)',
+                                            style: TextStyle(
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.bold,
+                                              color: currentLang == 'hi'
+                                                  ? Colors.white
+                                                  : const Color(0xFF334155),
+                                            ),
+                                          ),
+                                          if (currentLang == 'hi') ...[
+                                            const SizedBox(width: 6),
+                                            const Icon(
+                                                Icons.check_circle_rounded,
+                                                size: 14,
+                                                color: Color(0xFF34D399)),
+                                          ],
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+
+                  // Refer & Earn Banner Card in Profile Sheet
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF064E3B), Color(0xFF0F5A47)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF064E3B).withValues(alpha: 0.2),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.15),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.card_giftcard_rounded,
+                            color: Color(0xFF34D399),
+                            size: 24,
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                ref
+                                    .watch(appLocalizationsProvider)
+                                    .tr('refer_earn'),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 14.5,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                ref
+                                    .watch(appLocalizationsProvider)
+                                    .tr('refer_earn_sub'),
+                                style: const TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 11.5,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton(
+                          onPressed: () {
+                            Navigator.pop(ctx);
+                            context.push('/referral');
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF10B981),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 8),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10)),
+                          ),
+                          child: Text(
+                            ref.watch(appLocalizationsProvider).tr('invite'),
+                            style: const TextStyle(
+                                fontSize: 11.5, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 20),
 
                   // Sign Out Action Button
                   OutlinedButton.icon(
-                    icon: const Icon(Icons.logout_rounded, color: Color(0xFFDC2626), size: 18),
-                    label: const Text('Sign Out of Account', style: TextStyle(color: Color(0xFFDC2626), fontWeight: FontWeight.bold, fontSize: 13.5)),
+                    icon: const Icon(Icons.logout_rounded,
+                        color: Color(0xFFDC2626), size: 18),
+                    label: Text(
+                      ref.watch(appLocalizationsProvider).tr('sign_out'),
+                      style: const TextStyle(
+                          color: Color(0xFFDC2626),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13.5),
+                    ),
                     style: OutlinedButton.styleFrom(
                       minimumSize: const Size(double.infinity, 48),
                       side: const BorderSide(color: Color(0xFFFCA5A5)),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14)),
                     ),
                     onPressed: () {
                       Navigator.pop(ctx);
@@ -2681,13 +3268,95 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     );
   }
 
-  Widget _buildProfileMiniStat(String label, String value, IconData icon, Color color) {
+  Widget _buildReferralDashboardCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF0F5A47), Color(0xFF064E3B)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF064E3B).withValues(alpha: 0.2),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.15),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.card_giftcard_rounded,
+              color: Color(0xFF34D399),
+              size: 26,
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  ref.watch(appLocalizationsProvider).tr('refer_earn'),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  ref.watch(appLocalizationsProvider).tr('refer_earn_sub'),
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          ElevatedButton(
+            onPressed: () => context.push('/referral'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF10B981),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+            ),
+            child: Text(
+              ref.watch(appLocalizationsProvider).tr('invite'),
+              style:
+                  const TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProfileMiniStat(
+      String label, String value, IconData icon, Color color) {
     return Column(
       children: [
         Icon(icon, size: 18, color: color),
         const SizedBox(height: 4),
-        Text(value, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: color)),
-        Text(label, style: const TextStyle(fontSize: 10, color: Color(0xFF64748B))),
+        Text(value,
+            style: TextStyle(
+                fontSize: 12, fontWeight: FontWeight.bold, color: color)),
+        Text(label,
+            style: const TextStyle(fontSize: 10, color: Color(0xFF64748B))),
       ],
     );
   }
@@ -2773,13 +3442,17 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Row(
+                Row(
                   children: [
-                    Icon(Icons.headset_mic_rounded, color: Color(0xFF0F5A47), size: 24),
-                    SizedBox(width: 10),
+                    const Icon(Icons.headset_mic_rounded,
+                        color: Color(0xFF0F5A47), size: 24),
+                    const SizedBox(width: 10),
                     Text(
-                      'Help & Support',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Color(0xFF0F172A)),
+                      ref.watch(appLocalizationsProvider).tr('help_support'),
+                      style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF0F172A)),
                     ),
                   ],
                 ),
@@ -2791,23 +3464,32 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             ),
             const Divider(height: 20, color: Color(0xFFF1F5F9)),
             ListTile(
-              leading: const Icon(Icons.chat_bubble_outline_rounded, color: Color(0xFF0F5A47)),
-              title: const Text('FAQs', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
-              subtitle: const Text('Get answers to common questions', style: TextStyle(fontSize: 12)),
+              leading: const Icon(Icons.chat_bubble_outline_rounded,
+                  color: Color(0xFF0F5A47)),
+              title: const Text('FAQs',
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+              subtitle: const Text('Get answers to common questions',
+                  style: TextStyle(fontSize: 12)),
               trailing: const Icon(Icons.chevron_right_rounded),
               onTap: () {},
             ),
             ListTile(
-              leading: const Icon(Icons.phone_in_talk_outlined, color: Color(0xFF0F5A47)),
-              title: const Text('Call Support', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
-              subtitle: const Text('+91 1800 123 4567 (Mon - Sat)', style: TextStyle(fontSize: 12)),
+              leading: const Icon(Icons.phone_in_talk_outlined,
+                  color: Color(0xFF0F5A47)),
+              title: const Text('Call Support',
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+              subtitle: const Text('+91 1800 123 4567 (Mon - Sat)',
+                  style: TextStyle(fontSize: 12)),
               trailing: const Icon(Icons.chevron_right_rounded),
               onTap: () {},
             ),
             ListTile(
-              leading: const Icon(Icons.mail_outline_rounded, color: Color(0xFF0F5A47)),
-              title: const Text('Email Support', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
-              subtitle: const Text('support@finleaf.in', style: TextStyle(fontSize: 12)),
+              leading: const Icon(Icons.mail_outline_rounded,
+                  color: Color(0xFF0F5A47)),
+              title: const Text('Email Support',
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+              subtitle: const Text('support@finleaf.in',
+                  style: TextStyle(fontSize: 12)),
               trailing: const Icon(Icons.chevron_right_rounded),
               onTap: () {},
             ),
@@ -2845,7 +3527,7 @@ class _OverviewStatCard extends StatelessWidget {
         border: Border.all(color: const Color(0xFFE2E8F0)),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF0F172A).withOpacity(0.02),
+            color: const Color(0xFF0F172A).withValues(alpha: 0.02),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -2885,8 +3567,6 @@ class _OverviewStatCard extends StatelessWidget {
   }
 }
 
-
-
 class _LoanSummaryMetric extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -2907,12 +3587,12 @@ class _LoanSummaryMetric extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(icon, color: Colors.white.withOpacity(0.68), size: 14),
+              Icon(icon, color: Colors.white.withValues(alpha: 0.68), size: 14),
               const SizedBox(width: 5),
               Text(
                 label,
                 style: TextStyle(
-                  color: Colors.white.withOpacity(0.65),
+                  color: Colors.white.withValues(alpha: 0.65),
                   fontSize: 10.5,
                 ),
               ),
@@ -2962,17 +3642,23 @@ class _ProfileDetailRow extends StatelessWidget {
           padding: const EdgeInsets.symmetric(vertical: 9),
           child: Row(
             children: [
-              Icon(icon, size: 16, color: highlight ? const Color(0xFF0F5A47) : const Color(0xFF94A3B8)),
+              Icon(icon,
+                  size: 16,
+                  color: highlight
+                      ? const Color(0xFF0F5A47)
+                      : const Color(0xFF94A3B8)),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
                   label,
-                  style: const TextStyle(color: Color(0xFF64748B), fontSize: 12.5),
+                  style:
+                      const TextStyle(color: Color(0xFF64748B), fontSize: 12.5),
                 ),
               ),
               if (trailingBadge != null) ...[
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                   margin: const EdgeInsets.only(right: 6),
                   decoration: BoxDecoration(
                     color: const Color(0xFFDCFCE7),
@@ -2980,18 +3666,24 @@ class _ProfileDetailRow extends StatelessWidget {
                   ),
                   child: Text(
                     trailingBadge!,
-                    style: const TextStyle(color: Color(0xFF15803D), fontSize: 9.5, fontWeight: FontWeight.bold),
+                    style: const TextStyle(
+                        color: Color(0xFF15803D),
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.bold),
                   ),
                 ),
               ],
               if (isVerified) ...[
-                const Icon(Icons.check_circle_rounded, color: Color(0xFF10B981), size: 14),
+                const Icon(Icons.check_circle_rounded,
+                    color: Color(0xFF10B981), size: 14),
                 const SizedBox(width: 4),
               ],
               Text(
                 value,
                 style: TextStyle(
-                  color: highlight ? const Color(0xFF0F5A47) : const Color(0xFF0F172A),
+                  color: highlight
+                      ? const Color(0xFF0F5A47)
+                      : const Color(0xFF0F172A),
                   fontWeight: highlight ? FontWeight.w900 : FontWeight.w700,
                   fontSize: highlight ? 14 : 12.5,
                 ),
@@ -3018,15 +3710,17 @@ class _VerificationStatusCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = isVerified ? const Color(0xFF10B981) : const Color(0xFFF59E0B);
-    final background = isVerified ? const Color(0xFFECFDF5) : const Color(0xFFFFFBEB);
+    final color =
+        isVerified ? const Color(0xFF10B981) : const Color(0xFFF59E0B);
+    final background =
+        isVerified ? const Color(0xFFECFDF5) : const Color(0xFFFFFBEB);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
       decoration: BoxDecoration(
         color: background,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.18)),
+        border: Border.all(color: color.withValues(alpha: 0.18)),
       ),
       child: Column(
         children: [
@@ -3115,7 +3809,8 @@ class _JourneyStepTile extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: statusBackground,
                     shape: BoxShape.circle,
-                    border: Border.all(color: statusColor.withOpacity(0.3)),
+                    border:
+                        Border.all(color: statusColor.withValues(alpha: 0.3)),
                   ),
                   child: step.isCompleted
                       ? Icon(Icons.check_rounded, color: statusColor, size: 16)
@@ -3134,7 +3829,7 @@ class _JourneyStepTile extends StatelessWidget {
                       width: 2,
                       margin: const EdgeInsets.symmetric(vertical: 4),
                       color: step.isCompleted
-                          ? const Color(0xFF10B981).withOpacity(0.3)
+                          ? const Color(0xFF10B981).withValues(alpha: 0.3)
                           : const Color(0xFFE2E8F0),
                     ),
                   ),
@@ -3156,7 +3851,9 @@ class _JourneyStepTile extends StatelessWidget {
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(
-                        color: isCurrent ? const Color(0xFF0F5A47) : const Color(0xFFE2E8F0),
+                        color: isCurrent
+                            ? const Color(0xFF0F5A47)
+                            : const Color(0xFFE2E8F0),
                         width: isCurrent ? 1.4 : 1.0,
                       ),
                     ),
@@ -3261,7 +3958,9 @@ class _ApplicationStepTile extends StatelessWidget {
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                color: isCurrent ? const Color(0xFF0F5A47) : const Color(0xFFE2E8F0),
+                color: isCurrent
+                    ? const Color(0xFF0F5A47)
+                    : const Color(0xFFE2E8F0),
                 width: isCurrent ? 1.4 : 1,
               ),
             ),
@@ -3301,7 +4000,9 @@ class _ApplicationStepTile extends StatelessWidget {
                   ),
                 ),
                 Icon(
-                  step.isCompleted ? Icons.check_circle_rounded : Icons.chevron_right_rounded,
+                  step.isCompleted
+                      ? Icons.check_circle_rounded
+                      : Icons.chevron_right_rounded,
                   color: color,
                   size: 20,
                 ),

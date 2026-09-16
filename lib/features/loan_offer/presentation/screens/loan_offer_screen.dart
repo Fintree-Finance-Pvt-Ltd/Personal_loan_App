@@ -5,6 +5,7 @@ import 'package:dio/dio.dart';
 import '../../../../core/api/api_exception.dart';
 import '../../../../app/theme.dart';
 import '../../../../core/models/lender_offer_multiplier.dart';
+import '../../../../core/providers/locale_provider.dart';
 import '../../../../core/providers/providers.dart';
 import '../../../../core/utils/currency_utils.dart';
 import '../../../../core/widgets/app_button.dart';
@@ -205,9 +206,9 @@ class _LoanOfferScreenState extends ConsumerState<LoanOfferScreen> {
         : (customer?.latestLan ?? customer?.platformLan);
 
     if (_isLoadingPreApproval || journeyState.isLoading) {
-      return Scaffold(
-        appBar: const AppHeader(title: 'Loan Offer'),
-        body: const AppLoader(message: 'Loading loan offer...'),
+      return const Scaffold(
+        appBar: AppHeader(title: 'Loan Offer'),
+        body: AppLoader(message: 'Loading loan offer...'),
       );
     }
 
@@ -258,9 +259,11 @@ class _LoanOfferScreenState extends ConsumerState<LoanOfferScreen> {
     final gst = processingFee * 0.18;
     final netDisbursal = amount - (processingFee + gst);
 
+    final tr = ref.watch(appLocalizationsProvider);
+
     return Scaffold(
       appBar: AppHeader(
-        title: isPreApproval ? 'Pre-Approved Loan Offer' : 'Loan Offer Summary',
+        title: tr.tr('loan_offer_title'),
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -297,9 +300,9 @@ class _LoanOfferScreenState extends ConsumerState<LoanOfferScreen> {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                           decoration: BoxDecoration(
-                            color: AppTheme.primaryTeal.withOpacity(0.15),
+                            color: AppTheme.primaryTeal.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: AppTheme.primaryTeal.withOpacity(0.3)),
+                            border: Border.all(color: AppTheme.primaryTeal.withValues(alpha: 0.3)),
                           ),
                           child: Text(
                             '${LenderMultiplierCalculator.getMultiplier(customer!.completedLoansCount)}x Offer Multiplier Applied (${customer.completedLoansCount} Completed Loan${customer.completedLoansCount > 1 ? 's' : ''})',

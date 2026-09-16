@@ -22,6 +22,7 @@ import '../features/dashboard/presentation/screens/dashboard_screen.dart';
 import '../features/dashboard/presentation/screens/splash_screen.dart';
 import '../features/account_aggregator/presentation/screens/account_aggregator_screen.dart';
 import '../features/loan_details/presentation/screens/fully_paid_loan_review_screen.dart';
+import '../features/referral/presentation/screens/referral_screen.dart';
 
 final appRouter = GoRouter(
   initialLocation: '/splash',
@@ -140,6 +141,10 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/dashboard',
       builder: (context, state) => const DashboardScreen(),
+    ),
+    GoRoute(
+      path: '/referral',
+      builder: (context, state) => const ReferralScreen(),
     ),
   ],
 );

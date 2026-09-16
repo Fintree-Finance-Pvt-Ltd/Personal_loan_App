@@ -212,9 +212,9 @@ class _KfsScreenState extends ConsumerState<KfsScreen> {
     final isAccepted = journey?.workflow.kfsAccepted == true;
 
     if (_isGenerating) {
-      return Scaffold(
-        appBar: const AppHeader(title: 'Key Fact Statement'),
-        body: const AppLoader(message: 'Generating Key Fact Statement (KFS)...'),
+      return const Scaffold(
+        appBar: AppHeader(title: 'Key Fact Statement'),
+        body: AppLoader(message: 'Generating Key Fact Statement (KFS)...'),
       );
     }
 
