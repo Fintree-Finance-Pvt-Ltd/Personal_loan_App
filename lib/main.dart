@@ -5,6 +5,9 @@ import 'app/app.dart';
 import 'app/env.dart';
 import 'app/router.dart';
 import 'core/services/push_notification_service.dart';
+import 'core/services/deep_link_service.dart';
+import 'core/api/api_client.dart';
+import 'core/storage/secure_storage_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -28,6 +31,15 @@ void main() async {
     );
   } catch (e) {
     debugPrint('Push Notification Service init error: $e');
+  }
+
+  // Initialize DeepLinkService
+  try {
+    final storage = SecureStorageService();
+    final apiClient = ApiClient(storage);
+    await DeepLinkService().init(apiClient);
+  } catch (e) {
+    debugPrint('DeepLinkService init error: $e');
   }
 
   runApp(

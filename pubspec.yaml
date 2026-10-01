@@ -1,7 +1,7 @@
 name: pl_customer_app
-description: "Production-ready Customer Mobile Application for Finle."
+description: "Production-ready Customer Mobile Application for Fin-Tree."
 publish_to: 'none'
-version: 1.0.0+5
+version: 1.0.0+6
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -42,6 +42,8 @@ dependencies:
   firebase_messaging: ^15.1.3
   flutter_local_notifications: ^17.2.3
   timezone: ^0.9.4
+  app_links: ^6.3.2
+  share_plus: ^10.1.4
 
   # Serialization & Utilities
   intl: ^0.20.2

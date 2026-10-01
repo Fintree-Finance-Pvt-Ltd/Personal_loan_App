@@ -20,7 +20,7 @@ class AppLocalizations {
       // General & Common
       'hello': 'Hello,',
       'hello_user': 'Hello, {name}',
-      'welcome_back': 'Welcome back to Finle',
+      'welcome_back': 'Welcome back to Fin-Tree',
       'submit': 'Submit',
       'continue_btn': 'Continue',
       'proceed': 'Proceed',
@@ -145,7 +145,7 @@ class AppLocalizations {
       'view_rps': 'View RPS Schedule',
       'utr_reference': 'UTR Reference',
       'destination_bank': 'Destination Bank',
-      'refer_earn': 'Refer & Earn ₹250 🎁',
+      'refer_earn': 'Refer & Earn ',
       'refer_earn_sub': 'Invite friends & get instant cashback payout in UPI.',
       'invite': 'Invite',
       'my_profile': 'My Profile & Settings',
@@ -406,7 +406,7 @@ class AppLocalizations {
     'hi': {
       'hello': 'नमस्ते,',
       'hello_user': 'नमस्ते, {name}',
-      'welcome_back': 'Finle में आपका स्वागत है',
+      'welcome_back': 'Fin-Tree में आपका स्वागत है',
       'submit': 'जमा करें',
       'continue_btn': 'आगे बढ़ें',
       'proceed': 'आगे बढ़ें',

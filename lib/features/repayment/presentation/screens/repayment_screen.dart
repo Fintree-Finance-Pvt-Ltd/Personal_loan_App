@@ -84,13 +84,10 @@ class _RepaymentScreenState extends ConsumerState<RepaymentScreen> {
           final summary = detailsMap?['summary'] as Map<String, dynamic>?;
           final loan = detailsMap?['loan'] as Map<String, dynamic>?;
           final num? summaryNextEmi = summary?['nextEmiAmount'] ?? summary?['totalOutstanding'] ?? loan?['approvedAmount'] ?? loan?['disbursalAmount'];
-          final postApproval = ref.read(journeyControllerProvider).postApproval;
-          final num? fallbackEmi = postApproval?.offer.acceptedEmiAmount ?? postApproval?.loan.approvedAmount ?? postApproval?.loan.disbursalAmount;
 
-          final double fallbackAmt = (summaryNextEmi != null && summaryNextEmi.toDouble() > 0)
+          defaultAmt = (summaryNextEmi != null && summaryNextEmi.toDouble() > 0)
               ? summaryNextEmi.toDouble()
-              : ((fallbackEmi != null && fallbackEmi.toDouble() > 0) ? fallbackEmi.toDouble() : 5005.0);
-          defaultAmt = fallbackAmt;
+              : 0.0;
         }
 
         setState(() {
@@ -306,9 +303,21 @@ class _RepaymentScreenState extends ConsumerState<RepaymentScreen> {
     final rpsList = (_loanDetails?['repaymentSchedule'] as List<dynamic>?) ?? [];
     final apiLoan = _loanDetails?['loan'] as Map<String, dynamic>?;
 
-    final totalOutstanding = (summary?['totalOutstanding'] ?? apiLoan?['approvedAmount'] ?? 0).toDouble();
-    final nextEmiAmount = (summary?['nextEmiAmount'] ?? 0).toDouble();
-    final overdueAmount = (summary?['overdueAmount'] ?? 0).toDouble();
+    final num? rawTotalOutstanding = summary?['totalOutstanding'] ?? apiLoan?['approvedAmount'] ?? apiLoan?['disbursalAmount'];
+    final double totalOutstanding = (rawTotalOutstanding != null && rawTotalOutstanding.toDouble() > 0)
+        ? rawTotalOutstanding.toDouble()
+        : 0.0;
+
+    final num? rawNextEmi = summary?['nextEmiAmount'];
+    final double nextEmiAmount = (rawNextEmi != null && rawNextEmi.toDouble() > 0)
+        ? rawNextEmi.toDouble()
+        : 0.0;
+
+    final num? rawOverdue = summary?['overdueAmount'];
+    final double overdueAmount = (rawOverdue != null && rawOverdue.toDouble() > 0)
+        ? rawOverdue.toDouble()
+        : 0.0;
+
     final nextDueDate = summary?['nextDueDate']?.toString();
 
     return Scaffold(
@@ -359,7 +368,7 @@ class _RepaymentScreenState extends ConsumerState<RepaymentScreen> {
                           ),
                           const SizedBox(height: 10),
                           Text(
-                            CurrencyUtils.formatAmount(totalOutstanding),
+                            totalOutstanding > 0 ? CurrencyUtils.formatAmount(totalOutstanding) : 'N/A',
                             style: const TextStyle(color: Colors.white, fontSize: 30, fontWeight: FontWeight.w800),
                           ),
                           const Text('Total Loan Outstanding', style: TextStyle(color: Colors.white70, fontSize: 12)),
@@ -378,7 +387,7 @@ class _RepaymentScreenState extends ConsumerState<RepaymentScreen> {
                                   children: [
                                     const Text('Next Due EMI', style: TextStyle(color: Colors.white70, fontSize: 11)),
                                     Text(
-                                      nextEmiAmount > 0 ? CurrencyUtils.formatAmount(nextEmiAmount) : '—',
+                                      nextEmiAmount > 0 ? CurrencyUtils.formatAmount(nextEmiAmount) : 'N/A',
                                       style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
                                     ),
                                   ],
@@ -563,7 +572,7 @@ class _RepaymentScreenState extends ConsumerState<RepaymentScreen> {
                                       const Icon(Icons.currency_rupee_rounded, size: 22, color: AppTheme.primaryTeal),
                                       const SizedBox(width: 6),
                                       Text(
-                                        _paymentAmount > 0 ? CurrencyUtils.formatAmount(_paymentAmount).replaceAll('₹', '') : '5,005',
+                                        _paymentAmount > 0 ? CurrencyUtils.formatAmount(_paymentAmount).replaceAll('₹', '').trim() : 'N/A',
                                         style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: AppTheme.primaryTeal),
                                       ),
                                     ],
@@ -627,7 +636,7 @@ class _RepaymentScreenState extends ConsumerState<RepaymentScreen> {
   }
 
   String _formatDate(String? iso) {
-    if (iso == null || iso.isEmpty) return '—';
+    if (iso == null || iso.trim().isEmpty || iso == 'N/A') return 'N/A';
     try {
       final dt = DateTime.parse(iso).toLocal();
       const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];

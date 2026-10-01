@@ -13,6 +13,8 @@ import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_loader.dart';
 import '../../../../core/widgets/app_header.dart';
 import '../../../dashboard/presentation/journey_controller.dart';
+import '../../../../core/providers/referral_provider.dart';
+import '../../../referral/presentation/widgets/referral_fee_discount_widget.dart';
 
 class ProcessingFeeScreen extends ConsumerStatefulWidget {
   final Map<String, dynamic>? eligibilityData;
@@ -677,18 +679,31 @@ class _ProcessingFeeScreenState extends ConsumerState<ProcessingFeeScreen> {
                         child: Column(
                           children: [
                             _row('Allocated Lender', lenderName),
-                            _row('Processing Fee', CurrencyUtils.formatAmount(feeAmount)),
+                            _row('Base Processing Fee', CurrencyUtils.formatAmount(feeAmount)),
                             _row('GST', gstAmount != null ? CurrencyUtils.formatAmount(gstAmount, showDecimals: true) : '₹0.00'),
+                            ReferralFeeDiscountWidget(
+                              baseProcessingFee: feeAmount,
+                              loanNumber: 1,
+                            ),
                             const Divider(height: 20),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                const Text('Total Payable', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                                Text(
-                                  CurrencyUtils.formatAmount(totalAmount, showDecimals: true),
-                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: AppTheme.primaryTeal),
-                                ),
-                              ],
+                            Consumer(
+                              builder: (context, ref, child) {
+                                final benefit = ref.watch(referralProvider).appliedBenefit;
+                                final num netPayable = (benefit?.benefitApplied == true)
+                                    ? (benefit!.finalProcessingFee + (gstAmount ?? 0))
+                                    : totalAmount;
+
+                                return Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    const Text('Total Payable', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                                    Text(
+                                      CurrencyUtils.formatAmount(netPayable, showDecimals: true),
+                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: AppTheme.primaryTeal),
+                                    ),
+                                  ],
+                                );
+                              },
                             ),
                           ],
                         ),

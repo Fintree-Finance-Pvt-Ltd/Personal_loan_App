@@ -7,6 +7,8 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 import '../storage/secure_storage_service.dart';
+import '../models/app_notification_model.dart';
+import '../utils/currency_utils.dart';
 
 /// Background FCM message handler (must be a top-level function)
 @pragma('vm:entry-point')
@@ -22,7 +24,27 @@ class PushNotificationService {
   factory PushNotificationService() => _instance;
   PushNotificationService._internal();
 
-  final FirebaseMessaging _fcm = FirebaseMessaging.instance;
+  static final StreamController<AppNotificationModel> _dynamicNotificationStream =
+      StreamController<AppNotificationModel>.broadcast();
+
+  static Stream<AppNotificationModel> get dynamicNotificationStream =>
+      _dynamicNotificationStream.stream;
+
+  static void dispatchDynamicNotification(AppNotificationModel notification) {
+    debugPrint('Dispatching dynamic notification to provider: ${notification.title}');
+    _dynamicNotificationStream.add(notification);
+  }
+
+  FirebaseMessaging? get _fcm {
+    if (Firebase.apps.isNotEmpty) {
+      try {
+        return FirebaseMessaging.instance;
+      } catch (e) {
+        debugPrint('FirebaseMessaging getter error: $e');
+      }
+    }
+    return null;
+  }
   final FlutterLocalNotificationsPlugin _localNotifications = FlutterLocalNotificationsPlugin();
 
   Function(String route)? _navigationCallback;
@@ -41,87 +63,119 @@ class PushNotificationService {
     _navigationCallback = onNavigate;
 
     // 1. Initialize Timezones for scheduled reminders
-    tz.initializeTimeZones();
+    try {
+      tz.initializeTimeZones();
+    } catch (e) {
+      debugPrint('Timezone init warning: $e');
+    }
 
-    // 2. Register Background FCM Handler
-    FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+    // 2. Register Background FCM Handler if Firebase is available
+    final messaging = _fcm;
+    if (messaging != null) {
+      try {
+        FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+      } catch (e) {
+        debugPrint('FCM background handler warning: $e');
+      }
+    }
 
     // 3. Request Notification Permissions
-    await requestPermissions();
+    try {
+      await requestPermissions();
+    } catch (e) {
+      debugPrint('Notification permission error: $e');
+    }
 
     // 4. Setup Flutter Local Notifications
-    const AndroidInitializationSettings androidSettings =
-        AndroidInitializationSettings('@mipmap/launcher_icon');
+    try {
+      const AndroidInitializationSettings androidSettings =
+          AndroidInitializationSettings('@mipmap/launcher_icon');
 
-    final DarwinInitializationSettings iosSettings = DarwinInitializationSettings(
-      requestAlertPermission: true,
-      requestBadgePermission: true,
-      requestSoundPermission: true,
-      notificationCategories: [
-        DarwinNotificationCategory(
-          'EMI_REMINDER_CATEGORY',
-          actions: [
-            DarwinNotificationAction.plain(
-              payNowActionId,
-              'Pay Now',
-              options: {DarwinNotificationActionOption.foreground},
-            ),
-          ],
-        ),
-      ],
-    );
+      final DarwinInitializationSettings iosSettings = DarwinInitializationSettings(
+        requestAlertPermission: true,
+        requestBadgePermission: true,
+        requestSoundPermission: true,
+        notificationCategories: [
+          DarwinNotificationCategory(
+            'EMI_REMINDER_CATEGORY',
+            actions: [
+              DarwinNotificationAction.plain(
+                payNowActionId,
+                'Pay Now',
+                options: {DarwinNotificationActionOption.foreground},
+              ),
+            ],
+          ),
+        ],
+      );
 
-    final InitializationSettings initSettings = InitializationSettings(
-      android: androidSettings,
-      iOS: iosSettings,
-    );
+      final InitializationSettings initSettings = InitializationSettings(
+        android: androidSettings,
+        iOS: iosSettings,
+      );
 
-    await _localNotifications.initialize(
-      initSettings,
-      onDidReceiveNotificationResponse: (NotificationResponse response) {
-        _handleNotificationTap(response.payload);
-      },
-    );
+      await _localNotifications.initialize(
+        initSettings,
+        onDidReceiveNotificationResponse: (NotificationResponse response) {
+          _handleNotificationTap(response.payload);
+        },
+      );
 
-    // 5. Setup Android Notification Channels
-    await _createNotificationChannels();
+      // 5. Setup Android Notification Channels
+      await _createNotificationChannels();
+    } catch (e) {
+      debugPrint('Local notifications init warning: $e');
+    }
 
-    // 6. Listen for Foreground FCM Messages
-    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-      debugPrint('Foreground FCM message received: ${message.notification?.title}');
-      _showLocalNotificationFromFcm(message);
-    });
+    // 6. Listen for Foreground & Background FCM Messages if available
+    if (messaging != null) {
+      try {
+        FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+          debugPrint('Foreground FCM message received: ${message.notification?.title}');
+          _showLocalNotificationFromFcm(message);
+        });
 
-    // 7. Listen for Background FCM message tap app launches
-    FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-      debugPrint('App opened via FCM notification: ${message.data}');
-      _handlePayloadData(message.data);
-    });
+        FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
+          debugPrint('App opened via FCM notification: ${message.data}');
+          _handlePayloadData(message.data);
+        });
 
-    // 8. Handle initial notification launch (app was closed)
-    final RemoteMessage? initialMessage = await _fcm.getInitialMessage();
-    if (initialMessage != null) {
-      _handlePayloadData(initialMessage.data);
+        final RemoteMessage? initialMessage = await messaging.getInitialMessage();
+        if (initialMessage != null) {
+          _handlePayloadData(initialMessage.data);
+        }
+      } catch (e) {
+        debugPrint('FCM listeners warning: $e');
+      }
     }
   }
 
   /// Request User Notification Permissions
   Future<bool> requestPermissions() async {
-    final settings = await _fcm.requestPermission(
-      alert: true,
-      badge: true,
-      sound: true,
-      provisional: false,
-    );
-    final granted = settings.authorizationStatus == AuthorizationStatus.authorized;
-    debugPrint('Push Notification Authorization Status: ${settings.authorizationStatus}');
-    return granted;
+    final messaging = _fcm;
+    if (messaging == null) return false;
+    try {
+      final settings = await messaging.requestPermission(
+        alert: true,
+        badge: true,
+        sound: true,
+        provisional: false,
+      );
+      final granted = settings.authorizationStatus == AuthorizationStatus.authorized;
+      debugPrint('Push Notification Authorization Status: ${settings.authorizationStatus}');
+      return granted;
+    } catch (e) {
+      debugPrint('Error requesting permissions: $e');
+      return false;
+    }
   }
 
   /// Get current Device FCM Token
   Future<String?> getFcmToken() async {
+    final messaging = _fcm;
+    if (messaging == null) return null;
     try {
-      final token = await _fcm.getToken();
+      final token = await messaging.getToken();
       debugPrint('FCM Token: $token');
       return token;
     } catch (e) {
@@ -131,7 +185,7 @@ class PushNotificationService {
   }
 
   /// Listen to FCM Token refresh
-  Stream<String> get onTokenRefresh => _fcm.onTokenRefresh;
+  Stream<String> get onTokenRefresh => _fcm?.onTokenRefresh ?? const Stream<String>.empty();
 
   /// Create Android Notification Channels with Action Buttons
   Future<void> _createNotificationChannels() async {
@@ -197,6 +251,18 @@ class PushNotificationService {
       notification.body,
       platformDetails,
       payload: jsonEncode({'route': route}),
+    );
+
+    dispatchDynamicNotification(
+      AppNotificationModel(
+        id: 'fcm_${message.messageId ?? DateTime.now().millisecondsSinceEpoch}',
+        title: notification.title ?? 'Notification Alert',
+        body: notification.body ?? '',
+        category: NotificationCategory.system,
+        timestamp: DateTime.now(),
+        isRead: false,
+        route: route,
+      ),
     );
   }
 
@@ -311,6 +377,19 @@ class PushNotificationService {
     );
 
     await storage.markLoanApprovedNotified(lan);
+    dispatchDynamicNotification(
+      AppNotificationModel(
+        id: 'dynamic_approved_${lan.isNotEmpty ? lan : "active"}',
+        title: 'Congratulations! Loan Approved! 🎉',
+        body: 'Your loan of $amountStr is approved! Complete 1 step to get money in your account.',
+        category: NotificationCategory.offer,
+        timestamp: DateTime.now(),
+        isRead: false,
+        route: route,
+        actionLabel: 'Claim Offer',
+        amount: loanAmount,
+      ),
+    );
     debugPrint('Instant Loan Approval notification sent and recorded for LAN: $lan');
   }
 
@@ -536,7 +615,7 @@ class PushNotificationService {
     const int notificationId = 901;
     final String greeting = (userName != null && userName.trim().isNotEmpty)
         ? 'Welcome back, ${userName.trim()}! 👋'
-        : 'Welcome back to Finle! 👋';
+        : 'Welcome back to Fin-Tree! 👋';
 
     const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
       dropoffChannelId,
@@ -567,6 +646,18 @@ class PushNotificationService {
       'You have successfully logged into your account.',
       platformDetails,
       payload: jsonEncode({'route': '/dashboard', 'type': 'login_success'}),
+    );
+
+    dispatchDynamicNotification(
+      AppNotificationModel(
+        id: 'dynamic_login_${DateTime.now().millisecondsSinceEpoch}',
+        title: greeting,
+        body: 'You have successfully logged into your account.',
+        category: NotificationCategory.system,
+        timestamp: DateTime.now(),
+        isRead: false,
+        route: '/dashboard',
+      ),
     );
 
     debugPrint('Instant Login Success notification sent.');
@@ -607,6 +698,19 @@ class PushNotificationService {
       payload: jsonEncode({'route': '/dashboard', 'type': 'kyc_success'}),
     );
 
+    dispatchDynamicNotification(
+      AppNotificationModel(
+        id: 'dynamic_kyc_${DateTime.now().millisecondsSinceEpoch}',
+        title: 'Aadhaar KYC Verified! ✅',
+        body: 'Your identity verification was successful. Proceed to the next step to claim your loan.',
+        category: NotificationCategory.loan,
+        timestamp: DateTime.now(),
+        isRead: false,
+        route: '/dashboard',
+        actionLabel: 'Continue Application',
+      ),
+    );
+
     debugPrint('Instant KYC Success notification sent.');
   }
 
@@ -616,7 +720,7 @@ class PushNotificationService {
     String? lan,
   }) async {
     const int notificationId = 903;
-    final String amountStr = '₹${amount.toStringAsFixed(0)}';
+    final String amountStr = CurrencyUtils.formatAmount(amount);
 
     final AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
       emiChannelId,
@@ -649,6 +753,20 @@ class PushNotificationService {
       'Payment of $amountStr received. Thank you!',
       platformDetails,
       payload: jsonEncode({'route': route, 'type': 'repayment_success'}),
+    );
+
+    dispatchDynamicNotification(
+      AppNotificationModel(
+        id: 'dynamic_repayment_${DateTime.now().millisecondsSinceEpoch}',
+        title: 'EMI Repayment Successful! 💳',
+        body: 'Payment of $amountStr received. Thank you!',
+        category: NotificationCategory.emi,
+        timestamp: DateTime.now(),
+        isRead: false,
+        route: route,
+        actionLabel: 'View Details',
+        amount: amount,
+      ),
     );
 
     debugPrint('Instant Repayment Success notification sent for amount: $amountStr');

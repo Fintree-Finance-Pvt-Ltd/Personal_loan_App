@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -129,7 +130,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // 1. Big Finley Brand Logo (From Web)
+                      // 1. Big Fin-Tree Brand Logo (From Web)
                       _buildBigLogo(),
 
                       // 2. Hero Graphic Frame with signature web curved corner
@@ -211,7 +212,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                           // Regulatory Copyright
                           Center(
                             child: Text(
-                              '© ${DateTime.now().year} Finley Finance Private Limited. All rights reserved.',
+                              '© ${DateTime.now().year} Fin-Tree Finance Private Limited. All rights reserved.',
                               textAlign: TextAlign.center,
                               style: const TextStyle(
                                 fontSize: 11,
@@ -230,7 +231,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     );
   }
 
-  /// Big FinLeaf / Finley Logo matching the website header
+  /// Big Fin-Tree Logo matching the website header
   Widget _buildBigLogo() {
     return Align(
       alignment: Alignment.centerLeft,
@@ -319,7 +320,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Finley',
+              'Fin-Tree',
               style: TextStyle(
                 color: AppTheme.textDarkPrimary,
                 fontSize: 22,
@@ -539,11 +540,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
             ),
           ),
           const SizedBox(width: 10),
-          const Expanded(
+          Expanded(
             child: Text.rich(
               TextSpan(
-                text: 'I agree to Finley\'s ',
-                style: TextStyle(
+                text: 'I agree to Fin-Tree\'s ',
+                style: const TextStyle(
                   fontSize: 11.5,
                   color: AppTheme.textDarkSecondary,
                   height: 1.35,
@@ -551,20 +552,26 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                 children: [
                   TextSpan(
                     text: 'Terms of Service',
-                    style: TextStyle(
+                    style: const TextStyle(
                       color: AppTheme.primaryTeal,
                       fontWeight: FontWeight.bold,
+                      decoration: TextDecoration.underline,
                     ),
+                    recognizer: TapGestureRecognizer()
+                      ..onTap = () => context.push('/refund-policy'),
                   ),
-                  TextSpan(text: ' and acknowledge the '),
+                  const TextSpan(text: ' and acknowledge the '),
                   TextSpan(
                     text: 'Privacy Policy',
-                    style: TextStyle(
+                    style: const TextStyle(
                       color: AppTheme.primaryTeal,
                       fontWeight: FontWeight.bold,
+                      decoration: TextDecoration.underline,
                     ),
+                    recognizer: TapGestureRecognizer()
+                      ..onTap = () => context.push('/privacy-policy'),
                   ),
-                  TextSpan(text: '.'),
+                  const TextSpan(text: '.'),
                 ],
               ),
             ),

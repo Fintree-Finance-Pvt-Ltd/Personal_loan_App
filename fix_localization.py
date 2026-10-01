@@ -23,7 +23,7 @@ if hi_start != -1:
         new_hi_block = """    'hi': {
       'hello': 'नमस्ते,',
       'hello_user': 'नमस्ते, {name}',
-      'welcome_back': 'Finle में आपका स्वागत है',
+      'welcome_back': 'Fin-Tree में आपका स्वागत है',
       'submit': 'जमा करें',
       'continue_btn': 'आगे बढ़ें',
       'proceed': 'आगे बढ़ें',
@@ -141,7 +141,7 @@ if hi_start != -1:
       'view_rps': 'भुगतान अनुसूची (RPS) देखें',
       'utr_reference': 'यूटीआर (UTR) संख्या',
       'destination_bank': 'प्राप्तकर्ता बैंक',
-      'refer_earn': 'रेफर करें और ₹250 कमाएं 🎁',
+      'refer_earn': 'रेफर करें',
       'refer_earn_sub': 'दोस्तों को आमंत्रित करें और तुरंत UPI कैशबैक पाएं।',
       'invite': 'आमंत्रित करें',
       'my_profile': 'मेरी प्रोफ़ाइल एवं सेटिंग्स',

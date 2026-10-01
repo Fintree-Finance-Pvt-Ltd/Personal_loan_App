@@ -306,7 +306,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       mainAxisSize: MainAxisSize.min,
       children: [
         const Text(
-          'Finley',
+          'Fin-Tree',
           textAlign: TextAlign.center,
           style: TextStyle(
             color: Colors.white,

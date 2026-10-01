@@ -206,8 +206,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final workflow = postApproval?.workflow;
 
     final customerName = _readText(customer?.fullName, 'Rohit Sharma');
-    final applicationStatus =
-        _readText(customer?.latestApplicationStatus, 'IN_PROGRESS');
 
     final disbursalStatus = _readText(workflow?.disbursalStatus, 'NOT_STARTED');
     final currentStep = _readText(workflow?.currentStep, 'APPROVAL_SUMMARY');
@@ -227,8 +225,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             (workflow?.offerAccepted == true ||
                 customer?.latestApplicationStatus == 'LENDER_APPROVED');
 
-    final tr = ref.watch(appLocalizationsProvider);
-
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       body: SafeArea(
@@ -244,7 +240,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ── 1. Top FinLeaf User Header ──────────────────────────────
+                // ── 1. Top Fin-Tree User Header ──────────────────────────────
                 _buildHeader(customerName),
                 const SizedBox(height: 20),
 
@@ -456,7 +452,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   Widget _buildHeroGoalsBanner() {
     return Container(
       width: double.infinity,
-      height: 142,
+      constraints: const BoxConstraints(minHeight: 135),
       decoration: BoxDecoration(
         color: const Color(0xFF0A4436),
         borderRadius: BorderRadius.circular(20),
@@ -555,7 +551,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               ),
             ),
             InkWell(
-              onTap: () => _openRoute('/application/status'),
+              onTap: () => _openRoute('/loans/all'),
               child: Row(
                 children: [
                   Text(
@@ -1294,43 +1290,16 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          ref
-                              .watch(appLocalizationsProvider)
-                              .tr('disbursed_amount'),
-                          style: const TextStyle(
-                            color: Color(0xFF64748B),
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          approvedAmount != null
-                              ? CurrencyUtils.formatAmount(approvedAmount)
-                              : ref
-                                  .watch(appLocalizationsProvider)
-                                  .tr('pending_confirmation_label'),
-                          style: TextStyle(
-                            color: const Color(0xFF0F172A),
-                            fontSize: approvedAmount != null ? 26 : 18,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: -0.5,
-                          ),
-                        ),
-                      ],
-                    ),
-                    if (emiAmount != null)
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
                             ref
                                 .watch(appLocalizationsProvider)
-                                .tr('monthly_emi'),
+                                .tr('disbursed_amount'),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                               color: Color(0xFF64748B),
                               fontSize: 11.5,
@@ -1338,15 +1307,59 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                             ),
                           ),
                           const SizedBox(height: 4),
-                          Text(
-                            CurrencyUtils.formatAmount(emiAmount),
-                            style: const TextStyle(
-                              color: Color(0xFF0F5A47),
-                              fontSize: 18,
-                              fontWeight: FontWeight.w800,
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              approvedAmount != null
+                                  ? CurrencyUtils.formatAmount(approvedAmount)
+                                  : ref
+                                      .watch(appLocalizationsProvider)
+                                      .tr('pending_confirmation_label'),
+                              style: TextStyle(
+                                color: const Color(0xFF0F172A),
+                                fontSize: approvedAmount != null ? 26 : 18,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: -0.5,
+                              ),
                             ),
                           ),
                         ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    if (emiAmount != null)
+                      Flexible(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(
+                              ref
+                                  .watch(appLocalizationsProvider)
+                                  .tr('monthly_emi'),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Color(0xFF64748B),
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerRight,
+                              child: Text(
+                                CurrencyUtils.formatAmount(emiAmount),
+                                style: const TextStyle(
+                                  color: Color(0xFF0F5A47),
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                   ],
                 ),
@@ -1370,12 +1383,18 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                             style: const TextStyle(
                                 color: Color(0xFF64748B), fontSize: 11.5),
                           ),
-                          Text(
-                            lan.isNotEmpty ? lan : 'N/A',
-                            style: const TextStyle(
-                              color: Color(0xFF0F172A),
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
+                          const SizedBox(width: 8),
+                          Flexible(
+                            child: Text(
+                              lan.isNotEmpty ? lan : 'N/A',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.right,
+                              style: const TextStyle(
+                                color: Color(0xFF0F172A),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                              ),
                             ),
                           ),
                         ],
@@ -1389,12 +1408,18 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                             style: const TextStyle(
                                 color: Color(0xFF64748B), fontSize: 11.5),
                           ),
-                          Text(
-                            lenderName,
-                            style: const TextStyle(
-                              color: Color(0xFF0F172A),
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
+                          const SizedBox(width: 8),
+                          Flexible(
+                            child: Text(
+                              lenderName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.right,
+                              style: const TextStyle(
+                                color: Color(0xFF0F172A),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           ),
                         ],
@@ -1411,12 +1436,18 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                               style: const TextStyle(
                                   color: Color(0xFF64748B), fontSize: 11.5),
                             ),
-                            Text(
-                              utr,
-                              style: const TextStyle(
-                                color: Color(0xFF059669),
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
+                            const SizedBox(width: 8),
+                            Flexible(
+                              child: Text(
+                                utr,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                textAlign: TextAlign.right,
+                                style: const TextStyle(
+                                  color: Color(0xFF059669),
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                ),
                               ),
                             ),
                           ],
@@ -1434,12 +1465,18 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                               style: const TextStyle(
                                   color: Color(0xFF64748B), fontSize: 11.5),
                             ),
-                            Text(
-                              '$bankName • $accountMasked',
-                              style: const TextStyle(
-                                color: Color(0xFF334155),
-                                fontSize: 11.5,
-                                fontWeight: FontWeight.w600,
+                            const SizedBox(width: 8),
+                            Flexible(
+                              child: Text(
+                                '$bankName • $accountMasked',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                textAlign: TextAlign.right,
+                                style: const TextStyle(
+                                  color: Color(0xFF334155),
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                             ),
                           ],
@@ -1567,6 +1604,43 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           const SizedBox(height: 16),
         ],
 
+        // Header with View All Loans Button
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'My Active Loan',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF0F172A),
+              ),
+            ),
+            InkWell(
+              onTap: () => _openRoute('/loans/all'),
+              borderRadius: BorderRadius.circular(8),
+              child: const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                child: Row(
+                  children: [
+                    Text(
+                      'View All Loans',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF0F5A47),
+                      ),
+                    ),
+                    SizedBox(width: 4),
+                    Icon(Icons.arrow_forward_ios_rounded, size: 12, color: Color(0xFF0F5A47)),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+
         // Loan Card
         InkWell(
           onTap: () => _openRoute('/loan/$lan/loan-details'),
@@ -1634,51 +1708,64 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          ref
-                              .watch(appLocalizationsProvider)
-                              .tr('approved_loan_amount_label'),
-                          style: const TextStyle(
-                              fontSize: 11, color: Color(0xFF64748B)),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          approvedAmount != null
-                              ? CurrencyUtils.formatAmount(approvedAmount)
-                              : ref
-                                  .watch(appLocalizationsProvider)
-                                  .tr('pending_confirmation_label'),
-                          style: const TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w800,
-                            color: Color(0xFF0F5A47),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            ref
+                                .watch(appLocalizationsProvider)
+                                .tr('approved_loan_amount_label'),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                                fontSize: 11, color: Color(0xFF64748B)),
                           ),
-                        ),
-                      ],
+                          const SizedBox(height: 2),
+                          Text(
+                            approvedAmount != null
+                                ? CurrencyUtils.formatAmount(approvedAmount)
+                                : ref
+                                    .watch(appLocalizationsProvider)
+                                    .tr('pending_confirmation_label'),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w800,
+                              color: Color(0xFF0F5A47),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(
-                          ref
-                              .watch(appLocalizationsProvider)
-                              .tr('destination_bank_label'),
-                          style: const TextStyle(
-                              fontSize: 11, color: Color(0xFF64748B)),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          bank?.bankName ?? 'Bank Account',
-                          style: const TextStyle(
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w700,
-                            color: Color(0xFF0F172A),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            ref
+                                .watch(appLocalizationsProvider)
+                                .tr('destination_bank_label'),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                                fontSize: 11, color: Color(0xFF64748B)),
                           ),
-                        ),
-                      ],
+                          const SizedBox(height: 2),
+                          Text(
+                            bank?.bankName ?? 'Bank Account',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF0F172A),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
@@ -2318,14 +2405,18 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                           const Icon(Icons.speed_rounded,
                               color: Color(0xFF34D399), size: 18),
                           const SizedBox(width: 6),
-                          Text(
-                            ref
-                                .watch(appLocalizationsProvider)
-                                .tr('approval_readiness'),
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 12.5,
-                              fontWeight: FontWeight.w700,
+                          Expanded(
+                            child: Text(
+                              ref
+                                  .watch(appLocalizationsProvider)
+                                  .tr('approval_readiness'),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w700,
+                              ),
                             ),
                           ),
                         ],
@@ -2357,7 +2448,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 const SizedBox(width: 12),
                 SvgPicture.asset(
                   'lib/assets/images/illustrations/Personal settings-cuate.svg',
-                  height: 65,
+                  height: 54,
+                  fit: BoxFit.contain,
                 ),
               ],
             ),
@@ -2565,7 +2657,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 label: tr.tr('application'),
                 onTap: () {
                   setState(() => _selectedNavIndex = 1);
-                  _openRoute('/application/status');
+                  _openRoute('/loans/all');
                 },
               ),
               _buildBottomNavItem(
@@ -3268,83 +3360,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     );
   }
 
-  Widget _buildReferralDashboardCard() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF0F5A47), Color(0xFF064E3B)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF064E3B).withValues(alpha: 0.2),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.15),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              Icons.card_giftcard_rounded,
-              color: Color(0xFF34D399),
-              size: 26,
-            ),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  ref.watch(appLocalizationsProvider).tr('refer_earn'),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  ref.watch(appLocalizationsProvider).tr('refer_earn_sub'),
-                  style: const TextStyle(
-                    color: Colors.white70,
-                    fontSize: 12,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 10),
-          ElevatedButton(
-            onPressed: () => context.push('/referral'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF10B981),
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
-            ),
-            child: Text(
-              ref.watch(appLocalizationsProvider).tr('invite'),
-              style:
-                  const TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+
 
   Widget _buildProfileMiniStat(
       String label, String value, IconData icon, Color color) {
@@ -3417,86 +3433,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   }
 
   void _showHelpSupportModal(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (ctx) => Container(
-        height: MediaQuery.of(ctx).size.height * 0.62,
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-        ),
-        padding: const EdgeInsets.fromLTRB(22, 16, 22, 24),
-        child: Column(
-          children: [
-            Container(
-              width: 42,
-              height: 5,
-              decoration: BoxDecoration(
-                color: const Color(0xFFE2E8F0),
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-            const SizedBox(height: 18),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  children: [
-                    const Icon(Icons.headset_mic_rounded,
-                        color: Color(0xFF0F5A47), size: 24),
-                    const SizedBox(width: 10),
-                    Text(
-                      ref.watch(appLocalizationsProvider).tr('help_support'),
-                      style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w800,
-                          color: Color(0xFF0F172A)),
-                    ),
-                  ],
-                ),
-                IconButton(
-                  icon: const Icon(Icons.close_rounded),
-                  onPressed: () => Navigator.pop(ctx),
-                ),
-              ],
-            ),
-            const Divider(height: 20, color: Color(0xFFF1F5F9)),
-            ListTile(
-              leading: const Icon(Icons.chat_bubble_outline_rounded,
-                  color: Color(0xFF0F5A47)),
-              title: const Text('FAQs',
-                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
-              subtitle: const Text('Get answers to common questions',
-                  style: TextStyle(fontSize: 12)),
-              trailing: const Icon(Icons.chevron_right_rounded),
-              onTap: () {},
-            ),
-            ListTile(
-              leading: const Icon(Icons.phone_in_talk_outlined,
-                  color: Color(0xFF0F5A47)),
-              title: const Text('Call Support',
-                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
-              subtitle: const Text('+91 1800 123 4567 (Mon - Sat)',
-                  style: TextStyle(fontSize: 12)),
-              trailing: const Icon(Icons.chevron_right_rounded),
-              onTap: () {},
-            ),
-            ListTile(
-              leading: const Icon(Icons.mail_outline_rounded,
-                  color: Color(0xFF0F5A47)),
-              title: const Text('Email Support',
-                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
-              subtitle: const Text('support@finleaf.in',
-                  style: TextStyle(fontSize: 12)),
-              trailing: const Icon(Icons.chevron_right_rounded),
-              onTap: () {},
-            ),
-          ],
-        ),
-      ),
-    );
+    context.push('/support');
   }
 }
 

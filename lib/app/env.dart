@@ -20,7 +20,7 @@ class Environment {
     const envString = String.fromEnvironment('APP_ENV', defaultValue: 'production');
     const baseUrl = String.fromEnvironment(
       'API_BASE_URL',
-      defaultValue: 'https://finle-prod.fintreelms.com/api',
+      defaultValue: 'https://fin-tree.fintreefinance.com/api',
     );
     const digitapEnv = String.fromEnvironment('DIGITAP_ENV', defaultValue: 'production');
     const paymentReturnScheme = String.fromEnvironment('PAYMENT_RETURN_SCHEME', defaultValue: 'pldirect://payment-return');
@@ -47,6 +47,9 @@ class Environment {
   bool get isDevelopment => env == AppEnvironment.development;
   bool get isUat => env == AppEnvironment.uat;
   bool get isProduction => env == AppEnvironment.production;
+
+  static const String privacyPolicyUrl = 'https://fintreefinance.com/privacy-policy';
+  static const String refundPolicyUrl = 'https://fintreefinance.com/assets/REFUND%20AND%20CANCELLATION%20TERMS%20(002)-BsS_J7QB.pdf';
 }
 
 late final Environment currentEnvironment;

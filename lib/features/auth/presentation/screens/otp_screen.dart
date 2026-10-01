@@ -12,6 +12,7 @@ import '../../../../core/providers/locale_provider.dart';
 import '../../../../core/utils/formatters.dart';
 import '../../../../core/utils/validators.dart';
 import '../../../../core/services/push_notification_service.dart';
+import '../../../../core/services/deep_link_service.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_header.dart';
 import '../../../dashboard/presentation/journey_controller.dart';
@@ -86,7 +87,11 @@ class _OtpScreenState extends ConsumerState<OtpScreen>
               _otpController.text = code;
             });
             TextInput.finishAutofillContext();
-            _verify();
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) {
+                _verify();
+              }
+            });
           }
         }
       }
@@ -208,24 +213,39 @@ class _OtpScreenState extends ConsumerState<OtpScreen>
       return;
     }
 
+    final referralCode = DeepLinkService().pendingReferralCode;
     final customer = await ref
         .read(authControllerProvider.notifier)
         .verifyOtp(
           _otpController.text.trim(),
+          referralCode: referralCode,
         );
 
-    if (customer == null || !mounted) return;
+    if (customer == null || !mounted) {
+      if (mounted) {
+        final err = ref.read(authControllerProvider).errorMessage;
+        if (err != null && err.isNotEmpty) {
+          _showMessage(err, isError: true);
+        }
+      }
+      return;
+    }
 
     // Send automated successful login push notification
-    PushNotificationService().sendLoginSuccessNotification(
-      userName: customer.fullName,
-    );
+    try {
+      PushNotificationService().sendLoginSuccessNotification(
+        userName: customer.fullName,
+      );
+    } catch (e) {
+      debugPrint('Failed to send login push notification: $e');
+    }
 
     await ref
         .read(journeyControllerProvider.notifier)
         .syncCustomerState();
 
     final targetRoute = ref.read(journeyControllerProvider).targetRoute;
+    if (!mounted) return;
     context.go(targetRoute);
   }
 
@@ -491,6 +511,36 @@ class _OtpScreenState extends ConsumerState<OtpScreen>
                   fontSize: 12.5,
                 ),
               ),
+
+              if (DeepLinkService().pendingReferralCode != null) ...[
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFECFDF5),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFA7F3D0)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.card_giftcard_rounded, color: Color(0xFF059669), size: 18),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          DeepLinkService().referrerName != null
+                              ? 'Referral Code Applied: ${DeepLinkService().pendingReferralCode} (Referred by ${DeepLinkService().referrerName})'
+                              : 'Referral Code Applied: ${DeepLinkService().pendingReferralCode}',
+                          style: const TextStyle(
+                            color: Color(0xFF065F46),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
 
               const SizedBox(height: 24),
 

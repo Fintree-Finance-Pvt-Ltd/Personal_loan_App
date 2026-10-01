@@ -59,6 +59,41 @@ class AppNotificationModel {
     );
   }
 
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'title': title,
+      'body': body,
+      'category': category.name,
+      'timestamp': timestamp.toIso8601String(),
+      'isRead': isRead,
+      'route': route,
+      'actionLabel': actionLabel,
+      'utr': utr,
+      'amount': amount,
+    };
+  }
+
+  factory AppNotificationModel.fromJson(Map<String, dynamic> json) {
+    return AppNotificationModel(
+      id: json['id']?.toString() ?? '',
+      title: json['title']?.toString() ?? '',
+      body: json['body']?.toString() ?? '',
+      category: NotificationCategory.values.firstWhere(
+        (c) => c.name == json['category'],
+        orElse: () => NotificationCategory.system,
+      ),
+      timestamp: json['timestamp'] != null
+          ? DateTime.tryParse(json['timestamp'].toString()) ?? DateTime.now()
+          : DateTime.now(),
+      isRead: json['isRead'] == true,
+      route: json['route']?.toString(),
+      actionLabel: json['actionLabel']?.toString(),
+      utr: json['utr']?.toString(),
+      amount: json['amount'] != null ? double.tryParse(json['amount'].toString()) : null,
+    );
+  }
+
   String get timeAgo {
     final diff = DateTime.now().difference(timestamp);
     if (diff.inSeconds < 60) return 'Just now';

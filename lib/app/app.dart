@@ -14,7 +14,7 @@ class PlCustomerApp extends ConsumerWidget {
     final currentLang = ref.watch(localeProvider);
 
     return MaterialApp.router(
-      title: 'Finle',
+      title: 'Fin-Tree',
       debugShowCheckedModeBanner: false,
       locale: Locale(currentLang),
       supportedLocales: const [

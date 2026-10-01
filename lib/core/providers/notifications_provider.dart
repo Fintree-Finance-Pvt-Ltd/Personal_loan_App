@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../models/app_notification_model.dart';
@@ -5,6 +6,7 @@ import '../utils/currency_utils.dart';
 import '../../features/dashboard/presentation/journey_controller.dart';
 import '../models/customer_model.dart';
 import '../models/post_approval_model.dart';
+import '../services/push_notification_service.dart';
 
 class NotificationsState {
   final List<AppNotificationModel> items;
@@ -38,7 +40,28 @@ class NotificationsState {
 }
 
 class NotificationsNotifier extends StateNotifier<NotificationsState> {
-  NotificationsNotifier() : super(const NotificationsState());
+  StreamSubscription<AppNotificationModel>? _dynamicSub;
+
+  NotificationsNotifier() : super(const NotificationsState()) {
+    _dynamicSub = PushNotificationService.dynamicNotificationStream.listen((notification) {
+      addNotification(notification);
+    });
+  }
+
+  @override
+  void dispose() {
+    _dynamicSub?.cancel();
+    super.dispose();
+  }
+
+  void addNotification(AppNotificationModel notif) {
+    final exists = state.items.any((item) => item.id == notif.id);
+    if (!exists) {
+      final updated = [notif, ...state.items];
+      updated.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+      state = state.copyWith(items: updated);
+    }
+  }
 
   void setFilter(NotificationCategory category) {
     state = state.copyWith(activeFilter: category);
@@ -69,7 +92,7 @@ class NotificationsNotifier extends StateNotifier<NotificationsState> {
   }
 
   void seedForCustomer(CustomerModel? customer, PostApprovalJourneyModel? postApproval) {
-    final lan = customer?.latestLan ?? customer?.platformLan ?? 'FTPL00000011';
+    final lan = customer?.latestLan ?? customer?.platformLan ?? '';
     final appStatus = customer?.latestApplicationStatus?.toUpperCase() ?? '';
     final isDisbursed = appStatus == 'DISBURSED' ||
         customer?.latestLoanStatus == 'DISBURSED' ||
@@ -78,71 +101,112 @@ class NotificationsNotifier extends StateNotifier<NotificationsState> {
 
     final now = DateTime.now();
 
-    List<AppNotificationModel> initialList = [];
+    List<AppNotificationModel> seededList = [];
 
     if (isDisbursed) {
       final loan = postApproval?.loan;
       final bank = postApproval?.bank;
       final offer = postApproval?.offer;
 
-      // 1. Dynamic Disbursal Amount
+      // 1. Disbursal Amount - only display actual amount, no fake fallback
       final num? rawAmt = loan?.disbursalAmount ?? loan?.approvedAmount ?? offer?.approvedAmount;
-      final double amount = (rawAmt != null && rawAmt > 0) ? rawAmt.toDouble() : 5000.0;
+      final double? amount = (rawAmt != null && rawAmt > 0) ? rawAmt.toDouble() : null;
 
-      // 2. Dynamic UTR Reference from backend post-approval loan model
-      final String rawUtr = loan?.disbursalUtr ?? '';
-      final String utr = (rawUtr.isNotEmpty && rawUtr != 'N/A') ? rawUtr : 'UTR_$lan';
+      // 2. UTR Reference - ONLY display if real UTR exists (no fake UTR_FTPL... placeholder)
+      final String? rawUtr = loan?.disbursalUtr;
+      final String? utr = (rawUtr != null && rawUtr.trim().isNotEmpty && rawUtr.trim() != 'N/A')
+          ? rawUtr.trim()
+          : null;
 
-      // 3. Dynamic Bank Details from customer profile
-      final String bankName = bank?.bankName ?? 'Bank Account';
-      final String accountMasked = bank?.accountMasked ?? '';
-      final String bankDisplay = accountMasked.isNotEmpty ? '$bankName (..$accountMasked)' : bankName;
+      // 3. Bank Details from customer profile
+      final String? bankName = bank?.bankName;
+      final String? accountMasked = bank?.accountMasked;
+      final String bankDisplay = (bankName != null && accountMasked != null && accountMasked.isNotEmpty)
+          ? '$bankName (..$accountMasked)'
+          : (bankName ?? 'your registered bank account');
 
-      // 4. Dynamic EMI Amount & Due Date
+      // 4. Disbursal Date & Timestamp
+      DateTime disbursalDate = now.subtract(const Duration(minutes: 18));
+      if (loan?.disbursalCompletedAt != null) {
+        final parsed = DateTime.tryParse(loan!.disbursalCompletedAt!);
+        if (parsed != null) disbursalDate = parsed;
+      } else if (loan?.disbursalDate != null) {
+        final parsed = DateTime.tryParse(loan!.disbursalDate!);
+        if (parsed != null) disbursalDate = parsed;
+      }
+
+      // 5. EMI Amount & Proper Due Date calculation
       final num? rawEmi = offer?.acceptedEmiAmount;
       final double emiAmount = (rawEmi != null && rawEmi > 0)
           ? rawEmi.toDouble()
-          : (amount > 0 ? (amount * 0.52).roundToDouble() : 2600.0);
+          : (amount != null ? (amount * 0.52).roundToDouble() : 0.0);
 
-      DateTime dueDateTime = now.add(const Duration(days: 30));
-      if (loan?.disbursalCompletedAt != null) {
-        final parsed = DateTime.tryParse(loan!.disbursalCompletedAt!);
-        if (parsed != null) dueDateTime = parsed.add(const Duration(days: 30));
+      // Determine proper due date using accepted tenure days (defaulting to 30 days)
+      final int tenureDays = (offer?.acceptedTenureDays != null && offer!.acceptedTenureDays! > 0)
+          ? offer.acceptedTenureDays!
+          : (offer?.allowedTenures.isNotEmpty == true ? offer!.allowedTenures.first : 30);
+
+      DateTime dueDateTime = disbursalDate.add(Duration(days: tenureDays));
+
+      // If calculated due date is in the past, roll forward by tenure period to get current active installment due date
+      while (dueDateTime.isBefore(now.subtract(const Duration(days: 1)))) {
+        dueDateTime = dueDateTime.add(Duration(days: tenureDays));
       }
-      final String formattedDueDate = DateFormat('dd MMM yyyy').format(dueDateTime);
 
-      initialList = [
+      final String formattedDueDate = DateFormat('dd MMM yyyy').format(dueDateTime);
+      final String amountStr = amount != null ? CurrencyUtils.formatAmount(amount) : 'Loan';
+
+      seededList = [
         AppNotificationModel(
-          id: 'notif_disbursed_$lan',
+          id: 'notif_disbursed_${lan.isNotEmpty ? lan : "active"}',
           title: 'Loan Disbursed Successfully! 🎉',
-          body: '${CurrencyUtils.formatAmount(amount)} net amount credited to $bankDisplay.',
+          body: '$amountStr net amount credited to $bankDisplay.',
           category: NotificationCategory.loan,
-          timestamp: now.subtract(const Duration(minutes: 18)),
+          timestamp: disbursalDate,
           isRead: false,
-          route: '/loan/$lan/loan-details',
+          route: lan.isNotEmpty ? '/loan/$lan/loan-details' : '/dashboard',
           actionLabel: 'View RPS Schedule',
           utr: utr,
           amount: amount,
         ),
+        if (emiAmount > 0)
+          AppNotificationModel(
+            id: 'notif_emi_due_${lan.isNotEmpty ? lan : "active"}',
+            title: 'EMI Installment Due Soon 📅',
+            body: '1st EMI installment of ${CurrencyUtils.formatAmount(emiAmount)} is due on $formattedDueDate.',
+            category: NotificationCategory.emi,
+            timestamp: now.subtract(const Duration(minutes: 5)),
+            isRead: false,
+            route: '/repayment',
+            actionLabel: 'Pay EMI',
+            amount: emiAmount,
+          ),
+      ];
+    } else if (appStatus == 'LENDER_APPROVED' || appStatus == 'PRE_APPROVAL_OFFER_SELECTION') {
+      final num? rawAmt = postApproval?.offer.approvedAmount ?? postApproval?.loan.approvedAmount;
+      final double? approvedAmt = (rawAmt != null && rawAmt > 0) ? rawAmt.toDouble() : null;
+      final String amountStr = approvedAmt != null ? CurrencyUtils.formatAmount(approvedAmt) : 'Pre-approved';
+
+      seededList = [
         AppNotificationModel(
-          id: 'notif_emi_due_$lan',
-          title: 'EMI Installment Due Soon 📅',
-          body: '1st EMI installment of ${CurrencyUtils.formatAmount(emiAmount)} is due on $formattedDueDate.',
-          category: NotificationCategory.emi,
-          timestamp: now.subtract(const Duration(hours: 3)),
+          id: 'notif_approved_${lan.isNotEmpty ? lan : "active"}',
+          title: 'Loan Approved! 🎉',
+          body: 'Your loan offer of $amountStr has been approved! Complete the final step to receive disbursal.',
+          category: NotificationCategory.offer,
+          timestamp: now.subtract(const Duration(minutes: 10)),
           isRead: false,
-          route: '/repayment',
-          actionLabel: 'Pay EMI',
-          amount: emiAmount,
+          route: lan.isNotEmpty ? '/loan/$lan/offer' : '/onboarding/offer',
+          actionLabel: 'Claim Loan Now',
+          amount: approvedAmt,
         ),
       ];
-    } else if (appStatus.isNotEmpty) {
-      final lenderName = postApproval?.lender.name ?? 'Fintree Finance';
-      initialList = [
+    } else if (appStatus.isNotEmpty && appStatus != 'DRAFT') {
+      final lenderName = postApproval?.lender.name ?? customer?.allocatedLenderName ?? 'Fintree Finance';
+      seededList = [
         AppNotificationModel(
-          id: 'notif_in_progress_$lan',
-          title: 'Application Underwriting ⏳',
-          body: 'Your loan application (LAN: $lan) is currently under review by $lenderName.',
+          id: 'notif_in_progress_${lan.isNotEmpty ? lan : "active"}',
+          title: 'Application Under Review ⏳',
+          body: 'Your loan application${lan.isNotEmpty ? ' (LAN: $lan)' : ''} is under review by $lenderName.',
           category: NotificationCategory.loan,
           timestamp: now.subtract(const Duration(minutes: 12)),
           isRead: false,
@@ -150,13 +214,18 @@ class NotificationsNotifier extends StateNotifier<NotificationsState> {
           actionLabel: 'Check Status',
         ),
       ];
-    } else {
-      initialList = [];
     }
 
+    // Retain existing dynamic notifications in state without duplicates
+    final existingIds = seededList.map((n) => n.id).toSet();
+    final dynamicItems = state.items.where((n) => !existingIds.contains(n.id)).toList();
+
+    final mergedList = [...dynamicItems, ...seededList];
+    mergedList.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+
     state = NotificationsState(
-      items: initialList,
-      activeFilter: NotificationCategory.all,
+      items: mergedList,
+      activeFilter: state.activeFilter,
       isSeeded: true,
     );
   }
@@ -165,7 +234,7 @@ class NotificationsNotifier extends StateNotifier<NotificationsState> {
 final notificationsProvider =
     StateNotifierProvider<NotificationsNotifier, NotificationsState>((ref) {
   final notifier = NotificationsNotifier();
-  
+
   // Auto-seed when customer state changes
   ref.listen<JourneyState>(journeyControllerProvider, (previous, next) {
     if (!next.isLoading && next.customer != null) {
