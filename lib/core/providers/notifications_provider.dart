@@ -1,22 +1,25 @@
 import 'dart:async';
+import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 import '../models/app_notification_model.dart';
-import '../utils/currency_utils.dart';
-import '../../features/dashboard/presentation/journey_controller.dart';
 import '../models/customer_model.dart';
 import '../models/post_approval_model.dart';
 import '../services/push_notification_service.dart';
+import '../storage/secure_storage_service.dart';
+import '../utils/currency_utils.dart';
+import '../../features/dashboard/presentation/journey_controller.dart';
+import 'providers.dart';
 
 class NotificationsState {
   final List<AppNotificationModel> items;
   final NotificationCategory activeFilter;
-  final bool isSeeded;
+  final bool isLoaded;
 
   const NotificationsState({
     this.items = const [],
     this.activeFilter = NotificationCategory.all,
-    this.isSeeded = false,
+    this.isLoaded = false,
   });
 
   int get unreadCount => items.where((n) => !n.isRead).length;
@@ -29,20 +32,22 @@ class NotificationsState {
   NotificationsState copyWith({
     List<AppNotificationModel>? items,
     NotificationCategory? activeFilter,
-    bool? isSeeded,
+    bool? isLoaded,
   }) {
     return NotificationsState(
       items: items ?? this.items,
       activeFilter: activeFilter ?? this.activeFilter,
-      isSeeded: isSeeded ?? this.isSeeded,
+      isLoaded: isLoaded ?? this.isLoaded,
     );
   }
 }
 
 class NotificationsNotifier extends StateNotifier<NotificationsState> {
+  final SecureStorageService _storage;
   StreamSubscription<AppNotificationModel>? _dynamicSub;
 
-  NotificationsNotifier() : super(const NotificationsState()) {
+  NotificationsNotifier(this._storage) : super(const NotificationsState()) {
+    _loadFromStorage();
     _dynamicSub = PushNotificationService.dynamicNotificationStream.listen((notification) {
       addNotification(notification);
     });
@@ -54,12 +59,42 @@ class NotificationsNotifier extends StateNotifier<NotificationsState> {
     super.dispose();
   }
 
+  Future<void> _loadFromStorage() async {
+    try {
+      final raw = await _storage.getStoredNotifications();
+      if (raw != null && raw.isNotEmpty) {
+        final decoded = jsonDecode(raw);
+        if (decoded is List) {
+          final loaded = decoded
+              .map((item) => AppNotificationModel.fromJson(Map<String, dynamic>.from(item)))
+              .toList();
+          loaded.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+          state = state.copyWith(items: loaded, isLoaded: true);
+          return;
+        }
+      }
+    } catch (e) {
+      debugPrint('[NotificationsNotifier] Error loading stored notifications: $e');
+    }
+    state = state.copyWith(isLoaded: true);
+  }
+
+  Future<void> _saveToStorage() async {
+    try {
+      final jsonList = state.items.map((n) => n.toJson()).toList();
+      await _storage.saveStoredNotifications(jsonEncode(jsonList));
+    } catch (e) {
+      debugPrint('[NotificationsNotifier] Error saving notifications: $e');
+    }
+  }
+
   void addNotification(AppNotificationModel notif) {
     final exists = state.items.any((item) => item.id == notif.id);
     if (!exists) {
       final updated = [notif, ...state.items];
       updated.sort((a, b) => b.timestamp.compareTo(a.timestamp));
       state = state.copyWith(items: updated);
+      _saveToStorage();
     }
   }
 
@@ -75,177 +110,182 @@ class NotificationsNotifier extends StateNotifier<NotificationsState> {
       return item;
     }).toList();
     state = state.copyWith(items: updated);
+    _saveToStorage();
   }
 
   void markAllAsRead() {
     final updated = state.items.map((item) => item.copyWith(isRead: true)).toList();
     state = state.copyWith(items: updated);
+    _saveToStorage();
   }
 
-  void deleteNotification(String id) {
+  Future<void> deleteNotification(String id) async {
     final updated = state.items.where((item) => item.id != id).toList();
     state = state.copyWith(items: updated);
+    await _storage.addDismissedNotificationId(id);
+    _saveToStorage();
   }
 
-  void clearAll() {
+  Future<void> clearAll() async {
+    for (final item in state.items) {
+      await _storage.addDismissedNotificationId(item.id);
+    }
     state = state.copyWith(items: []);
+    _saveToStorage();
   }
 
-  void seedForCustomer(CustomerModel? customer, PostApprovalJourneyModel? postApproval) {
-    final lan = customer?.latestLan ?? customer?.platformLan ?? '';
-    final appStatus = customer?.latestApplicationStatus?.toUpperCase() ?? '';
+  /// Synchronize real journey milestones from live API response
+  /// completely free of dummy delays or static mock data.
+  Future<void> syncRealMilestones(CustomerModel? customer, PostApprovalJourneyModel? postApproval) async {
+    if (customer == null) return;
+    final dismissed = await _storage.getDismissedNotificationIds();
+    final lan = customer.latestLan ?? customer.platformLan ?? '';
+    final appStatus = customer.latestApplicationStatus?.toUpperCase() ?? '';
+    final loanStatus = customer.latestLoanStatus?.toUpperCase() ?? '';
+
     final isDisbursed = appStatus == 'DISBURSED' ||
-        customer?.latestLoanStatus == 'DISBURSED' ||
+        loanStatus == 'DISBURSED' ||
         postApproval?.workflow.currentStep == 'DISBURSED' ||
         postApproval?.loan.disbursalCompletedAt != null;
 
-    final now = DateTime.now();
-
-    List<AppNotificationModel> seededList = [];
-
-    if (isDisbursed) {
+    if (isDisbursed && lan.isNotEmpty) {
       final loan = postApproval?.loan;
       final bank = postApproval?.bank;
-      final offer = postApproval?.offer;
+      final num? rawAmt = loan?.disbursalAmount ?? loan?.approvedAmount ?? postApproval?.offer.approvedAmount;
 
-      // 1. Disbursal Amount - only display actual amount, no fake fallback
-      final num? rawAmt = loan?.disbursalAmount ?? loan?.approvedAmount ?? offer?.approvedAmount;
-      final double? amount = (rawAmt != null && rawAmt > 0) ? rawAmt.toDouble() : null;
+      if (rawAmt != null && rawAmt > 0) {
+        final disbursalId = 'real_disbursed_$lan';
+        if (!dismissed.contains(disbursalId) && !state.items.any((n) => n.id == disbursalId)) {
+          DateTime disbursalTime = DateTime.now();
+          if (loan?.disbursalCompletedAt != null) {
+            disbursalTime = DateTime.tryParse(loan!.disbursalCompletedAt!) ?? disbursalTime;
+          } else if (loan?.disbursalDate != null) {
+            disbursalTime = DateTime.tryParse(loan!.disbursalDate!) ?? disbursalTime;
+          }
 
-      // 2. UTR Reference - ONLY display if real UTR exists (no fake UTR_FTPL... placeholder)
-      final String? rawUtr = loan?.disbursalUtr;
-      final String? utr = (rawUtr != null && rawUtr.trim().isNotEmpty && rawUtr.trim() != 'N/A')
-          ? rawUtr.trim()
-          : null;
+          final String bankDisplay = (bank?.bankName != null && bank?.accountMasked != null && bank!.accountMasked!.isNotEmpty)
+              ? '${bank.bankName} (..${bank.accountMasked})'
+              : (bank?.bankName ?? 'your registered bank account');
 
-      // 3. Bank Details from customer profile
-      final String? bankName = bank?.bankName;
-      final String? accountMasked = bank?.accountMasked;
-      final String bankDisplay = (bankName != null && accountMasked != null && accountMasked.isNotEmpty)
-          ? '$bankName (..$accountMasked)'
-          : (bankName ?? 'your registered bank account');
-
-      // 4. Disbursal Date & Timestamp
-      DateTime disbursalDate = now.subtract(const Duration(minutes: 18));
-      if (loan?.disbursalCompletedAt != null) {
-        final parsed = DateTime.tryParse(loan!.disbursalCompletedAt!);
-        if (parsed != null) disbursalDate = parsed;
-      } else if (loan?.disbursalDate != null) {
-        final parsed = DateTime.tryParse(loan!.disbursalDate!);
-        if (parsed != null) disbursalDate = parsed;
+          addNotification(
+            AppNotificationModel(
+              id: disbursalId,
+              title: 'Loan Disbursed Successfully! 🎉',
+              body: '${CurrencyUtils.formatAmount(rawAmt.toDouble())} net amount credited to $bankDisplay.',
+              category: NotificationCategory.loan,
+              timestamp: disbursalTime,
+              isRead: false,
+              route: '/loan/$lan/loan-details',
+              actionLabel: 'View RPS Schedule',
+              utr: loan?.disbursalUtr,
+              amount: rawAmt.toDouble(),
+            ),
+          );
+        }
       }
+    } else if (lan.isNotEmpty) {
+      // Check if loan is approved
+      final isApproved = loanStatus == 'APPROVED' ||
+          appStatus == 'APPROVED' ||
+          postApproval?.workflow.lenderApproved == true ||
+          postApproval?.workflow.offerAccepted == true;
 
-      // 5. EMI Amount & Proper Due Date calculation
-      final num? rawEmi = offer?.acceptedEmiAmount;
-      final double emiAmount = (rawEmi != null && rawEmi > 0)
-          ? rawEmi.toDouble()
-          : (amount != null ? (amount * 0.52).roundToDouble() : 0.0);
+      if (isApproved) {
+        final num? rawApproved = postApproval?.loan.approvedAmount ??
+            postApproval?.offer.approvedAmount ??
+            customer.assessmentFee?['totalAmount'];
 
-      // Determine proper due date using accepted tenure days (defaulting to 30 days)
-      final int tenureDays = (offer?.acceptedTenureDays != null && offer!.acceptedTenureDays! > 0)
-          ? offer.acceptedTenureDays!
-          : (offer?.allowedTenures.isNotEmpty == true ? offer!.allowedTenures.first : 30);
+        final approvedId = 'real_approved_$lan';
+        if (!dismissed.contains(approvedId) && !state.items.any((n) => n.id == approvedId)) {
+          final amountText = rawApproved != null && rawApproved > 0
+              ? 'of ${CurrencyUtils.formatAmount(rawApproved.toDouble())} '
+              : '';
 
-      DateTime dueDateTime = disbursalDate.add(Duration(days: tenureDays));
+          DateTime approvedTime = DateTime.now();
+          if (postApproval?.loan.approvedAt != null) {
+            approvedTime = DateTime.tryParse(postApproval!.loan.approvedAt!) ?? approvedTime;
+          }
 
-      // If calculated due date is in the past, roll forward by tenure period to get current active installment due date
-      while (dueDateTime.isBefore(now.subtract(const Duration(days: 1)))) {
-        dueDateTime = dueDateTime.add(Duration(days: tenureDays));
+          addNotification(
+            AppNotificationModel(
+              id: approvedId,
+              title: 'Loan Approved! 🎉',
+              body: 'Your loan $amountText is approved and ready for bank disbursement.',
+              category: NotificationCategory.offer,
+              timestamp: approvedTime,
+              isRead: false,
+              route: '/loan/$lan/offer',
+              actionLabel: 'View Loan Offer',
+              amount: rawApproved?.toDouble(),
+            ),
+          );
+        }
+
+        // Check if mandate is pending
+        final isMandatePending = postApproval != null &&
+            postApproval.workflow.offerAccepted &&
+            !postApproval.workflow.mandateCompleted;
+
+        if (isMandatePending) {
+          final mandateId = 'real_mandate_pending_$lan';
+          if (!dismissed.contains(mandateId) && !state.items.any((n) => n.id == mandateId)) {
+            addNotification(
+              AppNotificationModel(
+                id: mandateId,
+                title: 'Setup Auto-Debit (e-Mandate) ⚡',
+                body: 'Complete auto-debit setup to proceed with instant loan disbursal.',
+                category: NotificationCategory.system,
+                timestamp: DateTime.now(),
+                isRead: false,
+                route: '/loan/$lan/mandate',
+                actionLabel: 'Setup Mandate',
+              ),
+            );
+          }
+        }
+
+        // Check if eSign is pending
+        final isEsignPending = postApproval != null &&
+            postApproval.workflow.mandateCompleted &&
+            !postApproval.workflow.esignCompleted;
+
+        if (isEsignPending) {
+          final esignId = 'real_esign_pending_$lan';
+          if (!dismissed.contains(esignId) && !state.items.any((n) => n.id == esignId)) {
+            addNotification(
+              AppNotificationModel(
+                id: esignId,
+                title: 'Sign Loan Agreement ✍️',
+                body: 'Digitally e-Sign your agreement to complete the loan approval journey.',
+                category: NotificationCategory.system,
+                timestamp: DateTime.now(),
+                isRead: false,
+                route: '/loan/$lan/esign',
+                actionLabel: 'Sign Agreement',
+              ),
+            );
+          }
+        }
       }
-
-      final String formattedDueDate = DateFormat('dd MMM yyyy').format(dueDateTime);
-      final String amountStr = amount != null ? CurrencyUtils.formatAmount(amount) : 'Loan';
-
-      seededList = [
-        AppNotificationModel(
-          id: 'notif_disbursed_${lan.isNotEmpty ? lan : "active"}',
-          title: 'Loan Disbursed Successfully! 🎉',
-          body: '$amountStr net amount credited to $bankDisplay.',
-          category: NotificationCategory.loan,
-          timestamp: disbursalDate,
-          isRead: false,
-          route: lan.isNotEmpty ? '/loan/$lan/loan-details' : '/dashboard',
-          actionLabel: 'View RPS Schedule',
-          utr: utr,
-          amount: amount,
-        ),
-        if (emiAmount > 0)
-          AppNotificationModel(
-            id: 'notif_emi_due_${lan.isNotEmpty ? lan : "active"}',
-            title: 'EMI Installment Due Soon 📅',
-            body: '1st EMI installment of ${CurrencyUtils.formatAmount(emiAmount)} is due on $formattedDueDate.',
-            category: NotificationCategory.emi,
-            timestamp: now.subtract(const Duration(minutes: 5)),
-            isRead: false,
-            route: '/repayment',
-            actionLabel: 'Pay EMI',
-            amount: emiAmount,
-          ),
-      ];
-    } else if (appStatus == 'LENDER_APPROVED' || appStatus == 'PRE_APPROVAL_OFFER_SELECTION') {
-      final num? rawAmt = postApproval?.offer.approvedAmount ?? postApproval?.loan.approvedAmount;
-      final double? approvedAmt = (rawAmt != null && rawAmt > 0) ? rawAmt.toDouble() : null;
-      final String amountStr = approvedAmt != null ? CurrencyUtils.formatAmount(approvedAmt) : 'Pre-approved';
-
-      seededList = [
-        AppNotificationModel(
-          id: 'notif_approved_${lan.isNotEmpty ? lan : "active"}',
-          title: 'Loan Approved! 🎉',
-          body: 'Your loan offer of $amountStr has been approved! Complete the final step to receive disbursal.',
-          category: NotificationCategory.offer,
-          timestamp: now.subtract(const Duration(minutes: 10)),
-          isRead: false,
-          route: lan.isNotEmpty ? '/loan/$lan/offer' : '/onboarding/offer',
-          actionLabel: 'Claim Loan Now',
-          amount: approvedAmt,
-        ),
-      ];
-    } else if (appStatus.isNotEmpty && appStatus != 'DRAFT') {
-      final lenderName = postApproval?.lender.name ?? customer?.allocatedLenderName ?? 'Fintree Finance';
-      seededList = [
-        AppNotificationModel(
-          id: 'notif_in_progress_${lan.isNotEmpty ? lan : "active"}',
-          title: 'Application Under Review ⏳',
-          body: 'Your loan application${lan.isNotEmpty ? ' (LAN: $lan)' : ''} is under review by $lenderName.',
-          category: NotificationCategory.loan,
-          timestamp: now.subtract(const Duration(minutes: 12)),
-          isRead: false,
-          route: '/application/status',
-          actionLabel: 'Check Status',
-        ),
-      ];
     }
-
-    // Retain existing dynamic notifications in state without duplicates
-    final existingIds = seededList.map((n) => n.id).toSet();
-    final dynamicItems = state.items.where((n) => !existingIds.contains(n.id)).toList();
-
-    final mergedList = [...dynamicItems, ...seededList];
-    mergedList.sort((a, b) => b.timestamp.compareTo(a.timestamp));
-
-    state = NotificationsState(
-      items: mergedList,
-      activeFilter: state.activeFilter,
-      isSeeded: true,
-    );
   }
 }
 
 final notificationsProvider =
     StateNotifierProvider<NotificationsNotifier, NotificationsState>((ref) {
-  final notifier = NotificationsNotifier();
+  final storage = ref.watch(secureStorageProvider);
+  final notifier = NotificationsNotifier(storage);
 
-  // Auto-seed when customer state changes
+  // Sync real milestones when live customer state loads
   ref.listen<JourneyState>(journeyControllerProvider, (previous, next) {
     if (!next.isLoading && next.customer != null) {
-      notifier.seedForCustomer(next.customer, next.postApproval);
+      notifier.syncRealMilestones(next.customer, next.postApproval);
     }
   });
 
-  // Initial seed check
   final journey = ref.read(journeyControllerProvider);
   if (!journey.isLoading && journey.customer != null) {
-    notifier.seedForCustomer(journey.customer, journey.postApproval);
+    notifier.syncRealMilestones(journey.customer, journey.postApproval);
   }
 
   return notifier;

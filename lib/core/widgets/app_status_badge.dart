@@ -48,7 +48,9 @@ class AppStatusBadge extends StatelessWidget {
 
   _BadgeConfig _getStatusConfig(String status) {
     final upper = status.toUpperCase();
-    if (upper.contains('APPROVED') ||
+    if (upper.contains('PAID') ||
+        upper.contains('SETTLED') ||
+        upper.contains('APPROVED') ||
         upper.contains('VERIFIED') ||
         upper.contains('COMPLETED') ||
         upper.contains('SUCCESS') ||
@@ -60,7 +62,8 @@ class AppStatusBadge extends StatelessWidget {
         icon: Icons.check_circle_outline,
       );
     }
-    if (upper.contains('PENDING') ||
+    if (upper.contains('PRESENTED') ||
+        upper.contains('PENDING') ||
         upper.contains('PROGRESS') ||
         upper.contains('SUBMITTED') ||
         upper.contains('PROCESSING') ||
@@ -71,7 +74,8 @@ class AppStatusBadge extends StatelessWidget {
         icon: Icons.access_time_rounded,
       );
     }
-    if (upper.contains('REJECTED') ||
+    if (upper.contains('OVERDUE') ||
+        upper.contains('REJECTED') ||
         upper.contains('FAILED') ||
         upper.contains('CANCELLED') ||
         upper.contains('INELIGIBLE') ||

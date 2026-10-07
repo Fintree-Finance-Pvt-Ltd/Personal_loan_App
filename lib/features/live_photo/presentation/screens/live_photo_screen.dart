@@ -6,7 +6,6 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http_parser/http_parser.dart';
 import 'package:image_picker/image_picker.dart';
@@ -248,43 +247,17 @@ class _LivePhotoScreenState extends ConsumerState<LivePhotoScreen> {
 
     try {
       final apiClient = ref.read(apiClientProvider);
-      final customerApi = ref.read(customerApiProvider);
 
-      // 1. Get current geolocation details
-      double lat = 19.0760;
-      double lon = 72.8777;
-      double accuracy = 10.0;
-      String formattedAddress = 'Mumbai, Maharashtra';
-      String city = 'Mumbai';
-      String state = 'Maharashtra';
+      // 1. Get location details from customer profile (Google Play Personal Loans policy prohibits device GPS permissions)
+      final customer = ref.read(journeyControllerProvider).customer;
+      double lat = 0.0;
+      double lon = 0.0;
+      double accuracy = 0.0;
+      String city = customer?.residentialCity?.isNotEmpty == true ? customer!.residentialCity! : 'Mumbai';
+      String state = customer?.residentialState?.isNotEmpty == true ? customer!.residentialState! : 'Maharashtra';
+      String postalCode = customer?.residentialPincode?.isNotEmpty == true ? customer!.residentialPincode! : '400001';
       String country = 'India';
-      String postalCode = '400001';
-
-      try {
-        LocationPermission permission = await Geolocator.checkPermission();
-        if (permission == LocationPermission.denied) {
-          permission = await Geolocator.requestPermission();
-        }
-        final position = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.high,
-          timeLimit: const Duration(seconds: 8),
-        );
-        lat = position.latitude;
-        lon = position.longitude;
-        accuracy = position.accuracy;
-
-        final geocodeRes = await customerApi.reverseGeocode(lat, lon);
-        final gd = geocodeRes['data'] ?? geocodeRes;
-        if (gd != null) {
-          formattedAddress = gd['formattedAddress'] ?? formattedAddress;
-          city = gd['city'] ?? city;
-          state = gd['state'] ?? state;
-          country = gd['country'] ?? country;
-          postalCode = gd['postalCode'] ?? postalCode;
-        }
-      } catch (ge) {
-        print('Geolocation fetch failed: $ge');
-      }
+      String formattedAddress = [city, state, postalCode, country].where((s) => s.isNotEmpty).join(', ');
 
       // 2. Load bytes and apply watermark
       final originalBytes = await _imageFile!.readAsBytes();

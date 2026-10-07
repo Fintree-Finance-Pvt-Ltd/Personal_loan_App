@@ -28,7 +28,6 @@ class _LoanDetailsScreenState extends ConsumerState<LoanDetailsScreen> {
   bool _isLoading = true;
   String? _errorMessage;
   Map<String, dynamic>? _loanDetailsData;
-  bool _isRepaying = false;
   Timer? _pollingTimer;
 
   @override
@@ -132,50 +131,45 @@ class _LoanDetailsScreenState extends ConsumerState<LoanDetailsScreen> {
     }
   }
 
-  Future<void> _initiateRepayment(int installmentNumber, num amount) async {
-    setState(() {
-      _isRepaying = true;
-    });
-
-    try {
-      final customerApi = ref.read(customerApiProvider);
-      final res = await customerApi.initiateRepaymentPayment(
-        widget.lan,
-        {
-          'installmentNumber': installmentNumber,
-          'amount': amount,
-        },
-      );
-
-      final data = res['data'] ?? res;
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(data['message'] ?? 'Repayment initiated successfully!'),
-            backgroundColor: AppTheme.successGreen,
+  Future<void> _initiateRepayment(
+    int installmentNumber,
+    num amount, {
+    bool isMandateLocked = false,
+    String? mandateDebitMessage,
+  }) async {
+    if (isMandateLocked) {
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Row(
+            children: [
+              Icon(Icons.schedule_rounded, color: Color(0xFFD97706)),
+              SizedBox(width: 8),
+              Text(
+                'Auto-Debit Presented',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+            ],
           ),
-        );
-        _fetchLoanDetails(); // Refresh details
-      }
-    } catch (e) {
-      if (mounted) {
-        String msg = e.toString();
-        if (e is DioException) {
-          final apiClient = ref.read(apiClientProvider);
-          msg = apiClient.handleError(e).message;
-        } else if (e is AppException) {
-          msg = e.message;
-        } else if (msg.startsWith('Exception: ')) {
-          msg = msg.substring(11);
-        }
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Repayment Error: $msg')),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isRepaying = false);
+          content: Text(
+            mandateDebitMessage ??
+                'Auto-debit mandate has already been presented for this installment. Manual payment is temporarily disabled on the due date to prevent double deduction. Please wait for bank clearing.',
+            style: const TextStyle(fontSize: 13, height: 1.45, color: AppTheme.textDarkPrimary),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Understood', style: TextStyle(fontWeight: FontWeight.bold, color: AppTheme.primaryTeal)),
+            ),
+          ],
+        ),
+      );
+      return;
     }
+
+    // Navigate to full Easebuzz Payment Gateway WebView screen for complete payment flow
+    context.push('/loan/${widget.lan}/repay');
   }
 
   @override
@@ -271,10 +265,24 @@ class _LoanDetailsScreenState extends ConsumerState<LoanDetailsScreen> {
       }
     }
 
+    final bool isAllRpsPaid = effectiveRpsList.isNotEmpty &&
+        effectiveRpsList.every((item) {
+          final s = item['paymentStatus']?.toString().toUpperCase();
+          final rem = ((item['remainingAmount'] ?? 0) as num).toDouble();
+          return s == 'PAID' || rem <= 0;
+        });
+
+    final bool isFullyPaid = isAllRpsPaid ||
+        status == 'FULLY_PAID' ||
+        ((totalOutstanding == null || totalOutstanding == 0) && totalPaid != null && totalPaid > 0);
+
     String headerAmountText = tr.tr('pending_confirmation');
     String headerSubText = tr.tr('syncing_details');
 
-    if (totalOutstanding != null) {
+    if (isFullyPaid) {
+      headerAmountText = '₹0';
+      headerSubText = 'Loan Fully Paid & Settled';
+    } else if (totalOutstanding != null) {
       headerAmountText = CurrencyUtils.formatAmount(totalOutstanding);
       headerSubText = tr.tr('total_outstanding');
     } else if (disbursedAmount != null) {
@@ -309,15 +317,21 @@ class _LoanDetailsScreenState extends ConsumerState<LoanDetailsScreen> {
                   flexibleSpace: FlexibleSpaceBar(
                     stretchModes: const [StretchMode.zoomBackground],
                     background: Container(
-                      decoration: const BoxDecoration(
+                      decoration: BoxDecoration(
                         gradient: LinearGradient(
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
-                          colors: [
-                            AppTheme.primaryDeepTeal,
-                            AppTheme.primaryDarkTeal,
-                            AppTheme.primaryTeal,
-                          ],
+                          colors: isFullyPaid
+                              ? const [
+                                  Color(0xFF064E3B),
+                                  Color(0xFF047857),
+                                  Color(0xFF059669),
+                                ]
+                              : const [
+                                  AppTheme.primaryDeepTeal,
+                                  AppTheme.primaryDarkTeal,
+                                  AppTheme.primaryTeal,
+                                ],
                         ),
                       ),
                       child: Stack(
@@ -346,19 +360,25 @@ class _LoanDetailsScreenState extends ConsumerState<LoanDetailsScreen> {
                                       Container(
                                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                                         decoration: BoxDecoration(
-                                          color: isDisbursed
-                                              ? Colors.greenAccent.withValues(alpha: 0.25)
-                                              : Colors.orangeAccent.withValues(alpha: 0.25),
+                                          color: isFullyPaid
+                                              ? Colors.greenAccent.withValues(alpha: 0.3)
+                                              : (isDisbursed
+                                                  ? Colors.greenAccent.withValues(alpha: 0.25)
+                                                  : Colors.orangeAccent.withValues(alpha: 0.25)),
                                           borderRadius: BorderRadius.circular(20),
                                           border: Border.all(
-                                            color: isDisbursed ? Colors.greenAccent : Colors.orangeAccent,
+                                            color: isFullyPaid
+                                                ? Colors.greenAccent
+                                                : (isDisbursed ? Colors.greenAccent : Colors.orangeAccent),
                                             width: 1,
                                           ),
                                         ),
                                         child: Text(
-                                          isDisbursed ? tr.tr('active_loan_badge') : '⏳ ${tr.tr('processing')}',
+                                          isFullyPaid
+                                              ? '✓ LOAN FULLY PAID'
+                                              : (isDisbursed ? tr.tr('active_loan_badge') : '⏳ ${tr.tr('processing')}'),
                                           style: TextStyle(
-                                            color: isDisbursed ? Colors.greenAccent : Colors.orangeAccent,
+                                            color: isFullyPaid || isDisbursed ? Colors.greenAccent : Colors.orangeAccent,
                                             fontSize: 11,
                                             fontWeight: FontWeight.bold,
                                             letterSpacing: 1,
@@ -547,8 +567,11 @@ class _LoanDetailsScreenState extends ConsumerState<LoanDetailsScreen> {
                       ),
                       const SizedBox(height: 16),
 
-                      // Disbursal Banner - Only show if confirmed disbursed and amounts are confirmed
-                      if (isDisbursed && (disbursedAmount != null || approvedAmount != null)) ...[
+                      // Disbursal Banner or Fully Paid Celebration Banner
+                      if (isFullyPaid) ...[
+                        _fullyPaidBanner(),
+                        const SizedBox(height: 16),
+                      ] else if (isDisbursed && (disbursedAmount != null || approvedAmount != null)) ...[
                         _disbursalSuccessCard(
                           (disbursedAmount ?? approvedAmount)!,
                           apiLoan?['disbursalUtr'] ?? fallbackLoan?.disbursalUtr,
@@ -562,6 +585,48 @@ class _LoanDetailsScreenState extends ConsumerState<LoanDetailsScreen> {
                         title: tr.tr('repayment_schedule'),
                         icon: Icons.calendar_month_rounded,
                         children: [
+                          if (effectiveRpsList.any((r) => r['isMandateLocked'] == true)) ...[
+                            Container(
+                              margin: const EdgeInsets.only(bottom: 14),
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFFFBEB),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: const Color(0xFFFDE68A)),
+                              ),
+                              child: const Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Icon(Icons.warning_amber_rounded, color: Color(0xFFD97706), size: 20),
+                                  SizedBox(width: 10),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'Auto-Debit Clearing In Progress:',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.bold,
+                                            color: Color(0xFF78350F),
+                                          ),
+                                        ),
+                                        SizedBox(height: 3),
+                                        Text(
+                                          'An auto-debit mandate has been presented to your bank account for due installment collection. Online manual payment for presented installments is temporarily paused on the due date to protect against duplicate deductions. (If overdue by 1 or more days, manual payment is re-enabled).',
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            height: 1.35,
+                                            color: Color(0xFF92400E),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                           if (effectiveRpsList.isEmpty)
                             Padding(
                               padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
@@ -585,19 +650,31 @@ class _LoanDetailsScreenState extends ConsumerState<LoanDetailsScreen> {
                               final instNum = itemMap['installmentNumber'] ?? 1;
                               final emi = (itemMap['emi'] ?? 0).toDouble();
                               final remaining = (itemMap['remainingAmount'] ?? emi).toDouble();
+                              final paidAmount = (itemMap['paidAmount'] ?? 0).toDouble();
                               final dueDateStr = itemMap['dueDate']?.toString();
+                              final paymentDateStr = itemMap['paymentDate']?.toString();
                               final pStatus = itemMap['paymentStatus']?.toString().toUpperCase() ?? 'UNPAID';
-                              final isPaid = pStatus == 'PAID';
-                              final isOverdue = pStatus == 'OVERDUE';
+                              final isPaid = pStatus == 'PAID' || remaining <= 0;
+                              final isOverdue = pStatus == 'OVERDUE' || (itemMap['isOverdue'] == true);
+                              final isMandateLocked = itemMap['isMandateLocked'] == true;
+                              final mandateDebitMessage = itemMap['mandateDebitMessage']?.toString();
 
                               return Container(
                                 margin: const EdgeInsets.only(bottom: 12),
                                 padding: const EdgeInsets.all(14),
                                 decoration: BoxDecoration(
-                                  color: isPaid ? AppTheme.successBg : (isOverdue ? AppTheme.errorBg : Colors.grey.shade50),
+                                  color: isPaid
+                                      ? const Color(0xFFF0FDF4)
+                                      : (isMandateLocked
+                                          ? const Color(0xFFFFFBEB)
+                                          : (isOverdue ? AppTheme.errorBg : Colors.grey.shade50)),
                                   borderRadius: BorderRadius.circular(12),
                                   border: Border.all(
-                                    color: isPaid ? AppTheme.successGreen : (isOverdue ? AppTheme.errorRed : AppTheme.borderLight),
+                                    color: isPaid
+                                        ? const Color(0xFFBBF7D0)
+                                        : (isMandateLocked
+                                            ? const Color(0xFFFDE68A)
+                                            : (isOverdue ? AppTheme.errorRed : AppTheme.borderLight)),
                                   ),
                                 ),
                                 child: Column(
@@ -608,11 +685,21 @@ class _LoanDetailsScreenState extends ConsumerState<LoanDetailsScreen> {
                                       children: [
                                         Text(
                                           '${tr.tr("installment")} #$instNum',
-                                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 14,
+                                            color: isPaid
+                                                ? const Color(0xFF065F46)
+                                                : (isMandateLocked ? const Color(0xFF78350F) : AppTheme.textDarkPrimary),
+                                          ),
                                         ),
                                         AppStatusBadge(
-                                          status: pStatus,
-                                          label: isPaid ? tr.tr('paid') : (isOverdue ? tr.tr('overdue') : tr.tr('unpaid')),
+                                          status: isPaid ? 'PAID' : (isMandateLocked ? 'PRESENTED' : pStatus),
+                                          label: isPaid
+                                              ? tr.tr('paid')
+                                              : (isMandateLocked
+                                                  ? 'Auto-Debit Presented'
+                                                  : (isOverdue ? tr.tr('overdue') : tr.tr('unpaid'))),
                                         ),
                                       ],
                                     ),
@@ -625,30 +712,106 @@ class _LoanDetailsScreenState extends ConsumerState<LoanDetailsScreen> {
                                           children: [
                                             Text(
                                               '${tr.tr("due_date")}: ${_formatDate(dueDateStr)}',
-                                              style: const TextStyle(fontSize: 12, color: AppTheme.textDarkSecondary),
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                color: isPaid ? const Color(0xFF047857) : AppTheme.textDarkSecondary,
+                                              ),
                                             ),
                                             const SizedBox(height: 2),
                                             Text(
-                                              '${tr.tr("emi_amount")}: ${CurrencyUtils.formatAmount(emi)}',
-                                              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                                              isPaid && paidAmount > 0
+                                                  ? 'Paid: ${CurrencyUtils.formatAmount(paidAmount)}'
+                                                  : '${tr.tr("emi_amount")}: ${CurrencyUtils.formatAmount(emi)}',
+                                              style: TextStyle(
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.w600,
+                                                color: isPaid ? AppTheme.successGreen : AppTheme.textDarkPrimary,
+                                              ),
                                             ),
+                                            if (isPaid && paymentDateStr != null)
+                                              Text(
+                                                'Paid on ${_formatDate(paymentDateStr)}',
+                                                style: const TextStyle(fontSize: 11, color: Color(0xFF059669)),
+                                              ),
                                           ],
                                         ),
-                                        if (!isPaid)
+                                        if (isPaid)
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFFECFDF5),
+                                              borderRadius: BorderRadius.circular(8),
+                                              border: Border.all(color: const Color(0xFFA7F3D0)),
+                                            ),
+                                            child: const Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Icon(Icons.check_circle_rounded, size: 14, color: AppTheme.successGreen),
+                                                SizedBox(width: 4),
+                                                Text(
+                                                  'Payment completed',
+                                                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.successGreen),
+                                                ),
+                                              ],
+                                            ),
+                                          )
+                                        else if (isMandateLocked)
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFFFEF3C7),
+                                              borderRadius: BorderRadius.circular(8),
+                                              border: Border.all(color: const Color(0xFFFCD34D)),
+                                            ),
+                                            child: const Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                SizedBox(
+                                                  width: 12,
+                                                  height: 12,
+                                                  child: CircularProgressIndicator(
+                                                    strokeWidth: 2,
+                                                    valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFD97706)),
+                                                  ),
+                                                ),
+                                                SizedBox(width: 6),
+                                                Text(
+                                                  'Clearing in progress',
+                                                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF92400E)),
+                                                ),
+                                              ],
+                                            ),
+                                          )
+                                        else
                                           ElevatedButton(
-                                            onPressed: _isRepaying
-                                                ? null
-                                                : () => _initiateRepayment(instNum, remaining > 0 ? remaining : emi),
+                                            onPressed: () => _initiateRepayment(
+                                                  instNum,
+                                                  remaining > 0 ? remaining : emi,
+                                                  isMandateLocked: isMandateLocked,
+                                                  mandateDebitMessage: mandateDebitMessage,
+                                                ),
                                             style: ElevatedButton.styleFrom(
-                                              backgroundColor: AppTheme.primaryTeal,
+                                              backgroundColor: isOverdue ? AppTheme.errorRed : AppTheme.primaryTeal,
                                               foregroundColor: Colors.white,
                                               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                             ),
-                                            child: Text(tr.tr('pay_now'), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                                            child: Text(
+                                              isOverdue ? 'Pay Overdue' : tr.tr('pay_now'),
+                                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                                            ),
                                           ),
                                       ],
                                     ),
+                                    if (isMandateLocked)
+                                      Padding(
+                                        padding: const EdgeInsets.only(top: 8),
+                                        child: Text(
+                                          mandateDebitMessage ??
+                                              'Bank clearing in progress. Manual payment paused on due date.',
+                                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: Color(0xFF92400E)),
+                                        ),
+                                      ),
                                   ],
                                 ),
                               );
@@ -782,6 +945,67 @@ class _LoanDetailsScreenState extends ConsumerState<LoanDetailsScreen> {
           Text(val, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: color)),
           const SizedBox(height: 2),
           Text(sub, style: TextStyle(fontSize: 11, color: color.withValues(alpha: 0.8), fontWeight: FontWeight.w500)),
+        ],
+      ),
+    );
+  }
+
+  Widget _fullyPaidBanner() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFFECFDF5), Color(0xFFD1FAE5)],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppTheme.successGreen, width: 1),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppTheme.successGreen.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.verified_rounded, color: AppTheme.successGreen, size: 24),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Loan Fully Repaid & Closed!',
+                      style: TextStyle(fontWeight: FontWeight.bold, color: AppTheme.successDarkGreen, fontSize: 14),
+                    ),
+                    Text(
+                      'All installments have been completed. No outstanding dues remain on this account.',
+                      style: TextStyle(color: AppTheme.successDarkGreen, fontSize: 11),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: () => context.push('/loan/${widget.lan}/fully-paid-review'),
+              icon: const Icon(Icons.assignment_turned_in_rounded, size: 16),
+              label: const Text('View No Dues Certificate & Review', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primaryTeal,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                padding: const EdgeInsets.symmetric(vertical: 10),
+              ),
+            ),
+          ),
         ],
       ),
     );

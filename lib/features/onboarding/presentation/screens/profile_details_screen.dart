@@ -11,6 +11,8 @@ import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_stepper.dart';
 import '../../../../core/widgets/app_text_field.dart';
 import '../../../../core/widgets/app_header.dart';
+import '../../../../core/widgets/animated_page.dart';
+import '../../../../core/widgets/journey_progress.dart';
 import '../../../dashboard/presentation/journey_controller.dart';
 
 class ProfileDetailsScreen extends ConsumerStatefulWidget {
@@ -139,23 +141,40 @@ class _ProfileDetailsScreenState extends ConsumerState<ProfileDetailsScreen> {
         fallbackRoute: '/payment/processing-fee',
       ),
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20.0),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const AppStepper(
-                  currentStep: 4,
-                  totalSteps: 7,
-                  stepTitles: ['PAN Verification', 'Personal Details', 'Assessment Fee', 'Profile & Income', 'Photo & Liveness', 'DigiLocker KYC', 'Account Aggregator'],
-                ),
-                const SizedBox(height: 20),
+        child: AnimatedPage(
+          child: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
+            padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const AnimatedSection(
+                    delay: Duration(milliseconds: 50),
+                    child: Padding(
+                      padding: EdgeInsets.only(bottom: 16.0),
+                      child: JourneyProgress(
+                        currentStep: LoanJourneyStep.application,
+                        compact: true,
+                      ),
+                    ),
+                  ),
+                  const AnimatedSection(
+                    delay: Duration(milliseconds: 90),
+                    child: AppStepper(
+                      currentStep: 4,
+                      totalSteps: 7,
+                      stepTitles: ['PAN Verification', 'Personal Details', 'Assessment Fee', 'Profile & Income', 'Photo & Liveness', 'DigiLocker KYC', 'Account Aggregator'],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
 
-                // Hero Illustration Banner Card
-                Container(
-                  padding: const EdgeInsets.all(18),
+                  // Hero Illustration Banner Card
+                  AnimatedSection(
+                    delay: const Duration(milliseconds: 130),
+                    child: Container(
+                      padding: const EdgeInsets.all(18),
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(
                       begin: Alignment.topLeft,
@@ -227,7 +246,8 @@ class _ProfileDetailsScreenState extends ConsumerState<ProfileDetailsScreen> {
                     ],
                   ),
                 ),
-                const SizedBox(height: 20),
+              ),
+              const SizedBox(height: 20),
 
                 // Card 1: Residence & Employment Type
                 Container(
@@ -496,6 +516,7 @@ class _ProfileDetailsScreenState extends ConsumerState<ProfileDetailsScreen> {
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 }

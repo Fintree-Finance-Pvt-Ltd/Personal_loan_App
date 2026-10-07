@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class SecureStorageService {
@@ -50,6 +51,45 @@ class SecureStorageService {
 
   Future<void> setSelectedLanguage(String lang) async {
     await _storage.write(key: 'app_language', value: lang);
+  }
+
+  static const String _keyNotifications = 'user_notifications_payload';
+
+  Future<void> saveStoredNotifications(String rawJson) async {
+    await _storage.write(key: _keyNotifications, value: rawJson);
+  }
+
+  Future<String?> getStoredNotifications() async {
+    return await _storage.read(key: _keyNotifications);
+  }
+
+  Future<bool> isLoanDisbursedNotified(String lan) async {
+    final key = 'loan_disbursed_notified_${lan.isEmpty ? 'default' : lan}';
+    final val = await _storage.read(key: key);
+    return val == 'true';
+  }
+
+  Future<void> markLoanDisbursedNotified(String lan) async {
+    final key = 'loan_disbursed_notified_${lan.isEmpty ? 'default' : lan}';
+    await _storage.write(key: key, value: 'true');
+  }
+
+  static const String _keyDismissedNotifs = 'dismissed_notification_ids';
+
+  Future<Set<String>> getDismissedNotificationIds() async {
+    final val = await _storage.read(key: _keyDismissedNotifs);
+    if (val == null || val.isEmpty) return {};
+    try {
+      final decoded = jsonDecode(val);
+      if (decoded is List) return decoded.map((e) => e.toString()).toSet();
+    } catch (_) {}
+    return {};
+  }
+
+  Future<void> addDismissedNotificationId(String id) async {
+    final set = await getDismissedNotificationIds();
+    set.add(id);
+    await _storage.write(key: _keyDismissedNotifs, value: jsonEncode(set.toList()));
   }
 
   Future<void> clearSession() async {

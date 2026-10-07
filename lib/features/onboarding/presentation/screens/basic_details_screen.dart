@@ -15,6 +15,8 @@ import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_stepper.dart';
 import '../../../../core/widgets/app_text_field.dart';
 import '../../../../core/widgets/app_header.dart';
+import '../../../../core/widgets/animated_page.dart';
+import '../../../../core/widgets/journey_progress.dart';
 import '../../../dashboard/presentation/journey_controller.dart';
 
 class BasicDetailsScreen extends ConsumerStatefulWidget {
@@ -513,48 +515,67 @@ class _BasicDetailsScreenState extends ConsumerState<BasicDetailsScreen> {
         fallbackRoute: '/onboarding/pan',
       ),
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24.0),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const AppStepper(
-                  currentStep: 2,
-                  totalSteps: 7,
-                  stepTitles: ['PAN Verification', 'Personal Details', 'Assessment Fee', 'Profile & Income', 'Photo & Liveness', 'DigiLocker KYC', 'Account Aggregator'],
-                ),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Basic Information',
-                            style: TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                              color: AppTheme.textDarkPrimary,
-                            ),
-                          ),
-                          SizedBox(height: 6),
-                          Text(
-                            'Please provide your personal details to complete your profile.',
-                            style: TextStyle(fontSize: 13, color: AppTheme.textDarkSecondary),
-                          ),
-                        ],
+        child: AnimatedPage(
+          child: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
+            padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const AnimatedSection(
+                    delay: Duration(milliseconds: 50),
+                    child: Padding(
+                      padding: EdgeInsets.only(bottom: 16.0),
+                      child: JourneyProgress(
+                        currentStep: LoanJourneyStep.kyc,
+                        compact: true,
                       ),
                     ),
-                    SvgPicture.asset(
-                      'lib/assets/images/illustrations/Personal settings-pana.svg',
-                      height: 90,
+                  ),
+                  const AnimatedSection(
+                    delay: Duration(milliseconds: 90),
+                    child: AppStepper(
+                      currentStep: 2,
+                      totalSteps: 7,
+                      stepTitles: ['PAN Verification', 'Personal Details', 'Assessment Fee', 'Profile & Income', 'Photo & Liveness', 'DigiLocker KYC', 'Account Aggregator'],
                     ),
-                  ],
-                ),
-                const SizedBox(height: 20),
+                  ),
+                  const SizedBox(height: 16),
+                  AnimatedSection(
+                    delay: const Duration(milliseconds: 130),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Basic Information',
+                                style: TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppTheme.textDarkPrimary,
+                                ),
+                              ),
+                              SizedBox(height: 6),
+                              Text(
+                                'Please provide your personal details to complete your profile.',
+                                style: TextStyle(fontSize: 13, color: AppTheme.textDarkSecondary),
+                              ),
+                            ],
+                          ),
+                        ),
+                        SvgPicture.asset(
+                          'lib/assets/images/illustrations/Personal settings-pana.svg',
+                          height: 80,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
                 if (isPanVerified || _nameController.text.trim().isNotEmpty) ...[
                   AppTextField(
                     label: 'Full Name (As per PAN)',
@@ -780,6 +801,7 @@ class _BasicDetailsScreenState extends ConsumerState<BasicDetailsScreen> {
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 }

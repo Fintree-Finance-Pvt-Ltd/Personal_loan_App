@@ -158,6 +158,21 @@ class JourneyController extends StateNotifier<JourneyState> {
                  postApproval?.workflow.currentStep == 'DISBURSED' ||
                  postApproval?.workflow.currentStep == 'COMPLETED') {
         nextRoute = '/dashboard';
+        if (effectiveLan.isNotEmpty) {
+          final num? rawAmt = postApproval?.loan.disbursalAmount ?? postApproval?.loan.approvedAmount ?? postApproval?.offer.approvedAmount;
+          if (rawAmt != null && rawAmt > 0) {
+            PushNotificationService().sendDisbursalNotification(
+              lan: effectiveLan,
+              amount: rawAmt.toDouble(),
+              bankName: postApproval?.bank.bankName,
+              accountMasked: postApproval?.bank.accountMasked,
+              utr: postApproval?.loan.disbursalUtr,
+              disbursalTime: postApproval?.loan.disbursalCompletedAt != null
+                  ? DateTime.tryParse(postApproval!.loan.disbursalCompletedAt!)
+                  : null,
+            );
+          }
+        }
       } else if (customer.latestApplicationStatus == 'LENDER_APPROVED' && effectiveLan.isNotEmpty) {
         final step = postApproval?.workflow.currentStep ?? 'APPROVAL_SUMMARY';
         nextRoute = _mapPostApprovalStepToRoute(step, effectiveLan);

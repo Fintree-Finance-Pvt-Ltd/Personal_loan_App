@@ -56,6 +56,9 @@ class CustomerModel {
   final String? platformLan;
   final int completedLoansCount;
 
+  num? get approvedLimit => assessmentFee?['totalAmount'] ?? assessmentFee?['amount'];
+  num? get maxLoanLimit => null;
+
   const CustomerModel({
     required this.id,
     required this.customerCode,

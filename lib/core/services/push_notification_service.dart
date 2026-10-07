@@ -771,4 +771,78 @@ class PushNotificationService {
 
     debugPrint('Instant Repayment Success notification sent for amount: $amountStr');
   }
+
+  /// Send instant notification when loan is disbursed
+  Future<void> sendDisbursalNotification({
+    required String lan,
+    required double amount,
+    String? bankName,
+    String? accountMasked,
+    String? utr,
+    DateTime? disbursalTime,
+  }) async {
+    final storage = SecureStorageService();
+    final bool alreadyNotified = await storage.isLoanDisbursedNotified(lan);
+    if (alreadyNotified) {
+      return;
+    }
+
+    const int notificationId = 904;
+    final String amountStr = CurrencyUtils.formatAmount(amount);
+    final String bankDisplay = (bankName != null && accountMasked != null && accountMasked.isNotEmpty)
+        ? '$bankName (..$accountMasked)'
+        : (bankName ?? 'your registered bank account');
+
+    final AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+      dropoffChannelId,
+      dropoffChannelName,
+      icon: '@mipmap/launcher_icon',
+      importance: Importance.max,
+      priority: Priority.high,
+      playSound: true,
+      styleInformation: BigTextStyleInformation(
+        'Congratulations! $amountStr net loan amount has been credited to $bankDisplay. 🎉',
+      ),
+    );
+
+    const DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+    );
+
+    final NotificationDetails platformDetails = NotificationDetails(
+      android: androidDetails,
+      iOS: iosDetails,
+    );
+
+    final route = lan.isNotEmpty ? '/loan/$lan/loan-details' : '/dashboard';
+
+    await _localNotifications.show(
+      notificationId,
+      'Loan Disbursed Successfully! 🎉',
+      '$amountStr net amount credited to $bankDisplay.',
+      platformDetails,
+      payload: jsonEncode({'route': route, 'type': 'loan_disbursed'}),
+    );
+
+    await storage.markLoanDisbursedNotified(lan);
+
+    dispatchDynamicNotification(
+      AppNotificationModel(
+        id: 'dynamic_disbursed_${lan.isNotEmpty ? lan : DateTime.now().millisecondsSinceEpoch}',
+        title: 'Loan Disbursed Successfully! 🎉',
+        body: '$amountStr net amount credited to $bankDisplay.',
+        category: NotificationCategory.loan,
+        timestamp: disbursalTime ?? DateTime.now(),
+        isRead: false,
+        route: route,
+        actionLabel: 'View RPS Schedule',
+        utr: utr,
+        amount: amount,
+      ),
+    );
+
+    debugPrint('Instant Disbursal notification sent for LAN: $lan, amount: $amountStr');
+  }
 }

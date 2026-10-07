@@ -17,6 +17,10 @@ import '../../../../core/providers/locale_provider.dart';
 import '../../../dashboard/presentation/journey_controller.dart';
 
 
+import '../../../../core/widgets/animated_page.dart';
+import '../../../../core/widgets/journey_progress.dart';
+import '../../../../core/widgets/status_card.dart';
+
 class ApplicationStatusScreen extends ConsumerStatefulWidget {
   const ApplicationStatusScreen({super.key});
 
@@ -105,6 +109,26 @@ class _ApplicationStatusScreenState extends ConsumerState<ApplicationStatusScree
     if (mounted) setState(() => _isAutoPolling = false);
   }
 
+  LoanJourneyStep _getJourneyStep(String appStatus, String? nextStep, bool isDisbursed) {
+    if (isDisbursed) return LoanJourneyStep.disbursal;
+    final statusUpper = appStatus.toUpperCase();
+    if (statusUpper == 'LENDER_APPROVED' || statusUpper == 'APPROVED') {
+      return LoanJourneyStep.finalApproval;
+    }
+    if (statusUpper == 'LENDER_PRE_APPROVED' || statusUpper == 'PRE_APPROVED' || nextStep == 'PRE_APPROVAL_OFFER_SELECTION') {
+      return LoanJourneyStep.preApproval;
+    }
+    if (statusUpper == 'PENDING_CREDIT_REVIEW' ||
+        statusUpper == 'LENDER_REVIEW' ||
+        statusUpper == 'SUBMITTED' ||
+        nextStep == 'LENDER_DECISION_PROCESSING' ||
+        nextStep == 'LENDER_CREATE_PROCESSING' ||
+        nextStep == 'APPROVAL_PROCESSING') {
+      return LoanJourneyStep.creditReview;
+    }
+    return LoanJourneyStep.application;
+  }
+
   @override
   Widget build(BuildContext context) {
     final journeyState = ref.watch(journeyControllerProvider);
@@ -130,6 +154,8 @@ class _ApplicationStatusScreenState extends ConsumerState<ApplicationStatusScree
         appStatus == 'SUBMITTED' ||
         appStatus == 'PENDING_CREDIT_REVIEW' ||
         appStatus == 'LENDER_REVIEW';
+    final bool isPreApproved = appStatus == 'LENDER_PRE_APPROVED' || appStatus == 'PRE_APPROVED' || nextStep == 'PRE_APPROVAL_OFFER_SELECTION';
+    final bool isApproved = appStatus == 'LENDER_APPROVED' || appStatus == 'APPROVED';
     final bool isDisbursed = appStatus.toUpperCase() == 'DISBURSED' ||
         customer?.latestLoanStatus == 'DISBURSED' ||
         journeyState.postApproval?.workflow.currentStep == 'DISBURSED' ||
@@ -143,111 +169,354 @@ class _ApplicationStatusScreenState extends ConsumerState<ApplicationStatusScree
             ? tr.tr('underwriting_in_progress')
             : (isDisbursed ? tr.tr('loan_disbursed') : tr.tr('application_status')),
         actions: [
-          IconButton(icon: const Icon(Icons.refresh), onPressed: _refresh),
+          IconButton(
+            icon: const Icon(Icons.refresh_rounded),
+            tooltip: 'Refresh Status',
+            onPressed: _refresh,
+          ),
         ],
       ),
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            children: [
-              const SizedBox(height: 10),
-              if (isDisbursed)
-                _buildDisbursedCelebrationCard(context, customer, journeyState.postApproval, lan ?? '')
-              else ...[
-                if (isProcessing)
-                  SvgPicture.asset(
-                    'lib/assets/images/illustrations/Loading-rafiki.svg',
-                    height: 140,
-                  )
-                else if (appStatus.contains('APPROVED') || appStatus.contains('COMPLETED'))
-                  SvgPicture.asset(
-                    'lib/assets/images/illustrations/Completed-pana.svg',
-                    height: 140,
-                  )
-                else
-                  Container(
-                    padding: const EdgeInsets.all(24),
-                    decoration: BoxDecoration(
-                      color: AppTheme.surfaceWhite,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: AppTheme.primaryTeal.withValues(alpha: 0.15), width: 2),
-                      boxShadow: [
-                        BoxShadow(color: AppTheme.primaryTeal.withValues(alpha: 0.08), blurRadius: 16, offset: const Offset(0, 4)),
-                      ],
-                    ),
-                    child: Icon(
-                      _getStatusIcon(appStatus),
-                      size: 64,
-                      color: _getStatusIconColor(appStatus),
-                    ),
-                  ),
-                const SizedBox(height: 20),
-                Text(
-                  isProcessing ? 'We are processing your application with the lender...' : _getStatusTitle(appStatus),
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppTheme.textDarkPrimary),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  isProcessing
-                      ? 'This usually takes 10 to 30 seconds. Please do not close or refresh this page.'
-                      : _getStatusDescription(appStatus),
-                  style: const TextStyle(fontSize: 14, color: AppTheme.textDarkSecondary, height: 1.4),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 28),
-                Card(
+        child: AnimatedPage(
+          child: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
+            padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // 1. Continuous Journey Progress Header
+                AnimatedSection(
+                  delay: const Duration(milliseconds: 50),
                   child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Column(
-                      children: [
-                        _infoRow('Lender', customer?.allocatedLenderName ?? 'Fintree Finance Private Limited'),
-                        const Divider(height: 16),
-                        _infoRow('Status', appStatus, isBadge: true),
-                        if (lan != null && lan.isNotEmpty) ...[
-                          const Divider(height: 16),
-                          _infoRow('Loan Account No. (LAN)', lan),
-                        ],
-                      ],
+                    padding: const EdgeInsets.only(bottom: 20.0),
+                    child: JourneyProgress(
+                      currentStep: _getJourneyStep(appStatus, nextStep, isDisbursed),
+                      compact: true,
                     ),
                   ),
                 ),
-                const SizedBox(height: 32),
-                if (isRejection) ...[
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: AppTheme.errorBg,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Column(
-                      children: [
-                        Text(
-                          'Application Not Approved',
-                          style: TextStyle(fontWeight: FontWeight.bold, color: AppTheme.errorRed, fontSize: 15),
+
+                if (isDisbursed)
+                  AnimatedSection(
+                    delay: const Duration(milliseconds: 120),
+                    child: _buildDisbursedCelebrationCard(context, customer, journeyState.postApproval, lan ?? ''),
+                  )
+                else if (isProcessing) ...[
+                  // 2. Requirement 8: Polished Under Review Status Card
+                  AnimatedSection(
+                    delay: const Duration(milliseconds: 100),
+                    child: StatusCard.underReview(
+                      title: 'Under Review',
+                      description: 'Your application is being reviewed by our credit team. This automated assessment ensures competitive loan terms tailored to your profile.',
+                      onRefresh: _refresh,
+                      extraContent: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFEF3C7),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: const Color(0xFFFDE68A)),
                         ),
-                        SizedBox(height: 6),
-                        Text(
-                          'Your application does not currently satisfy lender policy thresholds. You may re-apply after 90 days or contact support for assistance.',
-                          style: TextStyle(color: AppTheme.errorRed, fontSize: 13, height: 1.4),
-                          textAlign: TextAlign.center,
+                        child: Row(
+                          children: [
+                            const Icon(Icons.timer_outlined, color: Color(0xFFB45309), size: 18),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                _isAutoPolling
+                                    ? 'Auto-checking decision with lender underwriting...'
+                                    : 'Typically completes in 10-30 seconds. Please keep this screen open.',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF92400E),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 16),
-                  AppButton(
-                    text: 'Return to Dashboard',
-                    onPressed: () => context.go('/dashboard'),
-                    icon: Icons.home_rounded,
+                  const SizedBox(height: 20),
+                  _buildDetailsCard(customer, appStatus, lan),
+                ] else if (isPreApproved) ...[
+                  // 3. Requirement 9: Pre-Approval State
+                  AnimatedSection(
+                    delay: const Duration(milliseconds: 100),
+                    child: StatusCard.preApproved(
+                      title: "You're Pre-Approved",
+                      description: 'Your offer is ready. Choose your preferred loan amount and flexible EMI repayment tenure to continue.',
+                      onViewOffer: () {
+                        final effectiveLan = (lan != null && lan.isNotEmpty) ? lan : 'default';
+                        context.push('/loan/$effectiveLan/offer?isPreApproval=true');
+                      },
+                      extraContent: Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: AppTheme.primaryLightTeal,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppTheme.primaryTeal.withValues(alpha: 0.2)),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: const BoxDecoration(
+                                color: AppTheme.primaryTeal,
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.verified_rounded, color: Colors.white, size: 20),
+                            ),
+                            const SizedBox(width: 12),
+                            const Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Instant Sanction Available',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.bold,
+                                      color: AppTheme.primaryDarkTeal,
+                                    ),
+                                  ),
+                                  SizedBox(height: 2),
+                                  Text(
+                                    'Customized interest rates and zero hidden charges.',
+                                    style: TextStyle(
+                                      fontSize: 11.5,
+                                      color: AppTheme.textDarkSecondary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                   ),
+                  const SizedBox(height: 20),
+                  _buildDetailsCard(customer, appStatus, lan),
+                ] else if (isApproved) ...[
+                  // 4. Requirement 10: Final Approval State
+                  AnimatedSection(
+                    delay: const Duration(milliseconds: 100),
+                    child: StatusCard.approved(
+                      title: 'Application Approved!',
+                      description: 'Congratulations! Your loan has received lender approval. Complete bank verification and digital agreement sign to initiate instant disbursal.',
+                      actionText: (lan != null && lan.isNotEmpty) ? 'Continue to Next Step' : 'Refresh Loan Status',
+                      onContinue: () {
+                        if (lan != null && lan.isNotEmpty) {
+                          context.push('/dashboard');
+                        } else {
+                          _refresh();
+                        }
+                      },
+                      extraContent: Builder(
+                        builder: (context) {
+                          final num? sanctionedAmt = journeyState.postApproval?.loan.approvedAmount ?? journeyState.postApproval?.offer.approvedAmount;
+                          return Column(
+                            children: [
+                              if (sanctionedAmt != null && sanctionedAmt > 0)
+                                Container(
+                                  padding: const EdgeInsets.all(16),
+                                  margin: const EdgeInsets.only(bottom: 12),
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.surfaceWhite,
+                                    borderRadius: BorderRadius.circular(14),
+                                    border: Border.all(color: AppTheme.primaryTeal.withValues(alpha: 0.25)),
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      const Text(
+                                        'Sanctioned Amount',
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          color: AppTheme.textDarkSecondary,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                      Text(
+                                        CurrencyUtils.formatAmount(sanctionedAmt.toDouble()),
+                                        style: const TextStyle(
+                                          fontSize: 20,
+                                          fontWeight: FontWeight.w900,
+                                          color: AppTheme.primaryTeal,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.surfaceWhite,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: AppTheme.borderLight),
+                                ),
+                                child: const Row(
+                                  children: [
+                                    Icon(Icons.arrow_circle_right_rounded, color: AppTheme.primaryTeal, size: 20),
+                                    SizedBox(width: 10),
+                                    Expanded(
+                                      child: Text(
+                                        'Next: Bank Account Setup & E-Sign Mandate',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w700,
+                                          color: AppTheme.textDarkPrimary,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  _buildDetailsCard(customer, appStatus, lan),
                 ] else ...[
-                  _buildActionButtons(appStatus, nextStep, lan, context, journeyState),
+                  // 5. General status presentation (in-progress, unsubmitted, or rejection)
+                  AnimatedSection(
+                    delay: const Duration(milliseconds: 100),
+                    child: Container(
+                      padding: const EdgeInsets.all(24),
+                      decoration: BoxDecoration(
+                        color: AppTheme.surfaceWhite,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: AppTheme.borderLight),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.03),
+                            blurRadius: 16,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(20),
+                            decoration: BoxDecoration(
+                              color: _getStatusIconColor(appStatus).withValues(alpha: 0.1),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              _getStatusIcon(appStatus),
+                              size: 48,
+                              color: _getStatusIconColor(appStatus),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            _getStatusTitle(appStatus),
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              fontSize: 19,
+                              fontWeight: FontWeight.w800,
+                              color: AppTheme.textDarkPrimary,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            _getStatusDescription(appStatus),
+                            style: const TextStyle(
+                              fontSize: 13.5,
+                              color: AppTheme.textDarkSecondary,
+                              height: 1.45,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  _buildDetailsCard(customer, appStatus, lan),
+                  const SizedBox(height: 24),
+                  if (isRejection) ...[
+                    AnimatedSection(
+                      delay: const Duration(milliseconds: 200),
+                      child: Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: AppTheme.errorBg,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: AppTheme.errorRed.withValues(alpha: 0.2)),
+                        ),
+                        child: const Column(
+                          children: [
+                            Text(
+                              'Application Not Approved',
+                              style: TextStyle(fontWeight: FontWeight.bold, color: AppTheme.errorRed, fontSize: 14),
+                            ),
+                            SizedBox(height: 6),
+                            Text(
+                              'Your application does not currently satisfy lender policy thresholds. You may re-apply after 90 days or contact support for assistance.',
+                              style: TextStyle(color: AppTheme.errorRed, fontSize: 12.5, height: 1.4),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    AnimatedSection(
+                      delay: const Duration(milliseconds: 250),
+                      child: AppButton(
+                        text: 'Return to Dashboard',
+                        onPressed: () => context.go('/dashboard'),
+                        icon: Icons.home_rounded,
+                      ),
+                    ),
+                  ] else ...[
+                    AnimatedSection(
+                      delay: const Duration(milliseconds: 200),
+                      child: _buildActionButtons(appStatus, nextStep, lan, context, journeyState),
+                    ),
+                  ],
                 ],
               ],
-            ],
+            ),
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDetailsCard(CustomerModel? customer, String appStatus, String? lan) {
+    return AnimatedSection(
+      delay: const Duration(milliseconds: 150),
+      child: Container(
+        padding: const EdgeInsets.all(18.0),
+        decoration: BoxDecoration(
+          color: AppTheme.surfaceWhite,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppTheme.borderLight),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.02),
+              blurRadius: 10,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Column(
+          children: [
+            _infoRow('Lender', customer?.allocatedLenderName ?? 'Fintree Finance Private Limited'),
+            const Divider(height: 20, color: AppTheme.borderLight),
+            _infoRow('Status', appStatus, isBadge: true),
+            if (lan != null && lan.isNotEmpty) ...[
+              const Divider(height: 20, color: AppTheme.borderLight),
+              _infoRow('Loan Account No. (LAN)', lan),
+            ],
+          ],
         ),
       ),
     );

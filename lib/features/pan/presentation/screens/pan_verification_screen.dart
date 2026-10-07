@@ -15,6 +15,8 @@ import '../../../../core/widgets/app_status_badge.dart';
 import '../../../../core/widgets/app_stepper.dart';
 import '../../../../core/widgets/app_text_field.dart';
 import '../../../../core/widgets/app_header.dart';
+import '../../../../core/widgets/animated_page.dart';
+import '../../../../core/widgets/journey_progress.dart';
 import '../../../dashboard/presentation/journey_controller.dart';
 
 class PanVerificationScreen extends ConsumerStatefulWidget {
@@ -237,33 +239,56 @@ class _PanVerificationScreenState extends ConsumerState<PanVerificationScreen> {
         title: tr.tr('pan_verification_title'),
       ),
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24.0),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const AppStepper(
-                  currentStep: 1,
-                  totalSteps: 5,
-                  stepTitles: ['PAN Verification', 'Personal Details', 'Profile & Income', 'Photo & Liveness', 'Submit'],
-                ),
-                const SizedBox(height: 24),
-                const Text(
-                  'Verify Your PAN',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: AppTheme.textDarkPrimary,
+        child: AnimatedPage(
+          child: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
+            padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const AnimatedSection(
+                    delay: Duration(milliseconds: 50),
+                    child: Padding(
+                      padding: EdgeInsets.only(bottom: 16.0),
+                      child: JourneyProgress(
+                        currentStep: LoanJourneyStep.kyc,
+                        compact: true,
+                      ),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 6),
-                const Text(
-                  'Enter your 10-character Permanent Account Number (PAN) for identity verification.',
-                  style: TextStyle(fontSize: 14, color: AppTheme.textDarkSecondary),
-                ),
-                                const SizedBox(height: 24),
+                  const AnimatedSection(
+                    delay: Duration(milliseconds: 90),
+                    child: AppStepper(
+                      currentStep: 1,
+                      totalSteps: 5,
+                      stepTitles: ['PAN Verification', 'Personal Details', 'Profile & Income', 'Photo & Liveness', 'Submit'],
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  const AnimatedSection(
+                    delay: Duration(milliseconds: 130),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Verify Your PAN',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: AppTheme.textDarkPrimary,
+                          ),
+                        ),
+                        SizedBox(height: 6),
+                        Text(
+                          'Enter your 10-character Permanent Account Number (PAN) for identity verification.',
+                          style: TextStyle(fontSize: 14, color: AppTheme.textDarkSecondary),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 20),
                 if (!isAlreadyVerified) ...[
                   Container(
                     width: double.infinity,
@@ -536,7 +561,8 @@ class _PanVerificationScreenState extends ConsumerState<PanVerificationScreen> {
           ),
         ),
       ),
-    );
+    ),
+  );
   }
 
   String? _getVerifiedField(String field) {

@@ -49,8 +49,6 @@
 	<true/>
 	<key>NSCameraUsageDescription</key>
 	<string>Camera access is required for capturing live selfie during face liveness verification.</string>
-	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Location access is required for geolocation risk verification during application submit.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Photo library access is required for selecting and uploading identification and supporting documents.</string>
 	<key>UIApplicationSceneManifest</key>

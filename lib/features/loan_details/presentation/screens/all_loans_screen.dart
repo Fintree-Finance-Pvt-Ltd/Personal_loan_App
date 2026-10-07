@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../app/theme.dart';
+import '../../../../core/models/customer_model.dart';
 import '../../../../core/models/lender_offer_multiplier.dart';
 import '../../../../core/providers/providers.dart';
 import '../../../../core/utils/currency_utils.dart';
@@ -384,10 +385,10 @@ class _AllLoansScreenState extends ConsumerState<AllLoansScreen> {
     );
   }
 
-  Widget _buildRepeatLoanBanner(dynamic customer) {
+  Widget _buildRepeatLoanBanner(CustomerModel customer) {
     final int count = customer.completedLoansCount > 0 ? customer.completedLoansCount : 1;
     final double mult = LenderMultiplierCalculator.getMultiplier(count);
-    final num? baseLimit = customer.approvedLimit ?? customer.maxLoanLimit ?? customer.assessmentFee?['totalAmount'];
+    final num? baseLimit = customer.approvedLimit ?? customer.assessmentFee?['totalAmount'] ?? customer.assessmentFee?['amount'];
     final double initialLimit = (baseLimit != null && baseLimit.toDouble() > 0) ? baseLimit.toDouble() : 0.0;
     final double revisedLimit = initialLimit > 0 ? LenderMultiplierCalculator.calculateRevisedLimit(initialLimit, count) : 0.0;
 
