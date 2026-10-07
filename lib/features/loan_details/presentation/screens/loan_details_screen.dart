@@ -2,15 +2,18 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dio/dio.dart';
 import '../../../../core/api/api_exception.dart';
 import '../../../../app/theme.dart';
 import '../../../../core/providers/providers.dart';
+import '../../../../core/providers/locale_provider.dart';
 import '../../../../core/utils/currency_utils.dart';
 import '../../../../core/widgets/app_loader.dart';
 import '../../../../core/widgets/app_status_badge.dart';
 import '../../../../core/widgets/app_header.dart';
+import '../../../../core/services/push_notification_service.dart';
 import '../../../dashboard/presentation/journey_controller.dart';
 
 class LoanDetailsScreen extends ConsumerStatefulWidget {
@@ -83,6 +86,28 @@ class _LoanDetailsScreenState extends ConsumerState<LoanDetailsScreen> {
         setState(() {
           _loanDetailsData = data is Map<String, dynamic> ? data : null;
         });
+
+        // Schedule EMI Reminders (3 days before, 1 day before, and due date with Pay Now button)
+        if (_loanDetailsData != null) {
+          final loanMap = _loanDetailsData!['loan'] as Map<String, dynamic>?;
+          final nextEmi = _loanDetailsData!['nextEmi'] as Map<String, dynamic>? ?? loanMap;
+          if (nextEmi != null) {
+            final rawAmount = nextEmi['amount'] ?? nextEmi['emiAmount'] ?? nextEmi['nextEmiAmount'];
+            final rawDueDate = nextEmi['dueDate'] ?? nextEmi['nextEmiDueDate'];
+            if (rawAmount != null && rawDueDate != null) {
+              final amount = (rawAmount is num) ? rawAmount.toDouble() : double.tryParse(rawAmount.toString()) ?? 0.0;
+              final dueDate = DateTime.tryParse(rawDueDate.toString());
+              if (dueDate != null && amount > 0) {
+                PushNotificationService().scheduleEmiReminders(
+                  lan: widget.lan,
+                  amount: amount,
+                  dueDate: dueDate,
+                );
+              }
+            }
+          }
+        }
+
         _checkAndStartPolling();
       }
     } catch (e) {
@@ -155,6 +180,7 @@ class _LoanDetailsScreenState extends ConsumerState<LoanDetailsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final tr = ref.watch(appLocalizationsProvider);
     final postApproval = ref.watch(journeyControllerProvider).postApproval;
     final fallbackLoan = postApproval?.loan;
     final fallbackOffer = postApproval?.offer;
@@ -167,16 +193,97 @@ class _LoanDetailsScreenState extends ConsumerState<LoanDetailsScreen> {
     final rpsList = (_loanDetailsData?['repaymentSchedule'] as List<dynamic>?) ?? [];
     final repaymentHistory = (_loanDetailsData?['repaymentHistory'] as List<dynamic>?) ?? [];
 
-    final status = apiLoan?['status']?.toString() ?? fallbackLoan?.status ?? 'DISBURSED';
-    final isDisbursed = status == 'DISBURSED' || fallbackLoan?.disbursalStatus == 'DISBURSED';
+    final status = (apiLoan?['status']?.toString() ?? fallbackLoan?.status ?? 'PROCESSING').toUpperCase();
+    final disbursalStatus = (apiLoan?['disbursalStatus']?.toString() ?? fallbackLoan?.disbursalStatus ?? '').toUpperCase();
+    final isDisbursed = status == 'DISBURSED' || status == 'FULLY_PAID' || disbursalStatus == 'DISBURSED';
 
-    final approvedAmount = (apiLoan?['approvedAmount'] ?? fallbackLoan?.approvedAmount ?? 0).toDouble();
-    final disbursedAmount = (apiLoan?['disbursedAmount'] ?? approvedAmount).toDouble();
-    final totalOutstanding = (summary?['totalOutstanding'] ?? approvedAmount).toDouble();
-    final totalPaid = (summary?['totalPaid'] ?? 0).toDouble();
-    final overdueAmount = (summary?['overdueAmount'] ?? 0).toDouble();
-    final nextEmiAmount = (summary?['nextEmiAmount'] ?? 0).toDouble();
+    final num? rawApproved = apiLoan?['approvedAmount'] ??
+        apiLoan?['disbursedAmount'] ??
+        apiLoan?['amount'] ??
+        fallbackLoan?.approvedAmount ??
+        fallbackLoan?.disbursalAmount ??
+        fallbackOffer?.approvedAmount;
+
+    final double? approvedAmount = (rawApproved != null && rawApproved.toDouble() > 0)
+        ? rawApproved.toDouble()
+        : null;
+
+    final double rawDisbursed = (apiLoan?['disbursedAmount'] ?? fallbackLoan?.disbursalAmount ?? 0).toDouble();
+    final double? disbursedAmount = rawDisbursed > 0 ? rawDisbursed : null;
+
+    final double rawOutstanding = (summary?['totalOutstanding'] ?? 0).toDouble();
+    final double? totalOutstanding = rawOutstanding > 0 ? rawOutstanding : null;
+
+    final double rawPaid = (summary?['totalPaid'] ?? 0).toDouble();
+    final double? totalPaid = rawPaid > 0 ? rawPaid : (summary?['totalPaid'] != null ? 0.0 : null);
+
+    final double overdueAmount = (summary?['overdueAmount'] ?? 0).toDouble();
+
+    final num? rawNextEmi = summary?['nextEmiAmount'] ?? fallbackOffer?.acceptedEmiAmount;
+    final double? nextEmiAmount = (rawNextEmi != null && rawNextEmi.toDouble() > 0) ? rawNextEmi.toDouble() : null;
     final nextDueDate = summary?['nextDueDate']?.toString();
+
+    // Construct effective RPS list if rawRpsList is empty but loan is disbursed or has approved amount
+    List<Map<String, dynamic>> effectiveRpsList = rpsList.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+
+    if (effectiveRpsList.isEmpty && (isDisbursed || approvedAmount != null || disbursedAmount != null)) {
+      final double baseAmt = (approvedAmount != null && approvedAmount > 0)
+          ? approvedAmount
+          : ((disbursedAmount != null && disbursedAmount > 0) ? disbursedAmount : 0.0);
+
+      if (baseAmt > 0) {
+        final num? tenureNum = apiLoan?['tenure'] ?? fallbackOffer?.acceptedTenureDays ?? 40;
+        final int tenureDays = (tenureNum != null && tenureNum > 0) ? tenureNum.toInt() : 40;
+        final num? interestNum = apiLoan?['interestRate'] ?? fallbackOffer?.acceptedInterestRate ?? 1;
+        final double interestRatePercent = (interestNum != null && interestNum > 0) ? interestNum.toDouble() : 1.0;
+
+        final double totalInterest = (baseAmt * interestRatePercent * tenureDays) / 3650.0;
+        final double emiVal = (nextEmiAmount != null && nextEmiAmount > 0) ? nextEmiAmount : (baseAmt + totalInterest);
+
+        final rawDisbursalDate = apiLoan?['disbursalDate'] ?? fallbackLoan?.disbursalCompletedAt ?? fallbackLoan?.disbursalDate;
+        DateTime startDate = DateTime.now();
+        if (rawDisbursalDate != null && rawDisbursalDate.toString().isNotEmpty) {
+          final parsed = DateTime.tryParse(rawDisbursalDate.toString());
+          if (parsed != null) startDate = parsed;
+        }
+
+        DateTime dueDt = startDate.add(Duration(days: tenureDays));
+        if (nextDueDate != null && nextDueDate.isNotEmpty) {
+          final parsedDue = DateTime.tryParse(nextDueDate.toString());
+          if (parsedDue != null) dueDt = parsedDue;
+        }
+
+        final bool isPaid = totalOutstanding == 0 || (totalPaid != null && totalPaid >= emiVal);
+        final bool isOverdue = !isPaid && DateTime.now().isAfter(dueDt);
+        final String pStatus = isPaid ? 'PAID' : (isOverdue ? 'OVERDUE' : 'UNPAID');
+
+        effectiveRpsList = [
+          {
+            'installmentNumber': 1,
+            'emi': emiVal,
+            'remainingAmount': totalOutstanding ?? (isPaid ? 0.0 : emiVal),
+            'dueDate': dueDt.toIso8601String(),
+            'paymentStatus': pStatus,
+            'principalAmount': baseAmt,
+            'interestAmount': totalInterest,
+          }
+        ];
+      }
+    }
+
+    String headerAmountText = tr.tr('pending_confirmation');
+    String headerSubText = tr.tr('syncing_details');
+
+    if (totalOutstanding != null) {
+      headerAmountText = CurrencyUtils.formatAmount(totalOutstanding);
+      headerSubText = tr.tr('total_outstanding');
+    } else if (disbursedAmount != null) {
+      headerAmountText = CurrencyUtils.formatAmount(disbursedAmount);
+      headerSubText = tr.tr('disbursed_loan_amount');
+    } else if (approvedAmount != null) {
+      headerAmountText = CurrencyUtils.formatAmount(approvedAmount);
+      headerSubText = tr.tr('sanctioned_amount');
+    }
 
     return Scaffold(
       backgroundColor: AppTheme.backgroundLight,
@@ -223,7 +330,7 @@ class _LoanDetailsScreenState extends ConsumerState<LoanDetailsScreen> {
                               height: 160,
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
-                                color: Colors.white.withOpacity(0.06),
+                                color: Colors.white.withValues(alpha: 0.06),
                               ),
                             ),
                           ),
@@ -240,8 +347,8 @@ class _LoanDetailsScreenState extends ConsumerState<LoanDetailsScreen> {
                                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                                         decoration: BoxDecoration(
                                           color: isDisbursed
-                                              ? Colors.greenAccent.withOpacity(0.25)
-                                              : Colors.orangeAccent.withOpacity(0.25),
+                                              ? Colors.greenAccent.withValues(alpha: 0.25)
+                                              : Colors.orangeAccent.withValues(alpha: 0.25),
                                           borderRadius: BorderRadius.circular(20),
                                           border: Border.all(
                                             color: isDisbursed ? Colors.greenAccent : Colors.orangeAccent,
@@ -249,7 +356,7 @@ class _LoanDetailsScreenState extends ConsumerState<LoanDetailsScreen> {
                                           ),
                                         ),
                                         child: Text(
-                                          isDisbursed ? '✓ ACTIVE LOAN - DISBURSED' : '⏳ PROCESSING',
+                                          isDisbursed ? tr.tr('active_loan_badge') : '⏳ ${tr.tr('processing')}',
                                           style: TextStyle(
                                             color: isDisbursed ? Colors.greenAccent : Colors.orangeAccent,
                                             fontSize: 11,
@@ -275,7 +382,7 @@ class _LoanDetailsScreenState extends ConsumerState<LoanDetailsScreen> {
                                       Text(
                                         widget.lan,
                                         style: TextStyle(
-                                          color: Colors.white.withOpacity(0.75),
+                                          color: Colors.white.withValues(alpha: 0.75),
                                           fontSize: 13,
                                         ),
                                       ),
@@ -284,15 +391,15 @@ class _LoanDetailsScreenState extends ConsumerState<LoanDetailsScreen> {
                                         onTap: () {
                                           Clipboard.setData(ClipboardData(text: widget.lan));
                                           ScaffoldMessenger.of(context).showSnackBar(
-                                            const SnackBar(
-                                              content: Text('LAN copied to clipboard'),
-                                              duration: Duration(seconds: 2),
+                                            SnackBar(
+                                              content: Text(tr.tr('lan_copied')),
+                                              duration: const Duration(seconds: 2),
                                             ),
                                           );
                                         },
                                         child: Icon(
                                           Icons.copy_rounded,
-                                          color: Colors.white.withOpacity(0.6),
+                                          color: Colors.white.withValues(alpha: 0.6),
                                           size: 14,
                                         ),
                                       ),
@@ -300,18 +407,18 @@ class _LoanDetailsScreenState extends ConsumerState<LoanDetailsScreen> {
                                   ),
                                   const SizedBox(height: 12),
                                   Text(
-                                    CurrencyUtils.formatAmount(totalOutstanding > 0 ? totalOutstanding : approvedAmount),
-                                    style: const TextStyle(
+                                    headerAmountText,
+                                    style: TextStyle(
                                       color: Colors.white,
-                                      fontSize: 32,
+                                      fontSize: headerAmountText.startsWith('₹') ? 32 : 24,
                                       fontWeight: FontWeight.w800,
-                                      letterSpacing: -1,
+                                      letterSpacing: -0.5,
                                     ),
                                   ),
                                   Text(
-                                    totalOutstanding > 0 ? 'Total Outstanding Amount' : 'Disbursed Loan Amount',
+                                    headerSubText,
                                     style: TextStyle(
-                                      color: Colors.white.withOpacity(0.7),
+                                      color: Colors.white.withValues(alpha: 0.7),
                                       fontSize: 12,
                                     ),
                                   ),
@@ -330,21 +437,90 @@ class _LoanDetailsScreenState extends ConsumerState<LoanDetailsScreen> {
                   padding: const EdgeInsets.all(18),
                   sliver: SliverList(
                     delegate: SliverChildListDelegate([
-                      // Error message if any
-                      if (_errorMessage != null) ...[
+                      // Processing / Disbursal Sync Banner if statement is generating or notice present
+                      if (_errorMessage != null || rpsList.isEmpty) ...[
                         Container(
-                          padding: const EdgeInsets.all(12),
+                          padding: const EdgeInsets.all(18),
                           decoration: BoxDecoration(
-                            color: AppTheme.errorBg,
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: AppTheme.errorRed),
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: const Color(0xFF0F5A47).withValues(alpha: 0.2)),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFF0F5A47).withValues(alpha: 0.06),
+                                blurRadius: 16,
+                                offset: const Offset(0, 6),
+                              ),
+                            ],
                           ),
-                          child: Text(
-                            'Notice: $_errorMessage',
-                            style: const TextStyle(color: AppTheme.errorRed, fontSize: 12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  SvgPicture.asset(
+                                    'lib/assets/images/illustrations/Loading-rafiki.svg',
+                                    height: 80,
+                                  ),
+                                  const SizedBox(width: 14),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFFFEF3C7),
+                                            borderRadius: BorderRadius.circular(12),
+                                          ),
+                                          child: Text(
+                                            '⏳ ${tr.tr('statement_sync_in_progress')}',
+                                            style: const TextStyle(
+                                              fontSize: 9.5,
+                                              fontWeight: FontWeight.w800,
+                                              color: Color(0xFFD97706),
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(height: 6),
+                                        Text(
+                                          approvedAmount != null
+                                              ? '${tr.tr('sanctioned_amount')}: ${CurrencyUtils.formatAmount(approvedAmount)}'
+                                              : '${tr.tr('sanctioned_amount')}: ${tr.tr('pending_confirmation')}',
+                                          style: const TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w800,
+                                            color: Color(0xFF0F172A),
+                                          ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          tr.tr('statement_sync_desc'),
+                                          style: const TextStyle(fontSize: 11.5, color: Color(0xFF64748B), height: 1.3),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 14),
+                              SizedBox(
+                                width: double.infinity,
+                                child: OutlinedButton.icon(
+                                  onPressed: _fetchLoanDetails,
+                                  icon: const Icon(Icons.refresh_rounded, size: 18),
+                                  label: Text(tr.tr('refresh_disbursal_details')),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: const Color(0xFF0F5A47),
+                                    side: const BorderSide(color: Color(0xFF0F5A47)),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                        const SizedBox(height: 14),
+                        const SizedBox(height: 16),
                       ],
 
                       // Summary Overview Grid
@@ -352,18 +528,18 @@ class _LoanDetailsScreenState extends ConsumerState<LoanDetailsScreen> {
                         children: [
                           Expanded(
                             child: _summaryBox(
-                              title: 'Next Due EMI',
-                              val: nextEmiAmount > 0 ? CurrencyUtils.formatAmount(nextEmiAmount) : '—',
-                              sub: nextDueDate != null ? 'Due: ${_formatDate(nextDueDate)}' : 'No dues pending',
+                              title: tr.tr('next_due_emi'),
+                              val: nextEmiAmount != null ? CurrencyUtils.formatAmount(nextEmiAmount) : '—',
+                              sub: nextDueDate != null ? '${tr.tr("due_date")}: ${_formatDate(nextDueDate)}' : tr.tr('no_dues_pending'),
                               color: AppTheme.primaryTeal,
                             ),
                           ),
                           const SizedBox(width: 12),
                           Expanded(
                             child: _summaryBox(
-                              title: 'Total Paid',
-                              val: CurrencyUtils.formatAmount(totalPaid),
-                              sub: overdueAmount > 0 ? 'Overdue: ${CurrencyUtils.formatAmount(overdueAmount)}' : 'On schedule',
+                              title: tr.tr('total_paid'),
+                              val: totalPaid != null ? CurrencyUtils.formatAmount(totalPaid) : '—',
+                              sub: overdueAmount > 0 ? '${tr.tr("overdue")}: ${CurrencyUtils.formatAmount(overdueAmount)}' : tr.tr('on_schedule'),
                               color: overdueAmount > 0 ? AppTheme.errorRed : AppTheme.successGreen,
                             ),
                           ),
@@ -371,30 +547,41 @@ class _LoanDetailsScreenState extends ConsumerState<LoanDetailsScreen> {
                       ),
                       const SizedBox(height: 16),
 
-                      // Disbursal Banner
-                      _disbursalSuccessCard(
-                        disbursedAmount,
-                        apiLoan?['disbursalUtr'] ?? fallbackLoan?.disbursalUtr,
-                        apiLoan?['disbursalDate'] ?? fallbackLoan?.disbursalCompletedAt,
-                      ),
-                      const SizedBox(height: 16),
+                      // Disbursal Banner - Only show if confirmed disbursed and amounts are confirmed
+                      if (isDisbursed && (disbursedAmount != null || approvedAmount != null)) ...[
+                        _disbursalSuccessCard(
+                          (disbursedAmount ?? approvedAmount)!,
+                          apiLoan?['disbursalUtr'] ?? fallbackLoan?.disbursalUtr,
+                          apiLoan?['disbursalDate'] ?? fallbackLoan?.disbursalCompletedAt,
+                        ),
+                        const SizedBox(height: 16),
+                      ],
 
                       // ── Repayment Schedule (RPS) ────────────────────
                       _sectionCard(
-                        title: 'Repayment Schedule (RPS)',
+                        title: tr.tr('repayment_schedule'),
                         icon: Icons.calendar_month_rounded,
                         children: [
-                          if (rpsList.isEmpty)
-                            const Padding(
-                              padding: EdgeInsets.symmetric(vertical: 12),
-                              child: Text(
-                                'Repayment schedule will be available once final disbursal statement is generated.',
-                                style: TextStyle(fontSize: 13, color: AppTheme.textDarkSecondary),
+                          if (effectiveRpsList.isEmpty)
+                            Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.schedule_rounded, color: AppTheme.primaryTeal, size: 22),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      approvedAmount != null
+                                          ? '${tr.tr('repayment_schedule_for')} ${CurrencyUtils.formatAmount(approvedAmount)} ${tr.tr('rps_populated_utr_synced')}'
+                                          : tr.tr('repayment_schedule_populated_lender'),
+                                      style: const TextStyle(fontSize: 12.5, color: AppTheme.textDarkSecondary, height: 1.35),
+                                    ),
+                                  ),
+                                ],
                               ),
                             )
                           else
-                            ...rpsList.map((rpsItem) {
-                              final itemMap = rpsItem as Map<String, dynamic>;
+                            ...effectiveRpsList.map((itemMap) {
                               final instNum = itemMap['installmentNumber'] ?? 1;
                               final emi = (itemMap['emi'] ?? 0).toDouble();
                               final remaining = (itemMap['remainingAmount'] ?? emi).toDouble();
@@ -420,12 +607,12 @@ class _LoanDetailsScreenState extends ConsumerState<LoanDetailsScreen> {
                                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                       children: [
                                         Text(
-                                          'Installment #$instNum',
+                                          '${tr.tr("installment")} #$instNum',
                                           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                                         ),
                                         AppStatusBadge(
                                           status: pStatus,
-                                          label: isPaid ? 'PAID' : (isOverdue ? 'OVERDUE' : 'UNPAID'),
+                                          label: isPaid ? tr.tr('paid') : (isOverdue ? tr.tr('overdue') : tr.tr('unpaid')),
                                         ),
                                       ],
                                     ),
@@ -437,12 +624,12 @@ class _LoanDetailsScreenState extends ConsumerState<LoanDetailsScreen> {
                                           crossAxisAlignment: CrossAxisAlignment.start,
                                           children: [
                                             Text(
-                                              'Due Date: ${_formatDate(dueDateStr)}',
+                                              '${tr.tr("due_date")}: ${_formatDate(dueDateStr)}',
                                               style: const TextStyle(fontSize: 12, color: AppTheme.textDarkSecondary),
                                             ),
                                             const SizedBox(height: 2),
                                             Text(
-                                              'EMI Amount: ${CurrencyUtils.formatAmount(emi)}',
+                                              '${tr.tr("emi_amount")}: ${CurrencyUtils.formatAmount(emi)}',
                                               style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
                                             ),
                                           ],
@@ -458,7 +645,7 @@ class _LoanDetailsScreenState extends ConsumerState<LoanDetailsScreen> {
                                               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                             ),
-                                            child: const Text('Pay Now', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                                            child: Text(tr.tr('pay_now'), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                                           ),
                                       ],
                                     ),
@@ -472,28 +659,38 @@ class _LoanDetailsScreenState extends ConsumerState<LoanDetailsScreen> {
 
                       // ── Loan Details ────────────────────────────────
                       _sectionCard(
-                        title: 'Loan Account Summary',
+                        title: tr.tr('loan_account_summary'),
                         icon: Icons.receipt_long_rounded,
                         children: [
-                          _row('Loan Account No. (LAN)', widget.lan),
-                          _row('Application No.', apiLoan?['applicationNumber'] ?? fallbackLoan?.applicationNumber ?? '—'),
-                          _row('Lender', apiLoan?['lenderName'] ?? 'Fintree Finance Private Limited'),
-                          _row('Interest Rate', '${apiLoan?['interestRate'] ?? fallbackOffer?.acceptedInterestRate ?? 24}% p.a.'),
-                          _row('Tenure', '${apiLoan?['tenure'] ?? fallbackOffer?.acceptedTenureDays ?? 40} Days'),
-                          _row('Repayment Frequency', apiLoan?['repaymentFrequency'] ?? 'MONTHLY'),
+                          _row(tr.tr('loan_account_no'), widget.lan),
+                          _row(tr.tr('application_no'), apiLoan?['applicationNumber'] ?? fallbackLoan?.applicationNumber ?? '—'),
+                          _row(tr.tr('lender'), apiLoan?['lenderName'] ?? postApproval?.lender.name ?? customer?.allocatedLenderName ?? 'Fintree Finance Private Limited'),
+                          _row(
+                            tr.tr('interest_rate'),
+                            (apiLoan?['interestRate'] != null || fallbackOffer?.acceptedInterestRate != null)
+                                ? '${apiLoan?['interestRate'] ?? fallbackOffer?.acceptedInterestRate}% p.a.'
+                                : tr.tr('pending_confirmation'),
+                          ),
+                          _row(
+                            tr.tr('tenure'),
+                            (apiLoan?['tenure'] != null || fallbackOffer?.acceptedTenureDays != null)
+                                ? '${apiLoan?['tenure'] ?? fallbackOffer?.acceptedTenureDays} ${tr.tr("days")}'
+                                : tr.tr('pending_confirmation'),
+                          ),
+                          _row(tr.tr('repayment_frequency'), apiLoan?['repaymentFrequency'] ?? tr.tr('monthly')),
                         ],
                       ),
                       const SizedBox(height: 16),
 
                       // ── Bank Account ────────────────────────────────
                       _sectionCard(
-                        title: 'Disbursal Bank Account',
+                        title: tr.tr('disbursal_bank_account'),
                         icon: Icons.account_balance_rounded,
                         children: [
-                          _row('Bank Name', bank?.bankName ?? '—'),
-                          _row('Account Holder', bank?.accountHolderName ?? '—'),
+                          _row(tr.tr('bank_name'), bank?.bankName ?? '—'),
+                          _row(tr.tr('account_holder'), bank?.accountHolderName ?? '—'),
                           _row('Account No.', _maskAcc(bank?.accountMasked)),
-                          _row('IFSC Code', bank?.ifsc ?? '—'),
+                          _row(tr.tr('ifsc_code'), bank?.ifsc ?? '—'),
                         ],
                       ),
                       const SizedBox(height: 16),
@@ -572,9 +769,9 @@ class _LoanDetailsScreenState extends ConsumerState<LoanDetailsScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: color.withOpacity(0.3), width: 1.5),
+        border: Border.all(color: color.withValues(alpha: 0.3), width: 1.5),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 8, offset: const Offset(0, 3)),
+          BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: const Offset(0, 3)),
         ],
       ),
       child: Column(
@@ -584,7 +781,7 @@ class _LoanDetailsScreenState extends ConsumerState<LoanDetailsScreen> {
           const SizedBox(height: 4),
           Text(val, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: color)),
           const SizedBox(height: 2),
-          Text(sub, style: TextStyle(fontSize: 11, color: color.withOpacity(0.8), fontWeight: FontWeight.w500)),
+          Text(sub, style: TextStyle(fontSize: 11, color: color.withValues(alpha: 0.8), fontWeight: FontWeight.w500)),
         ],
       ),
     );
@@ -608,7 +805,7 @@ class _LoanDetailsScreenState extends ConsumerState<LoanDetailsScreen> {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: AppTheme.successGreen.withOpacity(0.15),
+                  color: AppTheme.successGreen.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: const Icon(Icons.check_circle_rounded, color: AppTheme.successGreen, size: 24),
@@ -633,7 +830,7 @@ class _LoanDetailsScreenState extends ConsumerState<LoanDetailsScreen> {
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.7),
+              color: Colors.white.withValues(alpha: 0.7),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Column(
@@ -672,7 +869,7 @@ class _LoanDetailsScreenState extends ConsumerState<LoanDetailsScreen> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 3)),
+          BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 3)),
         ],
       ),
       child: Column(

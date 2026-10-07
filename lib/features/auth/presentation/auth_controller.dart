@@ -95,13 +95,20 @@ class AuthController extends StateNotifier<AuthState> {
     }
   }
 
-  Future<CustomerModel?> verifyOtp(String otp) async {
-    if (state.mobileNumber == null) return null;
+  Future<CustomerModel?> verifyOtp(String otp, {String? referralCode}) async {
+    if (state.mobileNumber == null || state.mobileNumber!.trim().isEmpty) {
+      state = state.copyWith(
+        isLoading: false,
+        errorMessage: 'Mobile session expired. Please return to login screen and enter your mobile number.',
+      );
+      return null;
+    }
     state = state.copyWith(isLoading: true, errorMessage: null);
     try {
       final customer = await _repository.verifyMobileOtp(
         mobileNumber: state.mobileNumber!,
         otp: otp,
+        referralCode: referralCode,
       );
       state = state.copyWith(
         isLoading: false,

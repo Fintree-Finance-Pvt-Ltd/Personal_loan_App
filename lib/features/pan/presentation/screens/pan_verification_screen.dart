@@ -1,12 +1,12 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:dio/dio.dart';
 import '../../../../core/api/api_exception.dart';
 import '../../../../app/theme.dart';
+import '../../../../core/providers/locale_provider.dart';
 import '../../../../core/providers/providers.dart';
 import '../../../../core/utils/formatters.dart';
 import '../../../../core/utils/validators.dart';
@@ -230,9 +230,11 @@ class _PanVerificationScreenState extends ConsumerState<PanVerificationScreen> {
     final customer = ref.watch(journeyControllerProvider).customer;
     final isAlreadyVerified = customer?.panVerified == true || _verifiedResult != null;
 
+    final tr = ref.watch(appLocalizationsProvider);
+
     return Scaffold(
-      appBar: const AppHeader(
-        title: 'PAN Verification',
+      appBar: AppHeader(
+        title: tr.tr('pan_verification_title'),
       ),
       body: SafeArea(
         child: SingleChildScrollView(

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:dio/dio.dart';
 import '../../../../core/api/api_exception.dart';
 import '../../../../app/theme.dart';
+import '../../../../core/providers/locale_provider.dart';
 import '../../../../core/providers/providers.dart';
 import '../../../../core/utils/validators.dart';
 import '../../../../core/widgets/app_button.dart';
@@ -155,9 +156,11 @@ class _AddressScreenState extends ConsumerState<AddressScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final tr = ref.watch(appLocalizationsProvider);
+
     return Scaffold(
-      appBar: const AppHeader(
-        title: 'Address Confirmation',
+      appBar: AppHeader(
+        title: tr.tr('address_title'),
         fallbackRoute: '/onboarding/digilocker',
       ),
       body: SafeArea(

@@ -3,6 +3,8 @@ import '../api/api_client.dart';
 import '../api/customer_api.dart';
 import '../storage/secure_storage_service.dart';
 
+import '../services/push_notification_service.dart';
+
 final secureStorageProvider = Provider<SecureStorageService>((ref) {
   return SecureStorageService();
 });
@@ -16,4 +18,8 @@ final customerApiProvider = Provider<CustomerApi>((ref) {
   final apiClient = ref.watch(apiClientProvider);
   final storage = ref.watch(secureStorageProvider);
   return CustomerApi(apiClient, storage);
+});
+
+final pushNotificationServiceProvider = Provider<PushNotificationService>((ref) {
+  return PushNotificationService();
 });

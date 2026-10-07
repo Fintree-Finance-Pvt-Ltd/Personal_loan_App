@@ -21,6 +21,13 @@ import '../features/repayment/presentation/screens/repayment_screen.dart';
 import '../features/dashboard/presentation/screens/dashboard_screen.dart';
 import '../features/dashboard/presentation/screens/splash_screen.dart';
 import '../features/account_aggregator/presentation/screens/account_aggregator_screen.dart';
+import '../features/loan_details/presentation/screens/fully_paid_loan_review_screen.dart';
+import '../features/loan_details/presentation/screens/all_loans_screen.dart';
+import '../features/referral/presentation/screens/referral_screen.dart';
+import '../features/support/presentation/screens/support_screen.dart';
+import '../features/legal/presentation/screens/privacy_policy_screen.dart';
+import '../features/legal/presentation/screens/refund_policy_screen.dart';
+import '../features/legal/presentation/screens/legal_policies_screen.dart';
 
 final appRouter = GoRouter(
   initialLocation: '/splash',
@@ -129,8 +136,52 @@ final appRouter = GoRouter(
       builder: (context, state) => RepaymentScreen(lan: state.pathParameters['lan'] ?? ''),
     ),
     GoRoute(
+      path: '/loan/fully-paid-review',
+      builder: (context, state) => const FullyPaidLoanReviewScreen(),
+    ),
+    GoRoute(
+      path: '/loan/:lan/fully-paid-review',
+      builder: (context, state) => FullyPaidLoanReviewScreen(lan: state.pathParameters['lan'] ?? ''),
+    ),
+    GoRoute(
       path: '/dashboard',
       builder: (context, state) => const DashboardScreen(),
+    ),
+    GoRoute(
+      path: '/referral',
+      builder: (context, state) => const ReferralScreen(),
+    ),
+    GoRoute(
+      path: '/loans/all',
+      builder: (context, state) => const AllLoansScreen(),
+    ),
+    GoRoute(
+      path: '/my-loans',
+      builder: (context, state) => const AllLoansScreen(),
+    ),
+    GoRoute(
+      path: '/support',
+      builder: (context, state) => const SupportScreen(),
+    ),
+    GoRoute(
+      path: '/help',
+      builder: (context, state) => const SupportScreen(),
+    ),
+    GoRoute(
+      path: '/privacy-policy',
+      builder: (context, state) => const PrivacyPolicyScreen(),
+    ),
+    GoRoute(
+      path: '/refund-policy',
+      builder: (context, state) => const RefundPolicyScreen(),
+    ),
+    GoRoute(
+      path: '/legal',
+      builder: (context, state) => const LegalPoliciesScreen(),
+    ),
+    GoRoute(
+      path: '/policies',
+      builder: (context, state) => const LegalPoliciesScreen(),
     ),
   ],
 );

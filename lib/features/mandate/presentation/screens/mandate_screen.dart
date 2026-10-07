@@ -6,6 +6,7 @@ import 'package:webview_flutter/webview_flutter.dart';
 import 'package:dio/dio.dart';
 import '../../../../core/api/api_exception.dart';
 import '../../../../app/theme.dart';
+import '../../../../core/providers/locale_provider.dart';
 import '../../../../core/providers/providers.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_loader.dart';
@@ -313,11 +314,13 @@ class _MandateScreenState extends ConsumerState<MandateScreen> {
         ref.watch(journeyControllerProvider).postApproval?.workflow;
     final isCompleted = workflow?.mandateCompleted == true;
 
+    final tr = ref.watch(appLocalizationsProvider);
+
     // ── WebView Screen ────────────────────────────────────────────────────
     if (_mandateUrl != null && _webViewController != null && !isCompleted) {
       return Scaffold(
         appBar: AppHeader(
-          title: 'Mandate Authorization',
+          title: tr.tr('mandate_title'),
           onBackPressed: () {
             setState(() {
               _mandateUrl = null;
@@ -354,14 +357,14 @@ class _MandateScreenState extends ConsumerState<MandateScreen> {
               Container(
                 color: Colors.white,
                 alignment: Alignment.center,
-                child: Column(
+                child: const Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const CircularProgressIndicator(
+                    CircularProgressIndicator(
                       color: AppTheme.primaryTeal,
                       strokeWidth: 3,
                     ),
-                    const SizedBox(height: 16),
+                    SizedBox(height: 16),
                     Text(
                       'Loading payment portal…',
                       style: TextStyle(
@@ -369,7 +372,7 @@ class _MandateScreenState extends ConsumerState<MandateScreen> {
                         fontSize: 14,
                       ),
                     ),
-                    const SizedBox(height: 6),
+                    SizedBox(height: 6),
                     Text(
                       'Please wait, do not press back.',
                       style: TextStyle(

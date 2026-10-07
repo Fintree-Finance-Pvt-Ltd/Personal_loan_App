@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:dio/dio.dart';
 import 'package:http_parser/http_parser.dart';
 import '../../../../core/api/api_exception.dart';
 import '../../../../app/theme.dart';
+import '../../../../core/providers/locale_provider.dart';
 import '../../../../core/providers/providers.dart';
 import '../../../../core/utils/formatters.dart';
 import '../../../../core/utils/validators.dart';
@@ -189,7 +191,7 @@ class _BasicDetailsScreenState extends ConsumerState<BasicDetailsScreen> {
         ),
       });
 
-      print('[PAN OCR] Sending request to UAT /external-api/pan-ocr...');
+      print('[PAN OCR] Sending request to /external-api/pan-ocr...');
       final res = await apiClient.post(
         '/external-api/pan-ocr',
         data: formData,
@@ -456,6 +458,15 @@ class _BasicDetailsScreenState extends ConsumerState<BasicDetailsScreen> {
           data: const {},
         );
 
+        // Allocate eligible lender and compute assessment fee
+        print('[BASIC DETAILS SUBMIT] Allocating lender for customerId: $customerId');
+        try {
+          final customerApi = ref.read(customerApiProvider);
+          await customerApi.allocateLender(customerId);
+        } catch (err) {
+          print('[BASIC DETAILS SUBMIT] Lender allocation note: $err');
+        }
+
         // Run eligibility
         print('[BASIC DETAILS SUBMIT] Running eligibility for customerId: $customerId');
         final eligibilityRes = await apiClient.post(
@@ -494,9 +505,11 @@ class _BasicDetailsScreenState extends ConsumerState<BasicDetailsScreen> {
     }
     final isPanVerified = customer?.panVerified == true;
 
+    final tr = ref.watch(appLocalizationsProvider);
+
     return Scaffold(
-      appBar: const AppHeader(
-        title: 'Personal Details',
+      appBar: AppHeader(
+        title: tr.tr('basic_details_title'),
         fallbackRoute: '/onboarding/pan',
       ),
       body: SafeArea(
@@ -512,21 +525,36 @@ class _BasicDetailsScreenState extends ConsumerState<BasicDetailsScreen> {
                   totalSteps: 7,
                   stepTitles: ['PAN Verification', 'Personal Details', 'Assessment Fee', 'Profile & Income', 'Photo & Liveness', 'DigiLocker KYC', 'Account Aggregator'],
                 ),
-                const SizedBox(height: 24),
-                const Text(
-                  'Basic Information',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: AppTheme.textDarkPrimary,
-                  ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Basic Information',
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: AppTheme.textDarkPrimary,
+                            ),
+                          ),
+                          SizedBox(height: 6),
+                          Text(
+                            'Please provide your personal details to complete your profile.',
+                            style: TextStyle(fontSize: 13, color: AppTheme.textDarkSecondary),
+                          ),
+                        ],
+                      ),
+                    ),
+                    SvgPicture.asset(
+                      'lib/assets/images/illustrations/Personal settings-pana.svg',
+                      height: 90,
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 6),
-                const Text(
-                  'Please provide your personal details to complete your profile.',
-                  style: TextStyle(fontSize: 14, color: AppTheme.textDarkSecondary),
-                ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 20),
                 if (isPanVerified || _nameController.text.trim().isNotEmpty) ...[
                   AppTextField(
                     label: 'Full Name (As per PAN)',

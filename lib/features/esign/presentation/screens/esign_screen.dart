@@ -8,6 +8,7 @@ import 'package:dio/dio.dart';
 import '../../../../core/api/api_exception.dart';
 import '../../../../app/env.dart';
 import '../../../../app/theme.dart';
+import '../../../../core/providers/locale_provider.dart';
 import '../../../../core/providers/providers.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_loader.dart';
@@ -358,16 +359,18 @@ class _EsignScreenState extends ConsumerState<EsignScreen> {
     final workflow = ref.watch(journeyControllerProvider).postApproval?.workflow;
     final isCompleted = workflow?.esignCompleted == true;
 
+    final tr = ref.watch(appLocalizationsProvider);
+
     if (_isCheckingStatus) {
       return Scaffold(
-        appBar: const AppHeader(title: 'e-Sign Loan Agreement'),
+        appBar: AppHeader(title: tr.tr('esign_title')),
         body: const AppLoader(message: 'Checking agreement e-Sign status...'),
       );
     }
 
     return Scaffold(
       appBar: AppHeader(
-        title: 'e-Sign Loan Agreement',
+        title: tr.tr('esign_title'),
         fallbackRoute: widget.lan.isNotEmpty ? '/loan/${widget.lan}/mandate' : '/dashboard',
       ),
       body: SafeArea(
@@ -400,10 +403,10 @@ class _EsignScreenState extends ConsumerState<EsignScreen> {
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(color: AppTheme.successGreen, width: 1),
                   ),
-                  child: Column(
+                  child: const Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Row(
+                      Row(
                         children: [
                           Icon(Icons.check_circle_rounded, color: AppTheme.successGreen, size: 28),
                           SizedBox(width: 12),
@@ -419,8 +422,8 @@ class _EsignScreenState extends ConsumerState<EsignScreen> {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 8),
-                      const Text(
+                      SizedBox(height: 8),
+                      Text(
                         'Agreement electronically accepted via OTP authentication and stamped with legal audit evidence.',
                         style: TextStyle(color: AppTheme.successDarkGreen, fontSize: 13),
                       ),

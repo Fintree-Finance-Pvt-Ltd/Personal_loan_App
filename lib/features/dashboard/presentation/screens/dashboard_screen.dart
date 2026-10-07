@@ -1,30 +1,32 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../../app/theme.dart';
+import '../../../../core/models/lender_offer_multiplier.dart';
 import '../../../../core/utils/currency_utils.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_status_badge.dart';
 import '../../../auth/presentation/auth_controller.dart';
 import '../journey_controller.dart';
+import '../../../../core/providers/notifications_provider.dart';
+import '../../../../core/providers/locale_provider.dart';
+import '../widgets/notification_center_modal.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
 
   @override
-  ConsumerState<DashboardScreen> createState() =>
-      _DashboardScreenState();
+  ConsumerState<DashboardScreen> createState() => _DashboardScreenState();
 }
 
-class _DashboardScreenState
-    extends ConsumerState<DashboardScreen> {
-  int _selectedTab = 0;
+class _DashboardScreenState extends ConsumerState<DashboardScreen> {
+  int _selectedTab =
+      0; // 0: Loan Overview / Post-approval, 1: Application / My Loans
+  int _selectedNavIndex = 0;
 
   Future<void> _refreshDashboard() async {
-    await ref
-        .read(journeyControllerProvider.notifier)
-        .syncCustomerState();
+    await ref.read(journeyControllerProvider.notifier).syncCustomerState();
   }
 
   Future<void> _logout() async {
@@ -33,17 +35,10 @@ class _DashboardScreenState
       backgroundColor: Colors.transparent,
       builder: (context) {
         return Container(
-          padding: const EdgeInsets.fromLTRB(
-            22,
-            14,
-            22,
-            28,
-          ),
+          padding: const EdgeInsets.fromLTRB(22, 14, 22, 28),
           decoration: const BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.vertical(
-              top: Radius.circular(28),
-            ),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
           ),
           child: SafeArea(
             top: false,
@@ -54,7 +49,7 @@ class _DashboardScreenState
                   width: 44,
                   height: 5,
                   decoration: BoxDecoration(
-                    color: AppTheme.borderLight,
+                    color: const Color(0xFFE2E8F0),
                     borderRadius: BorderRadius.circular(10),
                   ),
                 ),
@@ -63,31 +58,31 @@ class _DashboardScreenState
                   width: 58,
                   height: 58,
                   decoration: BoxDecoration(
-                    color: AppTheme.errorBg,
+                    color: const Color(0xFFFEE2E2),
                     borderRadius: BorderRadius.circular(18),
                   ),
                   child: const Icon(
                     Icons.logout_rounded,
-                    color: AppTheme.errorRed,
+                    color: Color(0xFFDC2626),
                     size: 28,
                   ),
                 ),
                 const SizedBox(height: 16),
-                const Text(
-                  'Logout from your account?',
+                Text(
+                  ref.watch(appLocalizationsProvider).tr('logout_title'),
                   textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: AppTheme.textDarkPrimary,
-                    fontSize: 20,
+                  style: const TextStyle(
+                    color: Color(0xFF0F172A),
+                    fontSize: 19,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
                 const SizedBox(height: 8),
-                const Text(
-                  'You will need to verify your mobile number again to access your loan journey.',
+                Text(
+                  ref.watch(appLocalizationsProvider).tr('logout_message'),
                   textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: AppTheme.textDarkSecondary,
+                  style: const TextStyle(
+                    color: Color(0xFF64748B),
                     fontSize: 13,
                     height: 1.5,
                   ),
@@ -97,22 +92,40 @@ class _DashboardScreenState
                   children: [
                     Expanded(
                       child: OutlinedButton(
-                        onPressed: () {
-                          Navigator.of(context).pop(false);
-                        },
-                        child: const Text('Cancel'),
+                        onPressed: () => Navigator.of(context).pop(false),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          side: const BorderSide(color: Color(0xFFCBD5E1)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                        child: Text(
+                          ref.watch(appLocalizationsProvider).tr('cancel'),
+                          style: const TextStyle(
+                            color: Color(0xFF475569),
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: FilledButton(
-                        onPressed: () {
-                          Navigator.of(context).pop(true);
-                        },
+                        onPressed: () => Navigator.of(context).pop(true),
                         style: FilledButton.styleFrom(
-                          backgroundColor: AppTheme.errorRed,
+                          backgroundColor: const Color(0xFFDC2626),
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
                         ),
-                        child: const Text('Logout'),
+                        child: Text(
+                          ref.watch(appLocalizationsProvider).tr('logout'),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
                       ),
                     ),
                   ],
@@ -125,83 +138,383 @@ class _DashboardScreenState
     );
 
     if (shouldLogout != true) return;
-
     await ref.read(authControllerProvider.notifier).logout();
-
     if (!mounted) return;
-
     context.go('/login');
   }
 
   void _openRoute(String route) {
     if (route.trim().isEmpty) return;
-
     context.push(route);
+  }
+
+  String _readText(dynamic value, String fallback) {
+    if (value == null) return fallback;
+    final text = value.toString().trim();
+    return text.isEmpty ? fallback : text;
+  }
+
+  String _formatStatus(String value) {
+    return value
+        .replaceAll('_', ' ')
+        .trim()
+        .split(' ')
+        .where((word) => word.isNotEmpty)
+        .map((word) =>
+            '${word[0].toUpperCase()}${word.substring(1).toLowerCase()}')
+        .join(' ');
+  }
+
+  String _getPrimaryButtonLabel(JourneyState state) {
+    final route = state.targetRoute;
+    if (route.contains('/offer'))
+      return ref
+          .watch(appLocalizationsProvider)
+          .tr('review_approved_loan_offer');
+    if (route.contains('/digilocker'))
+      return ref.watch(appLocalizationsProvider).tr('complete_digilocker_kyc');
+    if (route.contains('/address'))
+      return ref
+          .watch(appLocalizationsProvider)
+          .tr('confirm_residence_address');
+    if (route.contains('/bank'))
+      return ref.watch(appLocalizationsProvider).tr('verify_bank_account');
+    if (route.contains('/kfs'))
+      return ref.watch(appLocalizationsProvider).tr('review_accept_kfs');
+    if (route.contains('/mandate'))
+      return ref.watch(appLocalizationsProvider).tr('register_enach_mandate');
+    if (route.contains('/esign'))
+      return ref.watch(appLocalizationsProvider).tr('complete_agreement_esign');
+    if (route.contains('/disbursal'))
+      return ref.watch(appLocalizationsProvider).tr('view_disbursal_status');
+    if (route.contains('/application/status'))
+      return ref.watch(appLocalizationsProvider).tr('check_application_status');
+    if (route.contains('/onboarding'))
+      return ref
+          .watch(appLocalizationsProvider)
+          .tr('continue_loan_application');
+    return ref.watch(appLocalizationsProvider).tr('start_application');
   }
 
   @override
   Widget build(BuildContext context) {
-    final journeyState =
-        ref.watch(journeyControllerProvider);
-
+    final journeyState = ref.watch(journeyControllerProvider);
     final customer = journeyState.customer;
     final postApproval = journeyState.postApproval;
     final offer = postApproval?.offer;
     final bank = postApproval?.bank;
     final workflow = postApproval?.workflow;
 
-    final customerName =
-        _readText(customer?.fullName, 'Valued Customer');
+    final customerName = _readText(customer?.fullName, 'Rohit Sharma');
 
-    final mobileNumber =
-        _readText(customer?.mobileNumber, 'Not available');
+    final disbursalStatus = _readText(workflow?.disbursalStatus, 'NOT_STARTED');
+    final currentStep = _readText(workflow?.currentStep, 'APPROVAL_SUMMARY');
+    final isDisbursed = currentStep == 'DISBURSED' ||
+        disbursalStatus == 'DISBURSED' ||
+        postApproval?.loan.disbursalCompletedAt != null ||
+        customer?.latestLoanStatus == 'DISBURSED' ||
+        customer?.latestLoanStatus == 'FULLY_PAID';
 
-    final applicationStatus = _readText(
-      customer?.latestApplicationStatus,
-      'IN_PROGRESS',
-    );
+    final loanStatus =
+        _readText(postApproval?.loan.status ?? customer?.latestLoanStatus, '')
+            .toUpperCase();
+    final isFullyPaid = loanStatus == 'FULLY_PAID' || loanStatus == 'CLOSED';
+
+    final hasActiveLoan =
+        (customer?.latestLan?.toString().isNotEmpty ?? false) &&
+            (workflow?.offerAccepted == true ||
+                customer?.latestApplicationStatus == 'LENDER_APPROVED');
 
     return Scaffold(
-      backgroundColor: AppTheme.backgroundLight,
-      body: RefreshIndicator(
-        color: AppTheme.primaryTeal,
-        backgroundColor: Colors.white,
-        onRefresh: _refreshDashboard,
-        child: CustomScrollView(
-          physics: const AlwaysScrollableScrollPhysics(
-            parent: BouncingScrollPhysics(),
+      backgroundColor: const Color(0xFFF8FAFC),
+      body: SafeArea(
+        child: RefreshIndicator(
+          color: const Color(0xFF0F5A47),
+          backgroundColor: Colors.white,
+          onRefresh: _refreshDashboard,
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(
+              parent: BouncingScrollPhysics(),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // ── 1. Top Fin-Tree User Header ──────────────────────────────
+                _buildHeader(customerName),
+                const SizedBox(height: 20),
+
+                // ── 2. Hero Goals Banner ────────────────────────────────────
+                _buildHeroGoalsBanner(),
+                const SizedBox(height: 22),
+
+                // ── 3. Loan Overview KPI Stats Bar ──────────────────────────
+                _buildLoanOverviewKPIs(
+                  customer: customer,
+                  hasActiveLoan: hasActiveLoan,
+                  isDisbursed: isDisbursed,
+                ),
+                const SizedBox(height: 22),
+
+                // ── 4. Dynamic Segment Switcher ─────────────────────────────
+                if (hasActiveLoan) ...[
+                  _buildSegmentedTabSelector(isDisbursed),
+                  const SizedBox(height: 18),
+                ],
+
+                // ── 5. Main Content Switching Body ──────────────────────────
+                if (!hasActiveLoan)
+                  _buildApplicationTab(
+                    journeyState: journeyState,
+                    customer: customer,
+                  )
+                else if (_selectedTab == 0)
+                  _buildPostApprovalTab(
+                    journeyState: journeyState,
+                    postApproval: postApproval,
+                    offer: offer,
+                    bank: bank,
+                    workflow: workflow,
+                  )
+                else if (isDisbursed)
+                  _buildMyLoansTab(
+                    journeyState: journeyState,
+                    customer: customer,
+                    postApproval: postApproval,
+                  )
+                else
+                  _buildApplicationTab(
+                    journeyState: journeyState,
+                    customer: customer,
+                  ),
+
+                const SizedBox(height: 24),
+
+                // ── 6. Personal Loan Promotional Card ───────────────────────
+                if (!isDisbursed || isFullyPaid) ...[
+                  _buildPersonalLoanPromoCard(journeyState),
+                  const SizedBox(height: 24),
+                ],
+
+                // ── 7. Smart Credit Perks & Readiness Hub ──────────────────
+                _buildSmartCreditPerksHub(),
+                //const SizedBox(height: 24),
+
+                // ── 8. Refer & Earn Cashback Banner ─────────────────────────
+                //_buildReferralDashboardCard(),
+                const SizedBox(height: 28),
+              ],
+            ),
           ),
-          slivers: [
-            SliverToBoxAdapter(
-              child: _buildHeader(
-                customerName: customerName,
-                mobileNumber: mobileNumber,
-                applicationStatus: applicationStatus,
+        ),
+      ),
+      bottomNavigationBar: _buildBottomNavigationBar(context, journeyState),
+    );
+  }
+
+  // ── Header Widget ──────────────────────────────────────────────────────────
+  Widget _buildHeader(String customerName) {
+    final firstChar = customerName.trim().isNotEmpty
+        ? customerName.trim()[0].toUpperCase()
+        : 'R';
+
+    return Row(
+      children: [
+        Container(
+          width: 44,
+          height: 44,
+          decoration: const BoxDecoration(
+            color: Color(0xFF0F5A47),
+            shape: BoxShape.circle,
+          ),
+          child: Center(
+            child: Text(
+              firstChar,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w800,
+                fontSize: 18,
               ),
             ),
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(
-                18,
-                0,
-                18,
-                32,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                ref.watch(appLocalizationsProvider).tr('hello'),
+                style: const TextStyle(
+                  color: Color(0xFF64748B),
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
-              sliver: SliverList(
-                delegate: SliverChildListDelegate(
-                  [
-                    Transform.translate(
-                      offset: const Offset(0, -20),
-                      child: _buildDashboardBody(
-                        journeyState: journeyState,
-                        customer: customer,
-                        postApproval: postApproval,
-                        offer: offer,
-                        bank: bank,
-                        workflow: workflow,
+              const SizedBox(height: 2),
+              Text(
+                customerName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Color(0xFF0F172A),
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.3,
+                ),
+              ),
+            ],
+          ),
+        ),
+        Consumer(
+          builder: (context, ref, child) {
+            final unreadCount = ref.watch(notificationsProvider).unreadCount;
+            return Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Material(
+                  color: Colors.white,
+                  shape: const CircleBorder(),
+                  child: InkWell(
+                    onTap: () => NotificationCenterModal.show(context),
+                    customBorder: const CircleBorder(),
+                    child: Container(
+                      width: 42,
+                      height: 42,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                      ),
+                      child: const Icon(
+                        Icons.notifications_none_rounded,
+                        color: Color(0xFF0F172A),
+                        size: 21,
                       ),
                     ),
-                  ],
+                  ),
                 ),
+                if (unreadCount > 0)
+                  Positioned(
+                    top: -2,
+                    right: -2,
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFEF4444),
+                        shape: BoxShape.circle,
+                      ),
+                      constraints: const BoxConstraints(
+                        minWidth: 18,
+                        minHeight: 18,
+                      ),
+                      child: Text(
+                        '$unreadCount',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
+              ],
+            );
+          },
+        ),
+        const SizedBox(width: 8),
+        Material(
+          color: Colors.white,
+          shape: const CircleBorder(),
+          child: InkWell(
+            onTap: _logout,
+            customBorder: const CircleBorder(),
+            child: Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: const Icon(
+                Icons.logout_rounded,
+                color: Color(0xFF64748B),
+                size: 20,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ── Hero Goals Banner ──────────────────────────────────────────────────────
+  Widget _buildHeroGoalsBanner() {
+    return Container(
+      width: double.infinity,
+      constraints: const BoxConstraints(minHeight: 135),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0A4436),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF0A4436).withValues(alpha: 0.18),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: Stack(
+          children: [
+            Positioned(
+              right: -25,
+              top: -25,
+              child: Container(
+                width: 140,
+                height: 140,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withValues(alpha: 0.04),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    ref.watch(appLocalizationsProvider).tr('hero_title'),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 20,
+                      height: 1.25,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.4,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    ref.watch(appLocalizationsProvider).tr('hero_subtitle'),
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.80),
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Positioned(
+              right: 4,
+              bottom: -4,
+              child: SvgPicture.asset(
+                'lib/assets/images/illustrations/Mobile Marketing-rafiki.svg',
+                height: 120,
+                fit: BoxFit.contain,
               ),
             ),
           ],
@@ -210,263 +523,167 @@ class _DashboardScreenState
     );
   }
 
-  Widget _buildHeader({
-    required String customerName,
-    required String mobileNumber,
-    required String applicationStatus,
+  // ── Loan Overview KPI Metric Bar ──────────────────────────────────────────
+  Widget _buildLoanOverviewKPIs({
+    required dynamic customer,
+    required bool hasActiveLoan,
+    required bool isDisbursed,
   }) {
-    final firstLetter = customerName.trim().isNotEmpty
-        ? customerName.trim()[0].toUpperCase()
-        : 'C';
+    final applicationCount =
+        (customer?.latestApplicationId != null) ? '1' : '0';
+    final approvedCount = (hasActiveLoan ||
+            customer?.latestApplicationStatus == 'LENDER_APPROVED')
+        ? '1'
+        : '0';
+    final activeLoanCount = isDisbursed ? '1' : '0';
 
-    return Container(
-      height: 225,
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            AppTheme.primaryDeepTeal,
-            AppTheme.primaryDarkTeal,
-            AppTheme.primaryTeal,
-          ],
-        ),
-        borderRadius: BorderRadius.vertical(
-          bottom: Radius.circular(34),
-        ),
-      ),
-      child: Stack(
-        children: [
-          Positioned(
-            top: -65,
-            right: -55,
-            child: _BackgroundCircle(
-              size: 190,
-              color: Colors.white.withOpacity(0.07),
-            ),
-          ),
-          Positioned(
-            top: 100,
-            left: -70,
-            child: _BackgroundCircle(
-              size: 160,
-              color: Colors.white.withOpacity(0.055),
-            ),
-          ),
-          Positioned(
-            top: 70,
-            right: 70,
-            child: _BackgroundCircle(
-              size: 32,
-              color: Colors.white.withOpacity(0.10),
-            ),
-          ),
-          SafeArea(
-            bottom: false,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(
-                18,
-                8,
-                18,
-                38,
+    return Column(
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              ref.watch(appLocalizationsProvider).tr('loan_overview'),
+              style: const TextStyle(
+                color: Color(0xFF0F172A),
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
               ),
-              child: Column(
+            ),
+            InkWell(
+              onTap: () => _openRoute('/loans/all'),
+              child: Row(
                 children: [
-                  Row(
-                    children: [
-                      // Prominent Large Logo Box
-                      Container(
-                        height: 52,
-                        width: 145,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(16),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.12),
-                              blurRadius: 20,
-                              offset: const Offset(0, 8),
-                            ),
-                          ],
-                        ),
-                        child: Image.asset(
-                          'lib/assets/images/Logo.png',
-                          fit: BoxFit.contain,
-                          errorBuilder: (_, __, ___) {
-                            return const Icon(
-                              Icons.account_balance_rounded,
-                              color: AppTheme.primaryTeal,
-                              size: 28,
-                            );
-                          },
-                        ),
-                      ),
-                      const Spacer(),
-                      Material(
-                        color: Colors.white.withOpacity(0.13),
-                        borderRadius: BorderRadius.circular(14),
-                        child: InkWell(
-                          onTap: _refreshDashboard,
-                          borderRadius:
-                              BorderRadius.circular(14),
-                          child: const SizedBox(
-                            width: 44,
-                            height: 44,
-                            child: Icon(
-                              Icons.refresh_rounded,
-                              color: Colors.white,
-                              size: 22,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Material(
-                        color: Colors.white.withOpacity(0.13),
-                        borderRadius: BorderRadius.circular(14),
-                        child: InkWell(
-                          onTap: _logout,
-                          borderRadius:
-                              BorderRadius.circular(14),
-                          child: const SizedBox(
-                            width: 44,
-                            height: 44,
-                            child: Icon(
-                              Icons.logout_rounded,
-                              color: Colors.white,
-                              size: 21,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
+                  Text(
+                    ref.watch(appLocalizationsProvider).tr('view_all'),
+                    style: const TextStyle(
+                      color: Color(0xFF0F5A47),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
-                  const Spacer(),
-                  Row(
-                    children: [
-                      Container(
-                        width: 62,
-                        height: 62,
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius:
-                              BorderRadius.circular(20),
-                          boxShadow: [
-                            BoxShadow(
-                              color:
-                                  Colors.black.withOpacity(0.16),
-                              blurRadius: 24,
-                              offset: const Offset(0, 10),
-                            ),
-                          ],
-                        ),
-                        child: Text(
-                          firstLetter,
-                          style: const TextStyle(
-                            color: AppTheme.primaryTeal,
-                            fontSize: 25,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment:
-                              CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              _getGreeting(),
-                              style: TextStyle(
-                                color:
-                                    Colors.white.withOpacity(0.76),
-                                fontSize: 12.5,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            const SizedBox(height: 3),
-                            Text(
-                              customerName,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 10,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: -0.5,
-                              ),
-                            ),
-                            const SizedBox(height: 5),
-                            Row(
-                              children: [
-                                Icon(
-                                  Icons.phone_android_rounded,
-                                  color:
-                                      Colors.white.withOpacity(0.7),
-                                  size: 14,
-                                ),
-                                const SizedBox(width: 5),
-                                Flexible(
-                                  child: Text(
-                                    mobileNumber,
-                                    maxLines: 1,
-                                    overflow:
-                                        TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      color: Colors.white
-                                          .withOpacity(0.76),
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 7,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.13),
-                          borderRadius:
-                              BorderRadius.circular(30),
-                          border: Border.all(
-                            color:
-                                Colors.white.withOpacity(0.18),
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(
-                              Icons.verified_user_outlined,
-                              color: Colors.white,
-                              size: 13,
-                            ),
-                            const SizedBox(width: 5),
-                            Text(
-                              _shortStatus(applicationStatus),
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 10.5,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
+                  const SizedBox(width: 2),
+                  const Icon(
+                    Icons.chevron_right_rounded,
+                    size: 18,
+                    color: Color(0xFF0F5A47),
                   ),
                 ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: _OverviewStatCard(
+                count: applicationCount,
+                label: ref.watch(appLocalizationsProvider).tr('application'),
+                icon: Icons.description_outlined,
+                iconColor: const Color(0xFF10B981),
+                bgColor: const Color(0xFFECFDF5),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _OverviewStatCard(
+                count: approvedCount,
+                label: ref.watch(appLocalizationsProvider).tr('approved'),
+                icon: Icons.verified_outlined,
+                iconColor: const Color(0xFFF59E0B),
+                bgColor: const Color(0xFFFFFBEB),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _OverviewStatCard(
+                count: activeLoanCount,
+                label: ref.watch(appLocalizationsProvider).tr('active_loan'),
+                icon: Icons.account_balance_wallet_outlined,
+                iconColor: const Color(0xFF3B82F6),
+                bgColor: const Color(0xFFEFF6FF),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  // ── Segmented Control Switcher ─────────────────────────────────────────────
+  Widget _buildSegmentedTabSelector(bool isDisbursed) {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: GestureDetector(
+              onTap: () => setState(() => _selectedTab = 0),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                decoration: BoxDecoration(
+                  color: _selectedTab == 0
+                      ? const Color(0xFF0F5A47)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Center(
+                  child: Text(
+                    isDisbursed
+                        ? ref
+                            .watch(appLocalizationsProvider)
+                            .tr('loan_overview')
+                        : ref
+                            .watch(appLocalizationsProvider)
+                            .tr('loan_journey'),
+                    style: TextStyle(
+                      color: _selectedTab == 0
+                          ? Colors.white
+                          : const Color(0xFF475569),
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 4),
+          Expanded(
+            child: GestureDetector(
+              onTap: () => setState(() => _selectedTab = 1),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                decoration: BoxDecoration(
+                  color: _selectedTab == 1
+                      ? const Color(0xFF0F5A47)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Center(
+                  child: Text(
+                    isDisbursed
+                        ? ref.watch(appLocalizationsProvider).tr('my_loans')
+                        : ref
+                            .watch(appLocalizationsProvider)
+                            .tr('application_tab'),
+                    style: TextStyle(
+                      color: _selectedTab == 1
+                          ? Colors.white
+                          : const Color(0xFF475569),
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
               ),
             ),
           ),
@@ -475,138 +692,7 @@ class _DashboardScreenState
     );
   }
 
-  Widget _buildDashboardBody({
-    required JourneyState journeyState,
-    required dynamic customer,
-    required dynamic postApproval,
-    required dynamic offer,
-    required dynamic bank,
-    required dynamic workflow,
-  }) {
-    final disbursalStatus = _readText(workflow?.disbursalStatus, 'NOT_STARTED');
-    final currentStep = _readText(workflow?.currentStep, 'APPROVAL_SUMMARY');
-    final isDisbursed = currentStep == 'DISBURSED' ||
-        disbursalStatus == 'DISBURSED' ||
-        postApproval?.loan?.disbursalCompletedAt != null ||
-        customer?.latestLoanStatus == 'DISBURSED' ||
-        customer?.latestLoanStatus == 'FULLY_PAID';
-
-    final hasActiveLoan = customer?.latestLan != null &&
-        customer.latestLan!.toString().isNotEmpty &&
-        (workflow?.offerAccepted == true || customer?.latestApplicationStatus == 'LENDER_APPROVED');
-
-    if (!hasActiveLoan) {
-      return KeyedSubtree(
-        key: const ValueKey('application'),
-        child: _buildApplicationTab(
-          journeyState: journeyState,
-          customer: customer,
-        ),
-      );
-    }
-
-    return Column(
-      children: [
-        const SizedBox(height: 33),
-        Container(
-          padding: const EdgeInsets.all(6),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: AppTheme.borderLight,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF033F45)
-                    .withValues(alpha: 0.10),
-                blurRadius: 25,
-                offset: const Offset(0, 12),
-              ),
-            ],
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: _DashboardTabButton(
-                  title: isDisbursed ? 'Loan Overview' : 'Loan Journey',
-                  subtitle: isDisbursed ? 'Status & Account' : 'Post-approval',
-                  icon: isDisbursed
-                      ? Icons.account_balance_wallet_rounded
-                      : Icons.account_balance_wallet_outlined,
-                  isSelected: _selectedTab == 0,
-                  onTap: () {
-                    setState(() {
-                      _selectedTab = 0;
-                    });
-                  },
-                ),
-              ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: _DashboardTabButton(
-                  title: isDisbursed ? 'My Loans' : 'Application',
-                  subtitle: isDisbursed ? 'Active & History' : 'Profile & KYC',
-                  icon: isDisbursed
-                      ? Icons.receipt_long_rounded
-                      : Icons.description_outlined,
-                  isSelected: _selectedTab == 1,
-                  onTap: () {
-                    setState(() {
-                      _selectedTab = 1;
-                    });
-                  },
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 18),
-        AnimatedSwitcher(
-          duration: const Duration(milliseconds: 320),
-          switchInCurve: Curves.easeOutCubic,
-          switchOutCurve: Curves.easeInCubic,
-          transitionBuilder: (child, animation) {
-            return FadeTransition(
-              opacity: animation,
-              child: SlideTransition(
-                position: Tween<Offset>(
-                  begin: const Offset(0.04, 0),
-                  end: Offset.zero,
-                ).animate(animation),
-                child: child,
-              ),
-            );
-          },
-          child: _selectedTab == 0
-              ? KeyedSubtree(
-                  key: const ValueKey('post-approval'),
-                  child: _buildPostApprovalTab(
-                    journeyState: journeyState,
-                    postApproval: postApproval,
-                    offer: offer,
-                    bank: bank,
-                    workflow: workflow,
-                  ),
-                )
-              : KeyedSubtree(
-                  key: ValueKey(isDisbursed ? 'my-loans' : 'application'),
-                  child: isDisbursed
-                      ? _buildMyLoansTab(
-                          journeyState: journeyState,
-                          customer: customer,
-                          postApproval: postApproval,
-                        )
-                      : _buildApplicationTab(
-                          journeyState: journeyState,
-                          customer: customer,
-                        ),
-                ),
-        ),
-      ],
-    );
-  }
-
+  // ── Post-Approval Tab ─────────────────────────────────────────────────────
   Widget _buildPostApprovalTab({
     required JourneyState journeyState,
     required dynamic postApproval,
@@ -614,315 +700,282 @@ class _DashboardScreenState
     required dynamic bank,
     required dynamic workflow,
   }) {
-    final lan = _readText(
-      postApproval?.loan?.lan,
-      'FFPL000001',
-    );
-    
+    final lan = _readText(postApproval?.loan?.lan, 'FFPL000001');
     final disbursalStatus = _readText(workflow?.disbursalStatus, 'NOT_STARTED');
     final currentStep = _readText(workflow?.currentStep, 'APPROVAL_SUMMARY');
-    final isDisbursalProcessing = currentStep == 'DISBURSAL_PROCESSING' || disbursalStatus == 'PROCESSING' || disbursalStatus == 'INITIATED';
-    final isDisbursed = currentStep == 'DISBURSED' || disbursalStatus == 'DISBURSED' || postApproval?.loan?.disbursalCompletedAt != null;
+    final isDisbursalProcessing = currentStep == 'DISBURSAL_PROCESSING' ||
+        disbursalStatus == 'PROCESSING' ||
+        disbursalStatus == 'INITIATED';
+    final isDisbursed = currentStep == 'DISBURSED' ||
+        disbursalStatus == 'DISBURSED' ||
+        postApproval?.loan?.disbursalCompletedAt != null;
 
-    final approvedAmount =
-        postApproval?.loan?.approvedAmount ?? 500000;
+    if (isDisbursed) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildDisbursedCard(
+            lan,
+            postApproval: postApproval,
+            customer: journeyState.customer,
+          ),
+          const SizedBox(height: 20),
+          _buildMyLoansTab(
+            journeyState: journeyState,
+            customer: journeyState.customer,
+            postApproval: postApproval,
+          ),
+        ],
+      );
+    }
 
+    final num? rawApproved = postApproval?.loan?.approvedAmount ??
+        postApproval?.loan?.disbursalAmount ??
+        postApproval?.offer?.approvedAmount;
+    final double? approvedAmount = (rawApproved != null && rawApproved > 0)
+        ? rawApproved.toDouble()
+        : null;
     final lenderName = _readText(
-      postApproval?.lender?.name,
-      'Fintree Finance Private Limited',
-    );
-
-    final acceptedTenure =
-        offer?.acceptedTenureDays ?? 90;
-
+        postApproval?.lender?.name, 'Fintree Finance Private Limited');
+    final acceptedTenure = offer?.acceptedTenureDays ?? 90;
     final acceptedEmi = offer?.acceptedEmiAmount;
-
-    final bankName =
-        _readText(bank?.bankName, 'Bank account');
-
-    final accountMasked =
-        _readText(bank?.accountMasked, '');
+    final bankName = _readText(bank?.bankName, 'Bank account');
+    final accountMasked = _readText(bank?.accountMasked, '');
 
     final steps = <_JourneyStep>[
       _JourneyStep(
         number: 1,
-        title: 'Verify bank account',
+        title: ref.watch(appLocalizationsProvider).tr('verify_bank_step'),
         subtitle:
-            'Complete penny-drop verification for your disbursal account.',
+            ref.watch(appLocalizationsProvider).tr('verify_bank_step_sub'),
         icon: Icons.account_balance_outlined,
         isCompleted: workflow?.bankVerified == true,
         route: '/loan/$lan/bank',
       ),
       _JourneyStep(
         number: 2,
-        title: 'Accept Key Fact Statement',
-        subtitle:
-            'Review interest, charges and repayment information.',
+        title: ref.watch(appLocalizationsProvider).tr('accept_kfs_step'),
+        subtitle: ref.watch(appLocalizationsProvider).tr('accept_kfs_step_sub'),
         icon: Icons.fact_check_outlined,
         isCompleted: workflow?.kfsAccepted == true,
         route: '/loan/$lan/kfs',
       ),
       _JourneyStep(
         number: 3,
-        title: 'Register e-NACH mandate',
+        title: ref.watch(appLocalizationsProvider).tr('register_mandate_step'),
         subtitle:
-            'Set up automatic EMI repayment from your bank account.',
+            ref.watch(appLocalizationsProvider).tr('register_mandate_step_sub'),
         icon: Icons.sync_alt_rounded,
-        isCompleted:
-            workflow?.mandateCompleted == true,
+        isCompleted: workflow?.mandateCompleted == true,
         route: '/loan/$lan/mandate',
       ),
       _JourneyStep(
         number: 4,
-        title: 'e-Sign loan agreement',
-        subtitle:
-            'Digitally sign and complete your loan documentation.',
+        title: ref.watch(appLocalizationsProvider).tr('esign_step'),
+        subtitle: ref.watch(appLocalizationsProvider).tr('esign_step_sub'),
         icon: Icons.draw_outlined,
         isCompleted: workflow?.esignCompleted == true,
         route: '/loan/$lan/esign',
       ),
       _JourneyStep(
         number: 5,
-        title: 'Disbursal',
-        subtitle:
-            'Track the final transfer of your approved loan amount.',
+        title: ref.watch(appLocalizationsProvider).tr('disbursal_step'),
+        subtitle: ref.watch(appLocalizationsProvider).tr('disbursal_step_sub'),
         icon: Icons.currency_rupee_rounded,
-        isCompleted:
-            workflow?.readyForDisbursal == true,
+        isCompleted: workflow?.readyForDisbursal == true,
         route: '/loan/$lan/disbursal',
       ),
     ];
 
-    final completedCount =
-        steps.where((step) => step.isCompleted).length;
-
-    final progress =
-        steps.isEmpty ? 0.0 : completedCount / steps.length;
+    final completedCount = steps.where((step) => step.isCompleted).length;
+    final progress = steps.isEmpty ? 0.0 : completedCount / steps.length;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Approved Loan Card
         Container(
           width: double.infinity,
-          padding: const EdgeInsets.fromLTRB(
-            20,
-            20,
-            20,
-            18,
-          ),
+          padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Color(0xFF033F45),
-                Color(0xFF007D74),
-              ],
-            ),
-            borderRadius: BorderRadius.circular(24),
+            color: const Color(0xFF033F45),
+            borderRadius: BorderRadius.circular(22),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF033F45)
-                    .withOpacity(0.20),
-                blurRadius: 28,
-                offset: const Offset(0, 14),
+                color: const Color(0xFF033F45).withValues(alpha: 0.18),
+                blurRadius: 20,
+                offset: const Offset(0, 8),
               ),
             ],
           ),
-          child: Stack(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Positioned(
-                top: -50,
-                right: -30,
-                child: _BackgroundCircle(
-                  size: 130,
-                  color: Colors.white.withOpacity(0.06),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        ref.watch(appLocalizationsProvider).tr('approved_loan'),
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.7),
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.8,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        approvedAmount != null
+                            ? CurrencyUtils.formatAmount(approvedAmount)
+                            : ref
+                                .watch(appLocalizationsProvider)
+                                .tr('pending_confirmation_label'),
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: approvedAmount != null ? 28 : 20,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: -0.6,
+                        ),
+                      ),
+                    ],
+                  ),
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: const Icon(
+                      Icons.account_balance_wallet_rounded,
+                      color: Colors.white,
+                      size: 24,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                lenderName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.8),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
                 ),
               ),
-              Column(
-                crossAxisAlignment:
-                    CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment:
-                              CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'APPROVED LOAN',
-                              style: TextStyle(
-                                color: Colors.white
-                                    .withOpacity(0.68),
-                                fontSize: 10.5,
-                                fontWeight: FontWeight.w700,
-                                letterSpacing: 1,
-                              ),
-                            ),
-                            const SizedBox(height: 7),
-                            Text(
-                              CurrencyUtils.formatAmount(
-                                approvedAmount,
-                              ),
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 31,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: -0.8,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.12),
-                          borderRadius:
-                              BorderRadius.circular(14),
-                        ),
-                        child: const Icon(
-                          Icons.account_balance_wallet_rounded,
-                          color: Colors.white,
-                          size: 25,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    lenderName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.80),
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-                  Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.10),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: Colors.white.withOpacity(0.12),
-                      ),
-                    ),
-                    child: Column(
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(14),
+                  border:
+                      Border.all(color: Colors.white.withValues(alpha: 0.12)),
+                ),
+                child: Column(
+                  children: [
+                    Row(
                       children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _LoanSummaryMetric(
-                                icon: Icons.schedule_rounded,
-                                label: 'Tenure',
-                                value: '$acceptedTenure days',
-                              ),
-                            ),
-                            Container(
-                              width: 1,
-                              height: 38,
-                              color:
-                                  Colors.white.withOpacity(0.15),
-                            ),
-                            Expanded(
-                              child: _LoanSummaryMetric(
-                                icon:
-                                    Icons.payments_outlined,
-                                label: 'Monthly EMI',
-                                value: acceptedEmi == null
-                                    ? 'To be confirmed'
-                                    : CurrencyUtils
-                                        .formatAmount(
-                                        acceptedEmi,
-                                        showDecimals: true,
-                                      ),
-                              ),
-                            ),
-                          ],
+                        Expanded(
+                          child: _LoanSummaryMetric(
+                            icon: Icons.schedule_rounded,
+                            label: ref
+                                .watch(appLocalizationsProvider)
+                                .tr('tenure'),
+                            value: '$acceptedTenure days',
+                          ),
                         ),
-                        if (accountMasked.isNotEmpty) ...[
-                          const SizedBox(height: 13),
-                          Divider(
-                            height: 1,
-                            color:
-                                Colors.white.withOpacity(0.14),
+                        Container(
+                          width: 1,
+                          height: 32,
+                          color: Colors.white.withValues(alpha: 0.15),
+                        ),
+                        Expanded(
+                          child: _LoanSummaryMetric(
+                            icon: Icons.payments_outlined,
+                            label: ref
+                                .watch(appLocalizationsProvider)
+                                .tr('monthly_emi'),
+                            value: acceptedEmi == null
+                                ? ref
+                                    .watch(appLocalizationsProvider)
+                                    .tr('to_be_confirmed')
+                                : CurrencyUtils.formatAmount(acceptedEmi,
+                                    showDecimals: true),
                           ),
-                          const SizedBox(height: 13),
-                          Row(
-                            children: [
-                              Icon(
-                                Icons.verified_rounded,
-                                color:
-                                    Colors.white.withOpacity(0.9),
-                                size: 17,
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  '$bankName • $accountMasked',
-                                  overflow:
-                                      TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    color: Colors.white
-                                        .withOpacity(0.82),
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
+                        ),
                       ],
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          'LAN: $lan',
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color:
-                                Colors.white.withOpacity(0.67),
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w600,
+                    if (accountMasked.isNotEmpty) ...[
+                      const SizedBox(height: 10),
+                      Divider(
+                          height: 1,
+                          color: Colors.white.withValues(alpha: 0.12)),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.verified_rounded,
+                            color: Colors.white.withValues(alpha: 0.9),
+                            size: 16,
                           ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.12),
-                          borderRadius:
-                              BorderRadius.circular(30),
-                        ),
-                        child: Text(
-                          _formatStatus(currentStep),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w700,
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              '$bankName • $accountMasked',
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.85),
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
                           ),
-                        ),
+                        ],
                       ),
                     ],
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'LAN: $lan',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.7),
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.14),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      _formatStatus(currentStep),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                   ),
                 ],
               ),
             ],
           ),
         ),
-        const SizedBox(height: 18),
+        const SizedBox(height: 16),
+
         if (isDisbursed)
           _buildDisbursedCard(lan)
         else if (isDisbursalProcessing)
@@ -933,17 +986,8 @@ class _DashboardScreenState
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(22),
-              border: Border.all(
-                color: AppTheme.borderLight,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFF033F45).withOpacity(0.06),
-                  blurRadius: 20,
-                  offset: const Offset(0, 8),
-                ),
-              ],
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -951,38 +995,41 @@ class _DashboardScreenState
                 Row(
                   children: [
                     Container(
-                      width: 44,
-                      height: 44,
+                      width: 42,
+                      height: 42,
                       decoration: BoxDecoration(
-                        color: AppTheme.primaryLightTeal,
-                        borderRadius: BorderRadius.circular(14),
+                        color: const Color(0xFFECFDF5),
+                        borderRadius: BorderRadius.circular(12),
                       ),
                       child: const Icon(
                         Icons.bolt_rounded,
-                        color: AppTheme.primaryTeal,
-                        size: 23,
+                        color: Color(0xFF0F5A47),
+                        size: 22,
                       ),
                     ),
                     const SizedBox(width: 12),
-                    const Expanded(
+                    Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Your next step',
-                            style: TextStyle(
-                              color: AppTheme.textDarkPrimary,
-                              fontSize: 16,
+                            ref
+                                .watch(appLocalizationsProvider)
+                                .tr('your_next_step'),
+                            style: const TextStyle(
+                              color: Color(0xFF0F172A),
+                              fontSize: 15,
                               fontWeight: FontWeight.w800,
                             ),
                           ),
-                          SizedBox(height: 3),
+                          const SizedBox(height: 2),
                           Text(
-                            'Complete this step to move closer to disbursal.',
-                            style: TextStyle(
-                              color: AppTheme.textDarkSecondary,
+                            ref
+                                .watch(appLocalizationsProvider)
+                                .tr('complete_step_disbursal'),
+                            style: const TextStyle(
+                              color: Color(0xFF64748B),
                               fontSize: 11.5,
-                              height: 1.4,
                             ),
                           ),
                         ],
@@ -990,64 +1037,69 @@ class _DashboardScreenState
                     ),
                   ],
                 ),
-                const SizedBox(height: 17),
+                const SizedBox(height: 16),
                 AppButton(
                   text: _getPrimaryButtonLabel(journeyState),
-                  onPressed: () {
-                    _openRoute(journeyState.targetRoute);
-                  },
+                  onPressed: () => _openRoute(journeyState.targetRoute),
                   icon: Icons.arrow_forward_rounded,
                 ),
               ],
             ),
           ),
+
         if (!isDisbursed) ...[
-          const SizedBox(height: 24),
-          _SectionHeader(
-            title: 'Loan journey',
-            subtitle:
-                '$completedCount of ${steps.length} steps completed',
-            trailing: Text(
-              '${(progress * 100).round()}%',
-              style: const TextStyle(
-                color: AppTheme.primaryTeal,
-                fontSize: 13,
-                fontWeight: FontWeight.w800,
+          const SizedBox(height: 22),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                ref.watch(appLocalizationsProvider).tr(
+                    'loan_journey_progress', {
+                  'completed': '$completedCount',
+                  'total': '${steps.length}'
+                }),
+                style: const TextStyle(
+                  color: Color(0xFF0F172A),
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
-            ),
+              Text(
+                '${(progress * 100).round()}%',
+                style: const TextStyle(
+                  color: Color(0xFF0F5A47),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
           ClipRRect(
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(10),
             child: LinearProgressIndicator(
               value: progress,
-              minHeight: 7,
-              backgroundColor: AppTheme.primaryLightTeal,
+              minHeight: 6,
+              backgroundColor: const Color(0xFFE2E8F0),
               valueColor:
-                  const AlwaysStoppedAnimation<Color>(
-                AppTheme.primaryTeal,
-              ),
+                  const AlwaysStoppedAnimation<Color>(Color(0xFF0F5A47)),
             ),
           ),
-          const SizedBox(height: 16),
-          ...steps.sublist(0, (completedCount + 1).clamp(0, steps.length)).asMap().entries.map(
+          const SizedBox(height: 14),
+          ...steps
+              .sublist(0, (completedCount + 1).clamp(0, steps.length))
+              .asMap()
+              .entries
+              .map(
             (entry) {
-              final index = entry.key;
               final step = entry.value;
-
-              final isCurrent =
-                  journeyState.targetRoute == step.route;
-
-              final visibleStepsCount = (completedCount + 1).clamp(0, steps.length);
-              final isLast = index == visibleStepsCount - 1;
-
+              final isCurrent = journeyState.targetRoute == step.route;
               return _JourneyStepTile(
                 step: step,
                 isCurrent: isCurrent,
-                isLast: isLast,
-                onTap: () {
-                  _openRoute(step.route);
-                },
+                isLast: entry.key ==
+                    (completedCount + 1).clamp(0, steps.length) - 1,
+                onTap: () => _openRoute(step.route),
               );
             },
           ),
@@ -1056,23 +1108,15 @@ class _DashboardScreenState
     );
   }
 
+  // ── Crediting & Disbursed Status Cards ────────────────────────────────────
   Widget _buildCreditingSoonCard(String lan) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFFFFF8E6), Color(0xFFFFF3CC)],
-        ),
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: const Color(0xFFE6A817), width: 1),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFFE6A817).withOpacity(0.12),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        color: const Color(0xFFFFFBEB),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFFDE68A)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1082,36 +1126,34 @@ class _DashboardScreenState
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFFFB800).withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(14),
+                  color: const Color(0xFFFEF3C7),
+                  borderRadius: BorderRadius.circular(12),
                 ),
                 child: const Icon(
                   Icons.access_time_rounded,
-                  color: Color(0xFF9E6A00),
-                  size: 28,
+                  color: Color(0xFFD97706),
+                  size: 26,
                 ),
               ),
-              const SizedBox(width: 14),
-              Expanded(
+              const SizedBox(width: 12),
+              const Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Your loan amount will be credited shortly!',
+                    Text(
+                      'Your loan will be credited shortly!',
                       style: TextStyle(
                         fontWeight: FontWeight.w800,
-                        color: Color(0xFF7A4F00),
-                        fontSize: 15,
-                        height: 1.3,
+                        color: Color(0xFF92400E),
+                        fontSize: 14.5,
                       ),
                     ),
-                    const SizedBox(height: 4),
+                    SizedBox(height: 2),
                     Text(
-                      'Disbursal is being processed. Funds will arrive in your bank account soon.',
+                      'Disbursal is being processed by the lender.',
                       style: TextStyle(
-                        color: const Color(0xFF9E6A00).withOpacity(0.85),
-                        fontSize: 12,
-                        height: 1.4,
+                        color: Color(0xFFB45309),
+                        fontSize: 11.5,
                       ),
                     ),
                   ],
@@ -1119,9 +1161,9 @@ class _DashboardScreenState
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
           AppButton(
-            text: 'View Loan Details',
+            text: ref.watch(appLocalizationsProvider).tr('view_loan_details'),
             onPressed: () => _openRoute('/loan/$lan/loan-details'),
             icon: Icons.receipt_long_rounded,
           ),
@@ -1130,87 +1172,345 @@ class _DashboardScreenState
     );
   }
 
-  Widget _buildDisbursedCard(String lan) {
+  Widget _buildDisbursedCard(
+    String lan, {
+    dynamic postApproval,
+    dynamic customer,
+  }) {
+    final loan = postApproval?.loan;
+    final offer = postApproval?.offer;
+    final lender = postApproval?.lender;
+    final bank = postApproval?.bank;
+
+    final num? rawApproved =
+        loan?.approvedAmount ?? loan?.disbursalAmount ?? offer?.approvedAmount;
+    final double? approvedAmount = (rawApproved != null && rawApproved > 0)
+        ? rawApproved.toDouble()
+        : null;
+    final emiAmount = offer?.acceptedEmiAmount;
+    final lenderName = _readText(lender?.name,
+        customer?.allocatedLenderName ?? 'Fintree Finance Private Limited');
+    final utr = _readText(loan?.disbursalUtr, 'N/A');
+    final bankName = _readText(bank?.bankName, 'Bank account');
+    final accountMasked = _readText(bank?.accountMasked, '');
+
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFFECFDF5), Color(0xFFD1FAE5)],
-        ),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: AppTheme.successGreen, width: 1),
+        border:
+            Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.3)),
         boxShadow: [
           BoxShadow(
-            color: AppTheme.successGreen.withOpacity(0.12),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
+            color: const Color(0xFF10B981).withValues(alpha: 0.08),
+            blurRadius: 18,
+            offset: const Offset(0, 6),
           ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: AppTheme.successGreen.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(14),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+            decoration: const BoxDecoration(
+              color: Color(0xFF0A4436),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(21)),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.check_circle_rounded,
+                    color: Color(0xFF34D399),
+                    size: 20,
+                  ),
                 ),
-                child: const Icon(
-                  Icons.check_circle_rounded,
-                  color: AppTheme.successGreen,
-                  size: 28,
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        ref
+                            .watch(appLocalizationsProvider)
+                            .tr('active_disbursed_loan'),
+                        style: const TextStyle(
+                          color: Color(0xFF34D399),
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.8,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        ref
+                            .watch(appLocalizationsProvider)
+                            .tr('funds_credited_bank'),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF059669),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    ref.watch(appLocalizationsProvider).tr('disbursed'),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    const Text(
-                      'Loan Disbursed Successfully!',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w800,
-                        color: AppTheme.successDarkGreen,
-                        fontSize: 15,
-                        height: 1.3,
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            ref
+                                .watch(appLocalizationsProvider)
+                                .tr('disbursed_amount'),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Color(0xFF64748B),
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              approvedAmount != null
+                                  ? CurrencyUtils.formatAmount(approvedAmount)
+                                  : ref
+                                      .watch(appLocalizationsProvider)
+                                      .tr('pending_confirmation_label'),
+                              style: TextStyle(
+                                color: const Color(0xFF0F172A),
+                                fontSize: approvedAmount != null ? 26 : 18,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: -0.5,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Funds transferred to your bank account.',
-                      style: TextStyle(
-                        color: AppTheme.successDarkGreen.withOpacity(0.85),
-                        fontSize: 12,
-                        height: 1.4,
+                    const SizedBox(width: 8),
+                    if (emiAmount != null)
+                      Flexible(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(
+                              ref
+                                  .watch(appLocalizationsProvider)
+                                  .tr('monthly_emi'),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Color(0xFF64748B),
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerRight,
+                              child: Text(
+                                CurrencyUtils.formatAmount(emiAmount),
+                                style: const TextStyle(
+                                  color: Color(0xFF0F5A47),
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
                   ],
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          AppButton(
-            text: 'Pay EMI / Repay Loan',
-            onPressed: () => _openRoute('/loan/$lan/repay'),
-            icon: Icons.account_balance_wallet_rounded,
-          ),
-          const SizedBox(height: 10),
-          AppButton(
-            text: 'View Loan Details & RPS',
-            isOutlined: true,
-            onPressed: () => _openRoute('/loan/$lan/loan-details'),
-            icon: Icons.receipt_long_rounded,
+                const SizedBox(height: 14),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                  ),
+                  child: Column(
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            ref
+                                .watch(appLocalizationsProvider)
+                                .tr('loan_account_lan'),
+                            style: const TextStyle(
+                                color: Color(0xFF64748B), fontSize: 11.5),
+                          ),
+                          const SizedBox(width: 8),
+                          Flexible(
+                            child: Text(
+                              lan.isNotEmpty ? lan : 'N/A',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.right,
+                              style: const TextStyle(
+                                color: Color(0xFF0F172A),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            ref.watch(appLocalizationsProvider).tr('lender'),
+                            style: const TextStyle(
+                                color: Color(0xFF64748B), fontSize: 11.5),
+                          ),
+                          const SizedBox(width: 8),
+                          Flexible(
+                            child: Text(
+                              lenderName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.right,
+                              style: const TextStyle(
+                                color: Color(0xFF0F172A),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (utr != 'N/A') ...[
+                        const SizedBox(height: 6),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              ref
+                                  .watch(appLocalizationsProvider)
+                                  .tr('disbursal_utr'),
+                              style: const TextStyle(
+                                  color: Color(0xFF64748B), fontSize: 11.5),
+                            ),
+                            const SizedBox(width: 8),
+                            Flexible(
+                              child: Text(
+                                utr,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                textAlign: TextAlign.right,
+                                style: const TextStyle(
+                                  color: Color(0xFF059669),
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                      if (accountMasked.isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              ref
+                                  .watch(appLocalizationsProvider)
+                                  .tr('credited_account'),
+                              style: const TextStyle(
+                                  color: Color(0xFF64748B), fontSize: 11.5),
+                            ),
+                            const SizedBox(width: 8),
+                            Flexible(
+                              child: Text(
+                                '$bankName • $accountMasked',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                textAlign: TextAlign.right,
+                                style: const TextStyle(
+                                  color: Color(0xFF334155),
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                AppButton(
+                  text: ref
+                      .watch(appLocalizationsProvider)
+                      .tr('pay_emi_repay_loan'),
+                  onPressed: () => _openRoute('/loan/$lan/repay'),
+                  icon: Icons.account_balance_wallet_rounded,
+                ),
+                const SizedBox(height: 8),
+                AppButton(
+                  text: ref
+                      .watch(appLocalizationsProvider)
+                      .tr('view_full_loan_details_rps'),
+                  isOutlined: true,
+                  onPressed: () => _openRoute('/loan/$lan/loan-details'),
+                  icon: Icons.receipt_long_rounded,
+                ),
+              ],
+            ),
           ),
         ],
       ),
     );
   }
 
+  // ── My Loans Tab ──────────────────────────────────────────────────────────
   Widget _buildMyLoansTab({
     required JourneyState journeyState,
     required dynamic customer,
@@ -1221,155 +1521,137 @@ class _DashboardScreenState
     final bank = postApproval?.bank;
     final lender = postApproval?.lender;
 
-    final lan = _readText(loan?.lan ?? customer?.latestLan, 'FFPL000001');
-    final status = _readText(loan?.status ?? customer?.latestLoanStatus, 'DISBURSED').toUpperCase();
-    final approvedAmount = (loan?.approvedAmount ?? offer?.approvedAmount ?? 50000).toDouble();
-    final lenderName = _readText(lender?.name, 'Fintree Finance Private Limited');
-    final utr = _readText(loan?.disbursalUtr, 'UTR984729104');
+    final lan = _readText(loan?.lan ?? customer?.latestLan, '');
+    final status =
+        _readText(loan?.status ?? customer?.latestLoanStatus, 'DISBURSED')
+            .toUpperCase();
+    final num? rawApproved =
+        loan?.approvedAmount ?? loan?.disbursalAmount ?? offer?.approvedAmount;
+    final double? approvedAmount = (rawApproved != null && rawApproved > 0)
+        ? rawApproved.toDouble()
+        : null;
+    final lenderName =
+        _readText(lender?.name, 'Fintree Finance Private Limited');
+    final utr = _readText(loan?.disbursalUtr, 'N/A');
     final isFullyPaid = status == 'FULLY_PAID' || status == 'CLOSED';
+
+    final int completedLoansCount = (customer?.completedLoansCount ?? 0) > 0
+        ? customer!.completedLoansCount
+        : 1;
+    final double offerMultiplier =
+        LenderMultiplierCalculator.getMultiplier(completedLoansCount);
+    final double revisedLoanLimit =
+        LenderMultiplierCalculator.calculateRevisedLimit(
+            approvedAmount ?? 0, completedLoansCount);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // ── Pre-Approval Repeat Loan Banner (If Fully Paid) ──────────────────
         if (isFullyPaid) ...[
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Color(0xFF065F46),
-                  Color(0xFF047857),
-                  Color(0xFF059669),
-                ],
-              ),
-              borderRadius: BorderRadius.circular(22),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFF059669).withValues(alpha: 0.25),
-                  blurRadius: 16,
-                  offset: const Offset(0, 6),
-                ),
-              ],
+              color: const Color(0xFF065F46),
+              borderRadius: BorderRadius.circular(20),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: const Icon(
-                        Icons.workspace_premium_rounded,
-                        color: Colors.amberAccent,
-                        size: 28,
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-                    const Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '🎉 Pre-Approved for New Loan!',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 17,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          SizedBox(height: 2),
-                          Text(
-                            'Great repayment history unlocked higher limit',
-                            style: TextStyle(
-                              color: Colors.white70,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
+                    const Icon(Icons.workspace_premium_rounded,
+                        color: Colors.amber, size: 24),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Pre-Approved Repeat Loan (${offerMultiplier}x applied)',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 14.5,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 16),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Text(
-                    'You are now approved to take an instant new loan up to ₹10,000 with zero hassle!',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      height: 1.4,
-                    ),
+                const SizedBox(height: 10),
+                Text(
+                  'Eligible for revised limit of ${CurrencyUtils.formatAmount(revisedLoanLimit)} with instant disbursal.',
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.85),
+                    fontSize: 12,
                   ),
                 ),
-                const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  height: 48,
-                  child: ElevatedButton.icon(
-                    onPressed: () {
-                      _openRoute('/onboarding/basic-details');
-                    },
-                    icon: const Icon(Icons.add_circle_outline_rounded, color: AppTheme.primaryDeepTeal),
-                    label: const Text(
-                      'Apply for New Loan Now',
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w800,
-                        color: AppTheme.primaryDeepTeal,
-                      ),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                    ),
+                const SizedBox(height: 14),
+                ElevatedButton(
+                  onPressed: () => _openRoute('/onboarding/basic-details'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: const Color(0xFF065F46),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
                   ),
+                  child: Text(
+                      ref
+                          .watch(appLocalizationsProvider)
+                          .tr('apply_repeat_loan'),
+                      style: const TextStyle(fontWeight: FontWeight.w800)),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
         ],
 
-        // ── Section Header ───────────────────────────────────────────────
-        const _SectionHeader(
-          title: 'My Loans',
-          subtitle: 'All active and past disbursed loans',
+        // Header with View All Loans Button
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'My Active Loan',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF0F172A),
+              ),
+            ),
+            InkWell(
+              onTap: () => _openRoute('/loans/all'),
+              borderRadius: BorderRadius.circular(8),
+              child: const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                child: Row(
+                  children: [
+                    Text(
+                      'View All Loans',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF0F5A47),
+                      ),
+                    ),
+                    SizedBox(width: 4),
+                    Icon(Icons.arrow_forward_ios_rounded, size: 12, color: Color(0xFF0F5A47)),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
-        const SizedBox(height: 14),
+        const SizedBox(height: 10),
 
-        // ── Loan Card 1 ──────────────────────────────────────────────────
-        GestureDetector(
+        // Loan Card
+        InkWell(
           onTap: () => _openRoute('/loan/$lan/loan-details'),
+          borderRadius: BorderRadius.circular(20),
           child: Container(
             width: double.infinity,
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: AppTheme.borderLight),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFF033F45).withValues(alpha: 0.06),
-                  blurRadius: 18,
-                  offset: const Offset(0, 6),
-                ),
-              ],
+              border: Border.all(color: const Color(0xFFE2E8F0)),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1380,34 +1662,34 @@ class _DashboardScreenState
                     Row(
                       children: [
                         Container(
-                          padding: const EdgeInsets.all(10),
+                          padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
-                            color: AppTheme.primaryLightTeal,
-                            borderRadius: BorderRadius.circular(12),
+                            color: const Color(0xFFECFDF5),
+                            borderRadius: BorderRadius.circular(10),
                           ),
                           child: const Icon(
                             Icons.receipt_long_rounded,
-                            color: AppTheme.primaryTeal,
-                            size: 22,
+                            color: Color(0xFF0F5A47),
+                            size: 20,
                           ),
                         ),
-                        const SizedBox(width: 12),
+                        const SizedBox(width: 10),
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
                               lan,
                               style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 15,
-                                color: AppTheme.textDarkPrimary,
+                                fontWeight: FontWeight.w800,
+                                fontSize: 14.5,
+                                color: Color(0xFF0F172A),
                               ),
                             ),
                             Text(
                               lenderName,
                               style: const TextStyle(
                                 fontSize: 11,
-                                color: AppTheme.textDarkSecondary,
+                                color: Color(0xFF64748B),
                               ),
                             ),
                           ],
@@ -1416,80 +1698,109 @@ class _DashboardScreenState
                     ),
                     AppStatusBadge(
                       status: isFullyPaid ? 'FULLY_PAID' : 'DISBURSED',
-                      label: isFullyPaid ? 'Fully Paid' : 'Disbursed',
+                      label: isFullyPaid
+                          ? ref.watch(appLocalizationsProvider).tr('fully_paid')
+                          : ref.watch(appLocalizationsProvider).tr('disbursed'),
                     ),
                   ],
                 ),
-                const Divider(height: 24),
+                const Divider(height: 24, color: Color(0xFFF1F5F9)),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Approved Loan Amount',
-                          style: TextStyle(fontSize: 11.5, color: AppTheme.textDarkSecondary),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          CurrencyUtils.formatAmount(approvedAmount),
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w800,
-                            color: AppTheme.primaryTeal,
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            ref
+                                .watch(appLocalizationsProvider)
+                                .tr('approved_loan_amount_label'),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                                fontSize: 11, color: Color(0xFF64748B)),
                           ),
-                        ),
-                      ],
+                          const SizedBox(height: 2),
+                          Text(
+                            approvedAmount != null
+                                ? CurrencyUtils.formatAmount(approvedAmount)
+                                : ref
+                                    .watch(appLocalizationsProvider)
+                                    .tr('pending_confirmation_label'),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w800,
+                              color: Color(0xFF0F5A47),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        const Text(
-                          'Destination Account',
-                          style: TextStyle(fontSize: 11.5, color: AppTheme.textDarkSecondary),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          bank?.bankName ?? 'Bank Account',
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            color: AppTheme.textDarkPrimary,
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            ref
+                                .watch(appLocalizationsProvider)
+                                .tr('destination_bank_label'),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                                fontSize: 11, color: Color(0xFF64748B)),
                           ),
-                        ),
-                      ],
+                          const SizedBox(height: 2),
+                          Text(
+                            bank?.bankName ?? 'Bank Account',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF0F172A),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 12),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: BoxDecoration(
-                    color: AppTheme.backgroundLight,
+                    color: const Color(0xFFF8FAFC),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Row(
-                        children: [
-                          const Icon(Icons.tag_rounded, size: 14, color: AppTheme.textDarkSecondary),
-                          const SizedBox(width: 4),
-                          Text(
-                            'UTR: $utr',
-                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppTheme.textDarkSecondary),
-                          ),
-                        ],
+                      Text(
+                        'UTR: $utr',
+                        style: const TextStyle(
+                            fontSize: 11,
+                            color: Color(0xFF64748B),
+                            fontWeight: FontWeight.w600),
                       ),
                       Row(
-                        children: const [
+                        children: [
                           Text(
-                            'View Loan Details',
-                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.primaryTeal),
+                            ref
+                                .watch(appLocalizationsProvider)
+                                .tr('view_rps_label'),
+                            style: const TextStyle(
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF0F5A47)),
                           ),
                           SizedBox(width: 4),
-                          Icon(Icons.arrow_forward_ios_rounded, size: 12, color: AppTheme.primaryTeal),
+                          Icon(Icons.arrow_forward_ios_rounded,
+                              size: 10, color: Color(0xFF0F5A47)),
                         ],
                       ),
                     ],
@@ -1503,265 +1814,220 @@ class _DashboardScreenState
     );
   }
 
+  // ── Application Tab ───────────────────────────────────────────────────────
   Widget _buildApplicationTab({
     required JourneyState journeyState,
     required dynamic customer,
   }) {
-    final applicationId = _readText(
-      customer?.latestApplicationId,
-      '1',
-    );
-
-    final applicationStatus = _readText(
-      customer?.latestApplicationStatus,
-      'IN_PROGRESS',
-    );
-
-    final fullName =
-        _readText(customer?.fullName, 'Not provided');
-
-    final email =
-        _readText(customer?.email, 'Not provided');
-
-    final panNumber =
-        _readText(customer?.panNumber, 'Not provided');
-
-    final employmentType =
-        _readText(customer?.employmentType, 'Not provided');
-
+    final applicationStatus =
+        _readText(customer?.latestApplicationStatus, 'IN_PROGRESS');
+    final fullName = _readText(customer?.fullName, 'Not provided');
+    final email = _readText(customer?.email, 'Not provided');
+    final panNumber = _readText(customer?.panNumber, 'Not provided');
+    final employmentType = _readText(customer?.employmentType, 'Not provided');
     final employerName = _readText(
-      customer?.companyName ?? customer?.businessName,
-      'Not provided',
-    );
-
-    final residentialPincode = _readText(
-      customer?.residentialPincode,
-      'Not provided',
-    );
-
+        customer?.companyName ?? customer?.businessName, 'Not provided');
+    final residentialPincode =
+        _readText(customer?.residentialPincode, 'Not provided');
     final monthlyIncome = customer?.monthlyIncome;
 
     final panVerified = customer?.panVerified == true;
-    final mobileVerified =
-        customer?.mobileVerified == true;
-    final emailVerified =
-        customer?.emailVerified == true;
+    final mobileVerified = customer?.mobileVerified == true;
+    final emailVerified = customer?.emailVerified == true;
 
     final statusUpper = applicationStatus.toUpperCase();
-
-    final applicationSubmitted =
-        statusUpper.contains('SUBMITTED') ||
-            statusUpper.contains('APPROVED') ||
-            statusUpper.contains('SANCTION') ||
-            statusUpper.contains('DISBURS');
-
-    final lenderApproved =
+    final applicationSubmitted = statusUpper.contains('SUBMITTED') ||
         statusUpper.contains('APPROVED') ||
-            statusUpper.contains('SANCTION') ||
-            statusUpper.contains('DISBURS');
+        statusUpper.contains('SANCTION') ||
+        statusUpper.contains('DISBURS');
 
     final basicDetailsComplete =
         fullName != 'Not provided' && emailVerified == true;
-
     final profileComplete =
-        employmentType != 'Not provided' ||
-            monthlyIncome != null;
-
+        employmentType != 'Not provided' || monthlyIncome != null;
     final assessmentFeePaid = customer?.assessmentFeePaid == true;
     final postApproval = journeyState.postApproval;
     final offerAccepted = postApproval?.workflow.offerAccepted == true;
 
     final livenessComplete = customer != null &&
         !customer.updateReadinessReasons.contains('LIVENESS_NOT_VERIFIED');
-
     final digilockerComplete = customer != null &&
         (customer.aadhaarVerified == true ||
             customer.aadhaarKycStatus == 'VERIFIED');
-
     final addressComplete = customer != null &&
         !customer.updateReadinessReasons.contains('ADDRESS_NOT_VERIFIED') &&
-        !customer.updateReadinessReasons.contains('RESIDENTIAL_ADDRESS_NOT_VERIFIED') &&
-        (customer.residentialCity != null && customer.residentialCity != 'Not provided');
-
+        !customer.updateReadinessReasons
+            .contains('RESIDENTIAL_ADDRESS_NOT_VERIFIED') &&
+        (customer.residentialCity != null &&
+            customer.residentialCity != 'Not provided');
     final aaComplete = customer != null &&
         (customer.aaVerified == true ||
-            ['SUCCESS', 'COMPLETED', 'VERIFIED'].contains(customer.aaStatus?.toUpperCase()) ||
-            ['SUCCESS', 'COMPLETED', 'VERIFIED'].contains(customer.accountAggregatorStatus?.toUpperCase()));
+            ['SUCCESS', 'COMPLETED', 'VERIFIED']
+                .contains(customer.aaStatus?.toUpperCase()) ||
+            ['SUCCESS', 'COMPLETED', 'VERIFIED']
+                .contains(customer.accountAggregatorStatus?.toUpperCase()));
 
     final applicationSteps = <_ApplicationStep>[
       _ApplicationStep(
         number: 1,
-        title: 'Basic personal details',
-        subtitle: 'Name, date of birth, gender and pincode',
+        title: ref.watch(appLocalizationsProvider).tr('step_basic_details'),
+        subtitle:
+            ref.watch(appLocalizationsProvider).tr('step_basic_details_sub'),
         icon: Icons.person_outline_rounded,
         route: '/onboarding/basic-details',
-        isCompleted:
-            applicationSubmitted || basicDetailsComplete,
+        isCompleted: applicationSubmitted || basicDetailsComplete,
       ),
       _ApplicationStep(
         number: 2,
-        title: 'PAN verification',
-        subtitle: 'Verify your Permanent Account Number',
+        title: ref.watch(appLocalizationsProvider).tr('step_pan_verification'),
+        subtitle:
+            ref.watch(appLocalizationsProvider).tr('step_pan_verification_sub'),
         icon: Icons.badge_outlined,
         route: '/onboarding/pan',
-        isCompleted:
-            applicationSubmitted || panVerified,
+        isCompleted: applicationSubmitted || panVerified,
       ),
       _ApplicationStep(
         number: 3,
-        title: 'Lender & Assessment fee',
-        subtitle: 'Allocated lender and processing fee payment',
+        title: ref.watch(appLocalizationsProvider).tr('step_lender_assessment'),
+        subtitle: ref
+            .watch(appLocalizationsProvider)
+            .tr('step_lender_assessment_sub'),
         icon: Icons.payment_rounded,
         route: '/payment/processing-fee',
-        isCompleted:
-            applicationSubmitted || assessmentFeePaid,
+        isCompleted: applicationSubmitted || assessmentFeePaid,
       ),
       _ApplicationStep(
         number: 4,
-        title: 'Profile and income',
+        title: ref.watch(appLocalizationsProvider).tr('step_profile_income'),
         subtitle:
-            'Employment, income and organisation details',
+            ref.watch(appLocalizationsProvider).tr('step_profile_income_sub'),
         icon: Icons.work_outline_rounded,
         route: '/onboarding/profile',
-        isCompleted:
-            applicationSubmitted || profileComplete,
+        isCompleted: applicationSubmitted || profileComplete,
       ),
       _ApplicationStep(
         number: 5,
-        title: 'Live photo',
-        subtitle: 'Selfie capture and liveness verification',
+        title: ref.watch(appLocalizationsProvider).tr('step_live_photo'),
+        subtitle: ref.watch(appLocalizationsProvider).tr('step_live_photo_sub'),
         icon: Icons.face_retouching_natural_outlined,
         route: '/onboarding/live-photo',
         isCompleted: applicationSubmitted || livenessComplete,
       ),
       _ApplicationStep(
         number: 6,
-        title: 'DigiLocker Aadhaar KYC',
-        subtitle: 'Secure Aadhaar verification through DigiLocker',
+        title: ref.watch(appLocalizationsProvider).tr('step_digilocker'),
+        subtitle: ref.watch(appLocalizationsProvider).tr('step_digilocker_sub'),
         icon: Icons.verified_user_outlined,
         route: '/onboarding/digilocker',
         isCompleted: applicationSubmitted || digilockerComplete,
       ),
       _ApplicationStep(
         number: 7,
-        title: 'Address confirmation',
-        subtitle: 'Review and confirm your residence address',
+        title: ref.watch(appLocalizationsProvider).tr('step_address'),
+        subtitle: ref.watch(appLocalizationsProvider).tr('step_address_sub'),
         icon: Icons.home_outlined,
         route: '/onboarding/address',
-        isCompleted:
-            applicationSubmitted || addressComplete,
+        isCompleted: applicationSubmitted || addressComplete,
       ),
       _ApplicationStep(
         number: 8,
-        title: 'Account Aggregator Verification',
-        subtitle: 'Connect bank account for statement analysis',
+        title: ref.watch(appLocalizationsProvider).tr('step_aa'),
+        subtitle: ref.watch(appLocalizationsProvider).tr('step_aa_sub'),
         icon: Icons.account_balance_outlined,
         route: '/onboarding/account-aggregator',
         isCompleted: applicationSubmitted || aaComplete,
       ),
       _ApplicationStep(
         number: 9,
-        title: 'Loan Offer Selection',
-        subtitle: 'Select loan tenure and review approved pricing',
+        title: ref.watch(appLocalizationsProvider).tr('step_loan_offer'),
+        subtitle: ref.watch(appLocalizationsProvider).tr('step_loan_offer_sub'),
         icon: Icons.local_offer_outlined,
         route: '/onboarding/offer',
         isCompleted: applicationSubmitted || offerAccepted,
       ),
       _ApplicationStep(
         number: 10,
-        title: 'Review and submit',
+        title: ref.watch(appLocalizationsProvider).tr('step_review_submit'),
         subtitle:
-            'Confirm the application before lender submission',
+            ref.watch(appLocalizationsProvider).tr('step_review_submit_sub'),
         icon: Icons.task_alt_rounded,
         route: '/onboarding/review',
         isCompleted: applicationSubmitted,
       ),
     ];
 
-    final completedSteps = applicationSteps
-        .where((step) => step.isCompleted)
-        .length;
-
+    final completedSteps =
+        applicationSteps.where((step) => step.isCompleted).length;
     final applicationProgress = applicationSteps.isEmpty
         ? 0.0
         : completedSteps / applicationSteps.length;
 
+    String? nextIncompleteRoute;
+    for (final step in applicationSteps) {
+      if (!step.isCompleted) {
+        nextIncompleteRoute = step.route;
+        break;
+      }
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-
-      
       children: [
-        const SizedBox(height: 38),
         Container(
           width: double.infinity,
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(
-              color: AppTheme.borderLight,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF033F45)
-                    .withOpacity(0.07),
-                blurRadius: 24,
-                offset: const Offset(0, 10),
-              ),
-            ],
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
-                crossAxisAlignment:
-                    CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Container(
-                    width: 50,
-                    height: 50,
-                    decoration: BoxDecoration(
-                      color: AppTheme.primaryLightTeal,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: const Icon(
-                      Icons.description_outlined,
-                      color: AppTheme.primaryTeal,
-                      size: 26,
-                    ),
-                  ),
-                  const SizedBox(width: 13),
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment:
-                          CrossAxisAlignment.start,
+                    child: Row(
                       children: [
-                        Text(
-                          'Application $applicationId',
-                          style: const TextStyle(
-                            color: AppTheme.textDarkPrimary,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w800,
-                          ),
+                        SvgPicture.asset(
+                          'lib/assets/images/illustrations/Filing system-rafiki.svg',
+                          height: 48,
                         ),
-                        const SizedBox(height: 4),
-                        const Text(
-                          'Personal Loan • Fintree Finance',
-                          style: TextStyle(
-                            color:
-                                AppTheme.textDarkSecondary,
-                            fontSize: 12,
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                ref
+                                    .watch(appLocalizationsProvider)
+                                    .tr('application_dossier'),
+                                style: const TextStyle(
+                                  color: Color(0xFF0F172A),
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 16,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                ref
+                                    .watch(appLocalizationsProvider)
+                                    .tr('personal_loan_fintree'),
+                                style: const TextStyle(
+                                    color: Color(0xFF64748B), fontSize: 11.5),
+                              ),
+                            ],
                           ),
                         ),
                       ],
                     ),
                   ),
-                  AppStatusBadge(
-                    status: applicationStatus,
-                  ),
+                  const SizedBox(width: 8),
+                  AppStatusBadge(status: applicationStatus),
                 ],
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 16),
               Row(
                 children: [
                   Expanded(
@@ -1789,195 +2055,163 @@ class _DashboardScreenState
                   ),
                 ],
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 16),
               ClipRRect(
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.circular(10),
                 child: LinearProgressIndicator(
                   value: applicationProgress,
-                  minHeight: 7,
-                  backgroundColor:
-                      AppTheme.primaryLightTeal,
+                  minHeight: 6,
+                  backgroundColor: const Color(0xFFE2E8F0),
                   valueColor:
-                      const AlwaysStoppedAnimation<Color>(
-                    AppTheme.primaryTeal,
-                  ),
+                      const AlwaysStoppedAnimation<Color>(Color(0xFF0F5A47)),
                 ),
               ),
               const SizedBox(height: 8),
               Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    '$completedSteps of ${applicationSteps.length} application steps completed',
+                    ref.watch(appLocalizationsProvider).tr('steps_completed', {
+                      'completed': '$completedSteps',
+                      'total': '${applicationSteps.length}'
+                    }),
                     style: const TextStyle(
-                      color: AppTheme.textDarkSecondary,
-                      fontSize: 11.5,
-                    ),
+                        color: Color(0xFF64748B), fontSize: 11.5),
                   ),
-                  const Spacer(),
                   Text(
                     '${(applicationProgress * 100).round()}%',
                     style: const TextStyle(
-                      color: AppTheme.primaryTeal,
+                      color: Color(0xFF0F5A47),
                       fontSize: 12,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
                 ],
               ),
-              (() {
-                String? nextIncompleteRoute;
-                for (final step in applicationSteps) {
-                  if (!step.isCompleted) {
-                    nextIncompleteRoute = step.route;
-                    break;
-                  }
-                }
-
-                if (applicationSubmitted) {
-                  return AppButton(
-                    text: 'View Application Status',
-                    isOutlined: true,
-                    onPressed: () {
-                      context.push('/application/status');
-                    },
-                    icon: Icons.analytics_outlined,
-                  );
-                } else if (nextIncompleteRoute != null) {
-                  return Column(
-                    children: [
-                      const SizedBox(height: 17),
-                      AppButton(
-                        text: (nextIncompleteRoute == '/onboarding/basic-details' || emailVerified != true)
-                            ? 'Apply for Loan'
-                            : 'Resume Application',
-                        onPressed: () async {
-                          await ref.read(journeyControllerProvider.notifier).syncCustomerState();
-                          if (mounted) {
-                            final target = ref.read(journeyControllerProvider).targetRoute;
-                            context.push((target.isNotEmpty && target != '/dashboard' && target != '/login') ? target : nextIncompleteRoute!);
-                          }
-                        },
-                        icon: Icons.arrow_forward_rounded,
-                      ),
-                    ],
-                  );
-                } else {
-                  return Column(
-                    children: [
-                      const SizedBox(height: 17),
-                      AppButton(
-                        text: 'Review & Submit Application',
-                        onPressed: () {
-                          context.push('/onboarding/review');
-                        },
-                        icon: Icons.arrow_forward_rounded,
-                      ),
-                    ],
-                  );
-                }
-              })(),
+              const SizedBox(height: 16),
+              if (applicationSubmitted)
+                AppButton(
+                  text: ref
+                      .watch(appLocalizationsProvider)
+                      .tr('view_application_status'),
+                  isOutlined: true,
+                  onPressed: () => _openRoute('/application/status'),
+                  icon: Icons.analytics_outlined,
+                )
+              else if (nextIncompleteRoute != null)
+                AppButton(
+                  text: (nextIncompleteRoute == '/onboarding/basic-details' ||
+                          emailVerified != true)
+                      ? ref.watch(appLocalizationsProvider).tr('apply_for_loan')
+                      : ref
+                          .watch(appLocalizationsProvider)
+                          .tr('resume_application'),
+                  onPressed: () async {
+                    await ref
+                        .read(journeyControllerProvider.notifier)
+                        .syncCustomerState();
+                    if (mounted) {
+                      final target =
+                          ref.read(journeyControllerProvider).targetRoute;
+                      _openRoute((target.isNotEmpty &&
+                              target != '/dashboard' &&
+                              target != '/login')
+                          ? target
+                          : nextIncompleteRoute!);
+                    }
+                  },
+                  icon: Icons.arrow_forward_rounded,
+                )
+              else
+                AppButton(
+                  text: ref
+                      .watch(appLocalizationsProvider)
+                      .tr('review_submit_application'),
+                  onPressed: () => _openRoute('/onboarding/review'),
+                  icon: Icons.arrow_forward_rounded,
+                ),
             ],
           ),
         ),
-        const SizedBox(height: 22),
-        _SectionHeader(
-          title: 'Applicant profile',
-          subtitle: 'Personal and income information',
-          trailing: Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 9,
-              vertical: 5,
-            ),
-            decoration: BoxDecoration(
-              color: lenderApproved
-                  ? AppTheme.successBg
-                  : AppTheme.primaryLightTeal,
-              borderRadius: BorderRadius.circular(30),
-            ),
-            child: Text(
-              lenderApproved ? 'Approved' : 'In progress',
-              style: TextStyle(
-                color: lenderApproved
-                    ? AppTheme.successGreen
-                    : AppTheme.primaryTeal,
-                fontSize: 10.5,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 20),
+
+        // Applicant Profile Details
         Container(
+          width: double.infinity,
           padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(22),
-            border: Border.all(
-              color: AppTheme.borderLight,
-            ),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
           ),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _ProfileDetailRow(
-                icon: Icons.person_outline_rounded,
-                label: 'Applicant name',
-                value: fullName,
+              Text(
+                ref.watch(appLocalizationsProvider).tr('applicant_profile'),
+                style: const TextStyle(
+                  color: Color(0xFF0F172A),
+                  fontWeight: FontWeight.w800,
+                  fontSize: 15,
+                ),
               ),
+              const Divider(height: 20, color: Color(0xFFF1F5F9)),
               _ProfileDetailRow(
-                icon: Icons.email_outlined,
-                label: 'Email address',
-                value: email,
-              ),
+                  icon: Icons.person_outline_rounded,
+                  label: 'Applicant Name',
+                  value: fullName),
               _ProfileDetailRow(
-                icon: Icons.badge_outlined,
-                label: 'PAN number',
-                value: panNumber,
-              ),
+                  icon: Icons.email_outlined,
+                  label: 'Email Address',
+                  value: email),
               _ProfileDetailRow(
-                icon: Icons.work_outline_rounded,
-                label: 'Employment type',
-                value: employmentType,
-              ),
+                  icon: Icons.badge_outlined,
+                  label: 'PAN Number',
+                  value: panNumber),
               _ProfileDetailRow(
-                icon: Icons.business_outlined,
-                label: 'Employer / business',
-                value: employerName,
-              ),
+                  icon: Icons.work_outline_rounded,
+                  label: 'Employment Type',
+                  value: employmentType),
+              _ProfileDetailRow(
+                  icon: Icons.business_outlined,
+                  label: 'Employer / Business',
+                  value: employerName),
               _ProfileDetailRow(
                 icon: Icons.currency_rupee_rounded,
-                label: 'Monthly net income',
+                label: 'Monthly Net Income',
                 value: monthlyIncome == null
                     ? 'Not provided'
-                    : CurrencyUtils.formatAmount(
-                        monthlyIncome,
-                      ),
+                    : CurrencyUtils.formatAmount(monthlyIncome),
               ),
               _ProfileDetailRow(
                 icon: Icons.location_on_outlined,
-                label: 'Residence pincode',
+                label: 'Residence Pincode',
                 value: residentialPincode,
                 showDivider: false,
               ),
             ],
           ),
         ),
-        const SizedBox(height: 24),
-        const _SectionHeader(
-          title: 'Application journey',
-          subtitle: 'Manage and review your application steps',
-        ),
-        const SizedBox(height: 13),
-        ...applicationSteps.sublist(0, (completedSteps + 1).clamp(0, applicationSteps.length)).map(
-          (step) {
-            final isCurrent =
-                journeyState.targetRoute == step.route;
+        const SizedBox(height: 20),
 
+        Text(
+          ref.watch(appLocalizationsProvider).tr('application_journey'),
+          style: const TextStyle(
+            color: Color(0xFF0F172A),
+            fontWeight: FontWeight.w800,
+            fontSize: 15,
+          ),
+        ),
+        const SizedBox(height: 12),
+        ...applicationSteps
+            .sublist(0, (completedSteps + 1).clamp(0, applicationSteps.length))
+            .map(
+          (step) {
+            final isCurrent = journeyState.targetRoute == step.route;
             return _ApplicationStepTile(
               step: step,
               isCurrent: isCurrent,
-              onTap: () {
-                _openRoute(step.route);
-              },
+              onTap: () => _openRoute(step.route),
             );
           },
         ),
@@ -1985,185 +2219,165 @@ class _DashboardScreenState
     );
   }
 
-  String _getGreeting() {
-    final hour = DateTime.now().hour;
-
-    if (hour < 12) return 'Good morning';
-    if (hour < 17) return 'Good afternoon';
-
-    return 'Good evening';
-  }
-
-  String _getPrimaryButtonLabel(JourneyState state) {
-    final route = state.targetRoute;
-
-    if (route.contains('/offer')) {
-      return 'Review Approved Loan Offer';
-    }
-
-    if (route.contains('/digilocker')) {
-      return 'Complete DigiLocker KYC';
-    }
-
-    if (route.contains('/address')) {
-      return 'Confirm Residence Address';
-    }
-
-    if (route.contains('/bank')) {
-      return 'Verify Bank Account';
-    }
-
-    if (route.contains('/kfs')) {
-      return 'Review & Accept KFS';
-    }
-
-    if (route.contains('/mandate')) {
-      return 'Register e-NACH Mandate';
-    }
-
-    if (route.contains('/esign')) {
-      return 'Complete Agreement e-Sign';
-    }
-
-    if (route.contains('/disbursal')) {
-      return 'View Disbursal Status';
-    }
-
-    if (route.contains('/application/status')) {
-      return 'Check Application Status';
-    }
-
-    if (route.contains('/onboarding')) {
-      return 'Continue Loan Application';
-    }
-
-    return 'Start Application';
-  }
-
-  String _readText(
-    dynamic value,
-    String fallback,
-  ) {
-    if (value == null) return fallback;
-
-    final text = value.toString().trim();
-
-    return text.isEmpty ? fallback : text;
-  }
-
-  String _formatStatus(String value) {
-    return value
-        .replaceAll('_', ' ')
-        .trim()
-        .split(' ')
-        .where((word) => word.isNotEmpty)
-        .map(
-          (word) =>
-              '${word[0].toUpperCase()}${word.substring(1).toLowerCase()}',
-        )
-        .join(' ');
-  }
-
-  String _shortStatus(String value) {
-    final upperValue = value.toUpperCase();
-
-    if (upperValue.contains('APPROVED')) {
-      return 'APPROVED';
-    }
-
-    if (upperValue.contains('DISBURS')) {
-      return 'DISBURSED';
-    }
-
-    if (upperValue.contains('REJECT')) {
-      return 'REVIEWED';
-    }
-
-    return 'IN PROGRESS';
-  }
-}
-
-class _DashboardTabButton extends StatelessWidget {
-  final String title;
-  final String subtitle;
-  final IconData icon;
-  final bool isSelected;
-  final VoidCallback onTap;
-
-  const _DashboardTabButton({
-    required this.title,
-    required this.subtitle,
-    required this.icon,
-    required this.isSelected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: isSelected
-          ? AppTheme.primaryTeal
-          : Colors.transparent,
-      borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 220),
-          padding: const EdgeInsets.symmetric(
-            horizontal: 12,
-            vertical: 12,
+  // ── Promo Card: Need Personal Loan ────────────────────────────────────────
+  Widget _buildPersonalLoanPromoCard(JourneyState journeyState) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF1F8F5),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFDCEDE4)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  ref.watch(appLocalizationsProvider).tr('need_personal_loan'),
+                  style: const TextStyle(
+                    color: Color(0xFF0F172A),
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  ref.watch(appLocalizationsProvider).tr('get_instant_offers'),
+                  style: const TextStyle(
+                    color: Color(0xFF64748B),
+                    fontSize: 11.5,
+                    height: 1.35,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                InkWell(
+                  onTap: () {
+                    final target = journeyState.targetRoute;
+                    _openRoute(
+                      (target.isNotEmpty &&
+                              target != '/dashboard' &&
+                              target != '/login')
+                          ? target
+                          : '/onboarding/basic-details',
+                    );
+                  },
+                  borderRadius: BorderRadius.circular(8),
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0F5A47),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          ref.watch(appLocalizationsProvider).tr('apply_now'),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        const Icon(
+                          Icons.chevron_right_rounded,
+                          color: Colors.white,
+                          size: 16,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
+          const SizedBox(width: 12),
+          SvgPicture.asset(
+            'lib/assets/images/illustrations/Completed-pana.svg',
+            height: 75,
+            fit: BoxFit.contain,
           ),
-          child: Row(
+        ],
+      ),
+    );
+  }
+
+  // ── Smart Credit Perks & Readiness Hub ────────────────────────────────────
+  Widget _buildSmartCreditPerksHub() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF0F5A47).withValues(alpha: 0.05),
+            blurRadius: 18,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  color: isSelected
-                      ? Colors.white.withOpacity(0.16)
-                      : AppTheme.primaryLightTeal,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  icon,
-                  color: isSelected
-                      ? Colors.white
-                      : AppTheme.primaryTeal,
-                  size: 20,
-                ),
-              ),
-              const SizedBox(width: 9),
               Expanded(
                 child: Column(
-                  crossAxisAlignment:
-                      CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: isSelected
-                            ? Colors.white
-                            : AppTheme.textDarkPrimary,
-                        fontSize: 12.5,
+                      ref
+                          .watch(appLocalizationsProvider)
+                          .tr('smart_credit_benefits'),
+                      style: const TextStyle(
+                        color: Color(0xFF0F172A),
+                        fontSize: 16,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      subtitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: isSelected
-                            ? Colors.white.withOpacity(0.72)
-                            : AppTheme.textDarkSecondary,
-                        fontSize: 9.5,
+                      ref.watch(appLocalizationsProvider).tr('exclusive_perks'),
+                      style: const TextStyle(
+                        color: Color(0xFF64748B),
+                        fontSize: 11.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFECFDF5),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: const Color(0xFFA7F3D0)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.stars_rounded,
+                      color: Color(0xFF059669),
+                      size: 14,
+                    ),
+                    SizedBox(width: 4),
+                    Text(
+                      ref.watch(appLocalizationsProvider).tr('high_odds'),
+                      style: const TextStyle(
+                        color: Color(0xFF059669),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                   ],
@@ -2171,7 +2385,1120 @@ class _DashboardTabButton extends StatelessWidget {
               ),
             ],
           ),
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF0A4436), Color(0xFF0F5A47)],
+              ),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.speed_rounded,
+                              color: Color(0xFF34D399), size: 18),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              ref
+                                  .watch(appLocalizationsProvider)
+                                  .tr('approval_readiness'),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(10),
+                        child: const LinearProgressIndicator(
+                          value: 0.88,
+                          minHeight: 6,
+                          backgroundColor: Color(0xFF063328),
+                          valueColor:
+                              AlwaysStoppedAnimation<Color>(Color(0xFF34D399)),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        ref
+                            .watch(appLocalizationsProvider)
+                            .tr('pre_verified_instant'),
+                        style: const TextStyle(
+                          color: Color(0xFFA7F3D0),
+                          fontSize: 10.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                SvgPicture.asset(
+                  'lib/assets/images/illustrations/Personal settings-cuate.svg',
+                  height: 54,
+                  fit: BoxFit.contain,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: _buildPerkCard(
+                  icon: Icons.bolt_rounded,
+                  iconColor: const Color(0xFFF59E0B),
+                  title: ref
+                      .watch(appLocalizationsProvider)
+                      .tr('instant_disbursal'),
+                  subtitle: ref
+                      .watch(appLocalizationsProvider)
+                      .tr('direct_transfer_esign'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _buildPerkCard(
+                  icon: Icons.verified_user_rounded,
+                  iconColor: const Color(0xFF10B981),
+                  title: ref
+                      .watch(appLocalizationsProvider)
+                      .tr('zero_foreclosure'),
+                  subtitle:
+                      ref.watch(appLocalizationsProvider).tr('pay_off_anytime'),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: _buildPerkCard(
+                  icon: Icons.trending_up_rounded,
+                  iconColor: const Color(0xFF6366F1),
+                  title:
+                      ref.watch(appLocalizationsProvider).tr('tier_multiplier'),
+                  subtitle: ref
+                      .watch(appLocalizationsProvider)
+                      .tr('higher_limits_emi'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _buildPerkCard(
+                  icon: Icons.document_scanner_rounded,
+                  iconColor: const Color(0xFFEC4899),
+                  title: ref.watch(appLocalizationsProvider).tr('digital_kyc'),
+                  subtitle: ref
+                      .watch(appLocalizationsProvider)
+                      .tr('paperless_digilocker'),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          InkWell(
+            onTap: () => _showHelpSupportModal(context),
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF1F5F9),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.headset_mic_rounded,
+                        color: Color(0xFF0F5A47),
+                        size: 18,
+                      ),
+                      SizedBox(width: 8),
+                      Text(
+                        ref
+                            .watch(appLocalizationsProvider)
+                            .tr('questions_credit_perks'),
+                        style: const TextStyle(
+                          color: Color(0xFF334155),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                  Row(
+                    children: [
+                      Text(
+                        ref.watch(appLocalizationsProvider).tr('support_label'),
+                        style: const TextStyle(
+                          color: Color(0xFF0F5A47),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      Icon(
+                        Icons.chevron_right_rounded,
+                        color: Color(0xFF0F5A47),
+                        size: 18,
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPerkCard({
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required String subtitle,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(7),
+            decoration: BoxDecoration(
+              color: iconColor.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: iconColor, size: 18),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: Color(0xFF0F172A),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: const TextStyle(
+                    color: Color(0xFF64748B),
+                    fontSize: 10,
+                    height: 1.2,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Bottom Navigation Bar ─────────────────────────────────────────────────
+  Widget _buildBottomNavigationBar(
+      BuildContext context, JourneyState journeyState) {
+    final customer = journeyState.customer;
+    final postApproval = journeyState.postApproval;
+    final tr = ref.watch(appLocalizationsProvider);
+
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(
+          top: BorderSide(color: Color(0xFFF1F5F9), width: 1.2),
         ),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _buildBottomNavItem(
+                index: 0,
+                icon: Icons.home_filled,
+                label: tr.tr('home'),
+                onTap: () => setState(() => _selectedNavIndex = 0),
+              ),
+              _buildBottomNavItem(
+                index: 1,
+                icon: Icons.assignment_outlined,
+                label: tr.tr('application'),
+                onTap: () {
+                  setState(() => _selectedNavIndex = 1);
+                  _openRoute('/loans/all');
+                },
+              ),
+              _buildBottomNavItem(
+                index: 2,
+                icon: Icons.account_balance_wallet_outlined,
+                label: tr.tr('loan_details_nav'),
+                onTap: () {
+                  setState(() => _selectedNavIndex = 2);
+                  final effectiveLan = customer?.latestLan ??
+                      customer?.platformLan ??
+                      postApproval?.loan.lan ??
+                      '';
+                  if (effectiveLan.isNotEmpty) {
+                    if (customer?.latestLoanStatus == 'FULLY_PAID' ||
+                        customer?.latestLoanStatus == 'CLOSED') {
+                      _openRoute('/loan/$effectiveLan/fully-paid-review');
+                    } else {
+                      _openRoute('/loan/$effectiveLan/loan-details');
+                    }
+                  } else if ((customer?.latestApplicationId ?? '').isNotEmpty) {
+                    _openRoute(
+                        '/loan/${customer!.latestApplicationId}/loan-details');
+                  } else {
+                    _openRoute('/onboarding/offer');
+                  }
+                },
+              ),
+              _buildBottomNavItem(
+                index: 3,
+                icon: Icons.person_outline_rounded,
+                label: tr.tr('profile'),
+                onTap: () {
+                  setState(() => _selectedNavIndex = 3);
+                  _showCustomerProfileModal(context, journeyState);
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBottomNavItem({
+    required int index,
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    final isSelected = _selectedNavIndex == index;
+    final color =
+        isSelected ? const Color(0xFF0F5A47) : const Color(0xFF94A3B8);
+
+    return InkWell(
+      onTap: onTap,
+      splashColor: Colors.transparent,
+      highlightColor: Colors.transparent,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: color, size: 22),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontSize: 11,
+              fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Modals: Profile & Support ──────────────────────────────────────────────
+  void _showCustomerProfileModal(
+      BuildContext context, JourneyState journeyState) {
+    final customer = journeyState.customer;
+    final postApproval = journeyState.postApproval;
+    final bank = postApproval?.bank;
+
+    final fullName = _readText(customer?.fullName, 'Rohit Sharma');
+    final mobile = _readText(customer?.mobileNumber, '+91 98XXXX4321');
+    final email = _readText(customer?.email, 'rohit@gmail.com');
+    final pan = _readText(customer?.panNumber, 'ABCDE1234F');
+    final employmentType = _readText(customer?.employmentType, 'Salaried');
+    final employerName = _readText(
+        customer?.companyName ?? customer?.businessName, 'Private Enterprise');
+    final designation = _readText(customer?.designation, 'Senior Associate');
+    final residenceStatus = _readText(customer?.residenceStatus, 'Owned');
+    final pincode = _readText(customer?.residentialPincode, '401303');
+    final monthlyIncome = customer?.monthlyIncome;
+    final formattedIncome = (monthlyIncome != null && monthlyIncome > 0)
+        ? CurrencyUtils.formatAmount(monthlyIncome)
+        : 'Verified Profile';
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => Container(
+        height: MediaQuery.of(ctx).size.height * 0.86,
+        decoration: const BoxDecoration(
+          color: Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          children: [
+            // Header Hero Banner with SVG
+            Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Color(0xFF073B2E),
+                    Color(0xFF0F5A47),
+                    Color(0xFF136E57),
+                  ],
+                ),
+              ),
+              child: SafeArea(
+                bottom: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 12, 16, 20),
+                  child: Column(
+                    children: [
+                      Container(
+                        width: 44,
+                        height: 5,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.3),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Stack(
+                            children: [
+                              Container(
+                                width: 62,
+                                height: 62,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                      color: const Color(0xFF34D399),
+                                      width: 2.5),
+                                  gradient: const LinearGradient(
+                                    colors: [
+                                      Color(0xFF10B981),
+                                      Color(0xFF059669)
+                                    ],
+                                  ),
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    fullName.isNotEmpty
+                                        ? fullName[0].toUpperCase()
+                                        : 'C',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 26,
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              Positioned(
+                                right: 0,
+                                bottom: 0,
+                                child: Container(
+                                  padding: const EdgeInsets.all(3),
+                                  decoration: const BoxDecoration(
+                                    color: Color(0xFF10B981),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    Icons.check_rounded,
+                                    color: Colors.white,
+                                    size: 12,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Flexible(
+                                      child: Text(
+                                        fullName,
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.w900,
+                                          letterSpacing: -0.3,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 7, vertical: 2.5),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF34D399)
+                                            .withValues(alpha: 0.25),
+                                        borderRadius: BorderRadius.circular(10),
+                                        border: Border.all(
+                                            color: const Color(0xFF34D399),
+                                            width: 0.8),
+                                      ),
+                                      child: Text(
+                                        ref
+                                            .watch(appLocalizationsProvider)
+                                            .tr('verified_badge'),
+                                        style: const TextStyle(
+                                          color: Color(0xFF6EE7B7),
+                                          fontSize: 9,
+                                          fontWeight: FontWeight.w900,
+                                          letterSpacing: 0.5,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 3),
+                                Text(
+                                  mobile,
+                                  style: TextStyle(
+                                    color: Colors.white.withValues(alpha: 0.85),
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                Text(
+                                  email,
+                                  style: TextStyle(
+                                    color: Colors.white.withValues(alpha: 0.7),
+                                    fontSize: 11.5,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          SvgPicture.asset(
+                            'lib/assets/images/illustrations/Personal settings-cuate.svg',
+                            height: 70,
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+            // Main Scrollable Body
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(18, 16, 18, 20),
+                children: [
+                  // Verification Quick Stats Bar
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.03),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      children: [
+                        _buildProfileMiniStat(
+                            ref
+                                .watch(appLocalizationsProvider)
+                                .tr('profile_score'),
+                            ref
+                                .watch(appLocalizationsProvider)
+                                .tr('profile_verified'),
+                            Icons.verified_user_rounded,
+                            const Color(0xFF10B981)),
+                        Container(
+                            width: 1,
+                            height: 32,
+                            color: const Color(0xFFE2E8F0)),
+                        _buildProfileMiniStat(
+                            ref
+                                .watch(appLocalizationsProvider)
+                                .tr('kyc_status_label'),
+                            ref
+                                .watch(appLocalizationsProvider)
+                                .tr('digilocker_ok'),
+                            Icons.badge_rounded,
+                            const Color(0xFF0F5A47)),
+                        Container(
+                            width: 1,
+                            height: 32,
+                            color: const Color(0xFFE2E8F0)),
+                        _buildProfileMiniStat(
+                            ref
+                                .watch(appLocalizationsProvider)
+                                .tr('lender_tier'),
+                            ref
+                                .watch(appLocalizationsProvider)
+                                .tr('prime_match'),
+                            Icons.workspace_premium_rounded,
+                            const Color(0xFFD97706)),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Section 1: Identity & KYC Details
+                  _buildProfileSectionCard(
+                    title: ref
+                        .watch(appLocalizationsProvider)
+                        .tr('identity_kyc_details'),
+                    icon: Icons.shield_rounded,
+                    children: [
+                      _ProfileDetailRow(
+                          icon: Icons.person_rounded,
+                          label: 'Full Name',
+                          value: fullName),
+                      _ProfileDetailRow(
+                          icon: Icons.phone_iphone_rounded,
+                          label: 'Mobile Number',
+                          value: mobile),
+                      _ProfileDetailRow(
+                          icon: Icons.alternate_email_rounded,
+                          label: 'Email Address',
+                          value: email),
+                      _ProfileDetailRow(
+                          icon: Icons.subtitles_rounded,
+                          label: 'PAN Card Number',
+                          value: pan,
+                          trailingBadge: 'VERIFIED'),
+                      const _ProfileDetailRow(
+                          icon: Icons.fingerprint_rounded,
+                          label: 'Aadhaar KYC',
+                          value: 'DigiLocker Linked',
+                          isVerified: true,
+                          showDivider: false),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+
+                  // Section 2: Employment & Financials
+                  _buildProfileSectionCard(
+                    title: ref
+                        .watch(appLocalizationsProvider)
+                        .tr('employment_financials'),
+                    icon: Icons.work_rounded,
+                    children: [
+                      _ProfileDetailRow(
+                          icon: Icons.business_center_rounded,
+                          label: 'Employment Type',
+                          value: employmentType),
+                      _ProfileDetailRow(
+                          icon: Icons.apartment_rounded,
+                          label: 'Employer / Business',
+                          value: employerName),
+                      _ProfileDetailRow(
+                          icon: Icons.badge_rounded,
+                          label: 'Designation',
+                          value: designation),
+                      _ProfileDetailRow(
+                        icon: Icons.payments_rounded,
+                        label: 'Monthly Income',
+                        value: formattedIncome,
+                        highlight: true,
+                        showDivider: false,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+
+                  // Section 3: Residence & Disbursal Account
+                  _buildProfileSectionCard(
+                    title: ref
+                        .watch(appLocalizationsProvider)
+                        .tr('residence_bank_details'),
+                    icon: Icons.location_city_rounded,
+                    children: [
+                      _ProfileDetailRow(
+                          icon: Icons.home_rounded,
+                          label: 'Residence Status',
+                          value: residenceStatus),
+                      _ProfileDetailRow(
+                          icon: Icons.map_rounded,
+                          label: 'Residential Pincode',
+                          value: pincode),
+                      _ProfileDetailRow(
+                        icon: Icons.account_balance_rounded,
+                        label: 'Disbursal Bank',
+                        value: bank?.bankName ?? 'Primary Account',
+                      ),
+                      _ProfileDetailRow(
+                        icon: Icons.credit_card_rounded,
+                        label: 'Account Number',
+                        value: bank?.accountMasked != null
+                            ? 'XXXX XXXX ${bank!.accountMasked}'
+                            : 'Linked Account',
+                        showDivider: false,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Section 4: Multi-Language Switcher (English & Hindi)
+                  Consumer(
+                    builder: (context, ref, child) {
+                      final currentLang = ref.watch(localeProvider);
+                      final notifier = ref.read(localeProvider.notifier);
+
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 16),
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.02),
+                              blurRadius: 8,
+                              offset: const Offset(0, 3),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(7),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF0F5A47)
+                                        .withValues(alpha: 0.1),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(Icons.language_rounded,
+                                      size: 18, color: Color(0xFF0F5A47)),
+                                ),
+                                const SizedBox(width: 10),
+                                Text(
+                                  currentLang == 'hi'
+                                      ? 'ऐप की भाषा (App Language)'
+                                      : 'App Language',
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w800,
+                                    color: Color(0xFF0F172A),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 14),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: InkWell(
+                                    onTap: () => notifier.setLanguage('en'),
+                                    borderRadius: BorderRadius.circular(12),
+                                    child: AnimatedContainer(
+                                      duration:
+                                          const Duration(milliseconds: 200),
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 10, horizontal: 12),
+                                      decoration: BoxDecoration(
+                                        color: currentLang == 'en'
+                                            ? const Color(0xFF0F172A)
+                                            : const Color(0xFFF1F5F9),
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(
+                                          color: currentLang == 'en'
+                                              ? const Color(0xFF0F172A)
+                                              : const Color(0xFFCBD5E1),
+                                        ),
+                                      ),
+                                      child: Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          const Text('🇬🇧 ',
+                                              style: TextStyle(fontSize: 16)),
+                                          Text(
+                                            'English',
+                                            style: TextStyle(
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.bold,
+                                              color: currentLang == 'en'
+                                                  ? Colors.white
+                                                  : const Color(0xFF334155),
+                                            ),
+                                          ),
+                                          if (currentLang == 'en') ...[
+                                            const SizedBox(width: 6),
+                                            const Icon(
+                                                Icons.check_circle_rounded,
+                                                size: 14,
+                                                color: Color(0xFF34D399)),
+                                          ],
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: InkWell(
+                                    onTap: () => notifier.setLanguage('hi'),
+                                    borderRadius: BorderRadius.circular(12),
+                                    child: AnimatedContainer(
+                                      duration:
+                                          const Duration(milliseconds: 200),
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 10, horizontal: 12),
+                                      decoration: BoxDecoration(
+                                        color: currentLang == 'hi'
+                                            ? const Color(0xFF0F172A)
+                                            : const Color(0xFFF1F5F9),
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(
+                                          color: currentLang == 'hi'
+                                              ? const Color(0xFF0F172A)
+                                              : const Color(0xFFCBD5E1),
+                                        ),
+                                      ),
+                                      child: Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          const Text('🇮🇳 ',
+                                              style: TextStyle(fontSize: 16)),
+                                          Text(
+                                            'हिंदी (Hindi)',
+                                            style: TextStyle(
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.bold,
+                                              color: currentLang == 'hi'
+                                                  ? Colors.white
+                                                  : const Color(0xFF334155),
+                                            ),
+                                          ),
+                                          if (currentLang == 'hi') ...[
+                                            const SizedBox(width: 6),
+                                            const Icon(
+                                                Icons.check_circle_rounded,
+                                                size: 14,
+                                                color: Color(0xFF34D399)),
+                                          ],
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+
+                  // Refer & Earn Banner Card in Profile Sheet
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF064E3B), Color(0xFF0F5A47)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF064E3B).withValues(alpha: 0.2),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.15),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.card_giftcard_rounded,
+                            color: Color(0xFF34D399),
+                            size: 24,
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                ref
+                                    .watch(appLocalizationsProvider)
+                                    .tr('refer_earn'),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 14.5,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                ref
+                                    .watch(appLocalizationsProvider)
+                                    .tr('refer_earn_sub'),
+                                style: const TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 11.5,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton(
+                          onPressed: () {
+                            Navigator.pop(ctx);
+                            context.push('/referral');
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF10B981),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 8),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10)),
+                          ),
+                          child: Text(
+                            ref.watch(appLocalizationsProvider).tr('invite'),
+                            style: const TextStyle(
+                                fontSize: 11.5, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Sign Out Action Button
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.logout_rounded,
+                        color: Color(0xFFDC2626), size: 18),
+                    label: Text(
+                      ref.watch(appLocalizationsProvider).tr('sign_out'),
+                      style: const TextStyle(
+                          color: Color(0xFFDC2626),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13.5),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size(double.infinity, 48),
+                      side: const BorderSide(color: Color(0xFFFCA5A5)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14)),
+                    ),
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      _logout();
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+
+
+  Widget _buildProfileMiniStat(
+      String label, String value, IconData icon, Color color) {
+    return Column(
+      children: [
+        Icon(icon, size: 18, color: color),
+        const SizedBox(height: 4),
+        Text(value,
+            style: TextStyle(
+                fontSize: 12, fontWeight: FontWeight.bold, color: color)),
+        Text(label,
+            style: const TextStyle(fontSize: 10, color: Color(0xFF64748B))),
+      ],
+    );
+  }
+
+  Widget _buildProfileSectionCard({
+    required String title,
+    required IconData icon,
+    required List<Widget> children,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0F5A47).withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(icon, color: const Color(0xFF0F5A47), size: 16),
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF0F172A),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1, color: Color(0xFFF1F5F9)),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 6, 16, 10),
+            child: Column(children: children),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showHelpSupportModal(BuildContext context) {
+    context.push('/support');
+  }
+}
+
+// ── Shared Helper Sub-widgets ────────────────────────────────────────────────
+
+class _OverviewStatCard extends StatelessWidget {
+  final String count;
+  final String label;
+  final IconData icon;
+  final Color iconColor;
+  final Color bgColor;
+
+  const _OverviewStatCard({
+    required this.count,
+    required this.label,
+    required this.icon,
+    required this.iconColor,
+    required this.bgColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF0F172A).withValues(alpha: 0.02),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: bgColor,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: iconColor, size: 18),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            count,
+            style: const TextStyle(
+              color: Color(0xFF0F172A),
+              fontSize: 18,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: const TextStyle(
+              color: Color(0xFF64748B),
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -2191,30 +3518,24 @@ class _LoanSummaryMetric extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 9,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(
-                icon,
-                color: Colors.white.withOpacity(0.68),
-                size: 14,
-              ),
+              Icon(icon, color: Colors.white.withValues(alpha: 0.68), size: 14),
               const SizedBox(width: 5),
               Text(
                 label,
                 style: TextStyle(
-                  color: Colors.white.withOpacity(0.65),
+                  color: Colors.white.withValues(alpha: 0.65),
                   fontSize: 10.5,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 5),
           Text(
             value,
             maxLines: 1,
@@ -2231,52 +3552,136 @@ class _LoanSummaryMetric extends StatelessWidget {
   }
 }
 
-class _SectionHeader extends StatelessWidget {
-  final String title;
-  final String subtitle;
-  final Widget? trailing;
+class _ProfileDetailRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  final String? trailingBadge;
+  final bool isVerified;
+  final bool highlight;
+  final bool showDivider;
 
-  const _SectionHeader({
-    required this.title,
-    required this.subtitle,
-    this.trailing,
+  const _ProfileDetailRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+    this.trailingBadge,
+    this.isVerified = false,
+    this.highlight = false,
+    this.showDivider = true,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.end,
+    return Column(
       children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment:
-                CrossAxisAlignment.start,
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 9),
+          child: Row(
             children: [
-              Text(
-                title,
-                style: const TextStyle(
-                  color: AppTheme.textDarkPrimary,
-                  fontSize: 17,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -0.2,
+              Icon(icon,
+                  size: 16,
+                  color: highlight
+                      ? const Color(0xFF0F5A47)
+                      : const Color(0xFF94A3B8)),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  label,
+                  style:
+                      const TextStyle(color: Color(0xFF64748B), fontSize: 12.5),
                 ),
               ),
-              const SizedBox(height: 3),
+              if (trailingBadge != null) ...[
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  margin: const EdgeInsets.only(right: 6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFDCFCE7),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    trailingBadge!,
+                    style: const TextStyle(
+                        color: Color(0xFF15803D),
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+              if (isVerified) ...[
+                const Icon(Icons.check_circle_rounded,
+                    color: Color(0xFF10B981), size: 14),
+                const SizedBox(width: 4),
+              ],
               Text(
-                subtitle,
-                style: const TextStyle(
-                  color: AppTheme.textDarkSecondary,
-                  fontSize: 11.5,
+                value,
+                style: TextStyle(
+                  color: highlight
+                      ? const Color(0xFF0F5A47)
+                      : const Color(0xFF0F172A),
+                  fontWeight: highlight ? FontWeight.w900 : FontWeight.w700,
+                  fontSize: highlight ? 14 : 12.5,
                 ),
               ),
             ],
           ),
         ),
-        if (trailing != null) ...[
-          const SizedBox(width: 10),
-          trailing!,
-        ],
+        if (showDivider) const Divider(height: 1, color: Color(0xFFF1F5F9)),
       ],
+    );
+  }
+}
+
+class _VerificationStatusCard extends StatelessWidget {
+  final String label;
+  final bool isVerified;
+  final IconData icon;
+
+  const _VerificationStatusCard({
+    required this.label,
+    required this.isVerified,
+    required this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color =
+        isVerified ? const Color(0xFF10B981) : const Color(0xFFF59E0B);
+    final background =
+        isVerified ? const Color(0xFFECFDF5) : const Color(0xFFFFFBEB);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.18)),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, color: color, size: 18),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: const TextStyle(
+              color: Color(0xFF0F172A),
+              fontSize: 10.5,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            isVerified ? 'Verified' : 'Pending',
+            style: TextStyle(
+              color: color,
+              fontSize: 9,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -2315,47 +3720,42 @@ class _JourneyStepTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final statusColor = step.isCompleted
-        ? AppTheme.successGreen
+        ? const Color(0xFF10B981)
         : isCurrent
-            ? AppTheme.primaryTeal
-            : AppTheme.textMuted;
+            ? const Color(0xFF0F5A47)
+            : const Color(0xFF94A3B8);
 
     final statusBackground = step.isCompleted
-        ? AppTheme.successBg
+        ? const Color(0xFFECFDF5)
         : isCurrent
-            ? AppTheme.primaryLightTeal
-            : const Color(0xFFF3F6F6);
+            ? const Color(0xFFE6F4EA)
+            : const Color(0xFFF1F5F9);
 
     return IntrinsicHeight(
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           SizedBox(
-            width: 42,
+            width: 36,
             child: Column(
               children: [
                 Container(
-                  width: 34,
-                  height: 34,
+                  width: 30,
+                  height: 30,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
                     color: statusBackground,
                     shape: BoxShape.circle,
-                    border: Border.all(
-                      color: statusColor.withOpacity(0.25),
-                    ),
+                    border:
+                        Border.all(color: statusColor.withValues(alpha: 0.3)),
                   ),
                   child: step.isCompleted
-                      ? Icon(
-                          Icons.check_rounded,
-                          color: statusColor,
-                          size: 18,
-                        )
+                      ? Icon(Icons.check_rounded, color: statusColor, size: 16)
                       : Text(
                           '${step.number}',
                           style: TextStyle(
                             color: statusColor,
-                            fontSize: 12,
+                            fontSize: 11,
                             fontWeight: FontWeight.w800,
                           ),
                         ),
@@ -2364,13 +3764,10 @@ class _JourneyStepTile extends StatelessWidget {
                   Expanded(
                     child: Container(
                       width: 2,
-                      margin: const EdgeInsets.symmetric(
-                        vertical: 4,
-                      ),
+                      margin: const EdgeInsets.symmetric(vertical: 4),
                       color: step.isCompleted
-                          ? AppTheme.successGreen
-                              .withOpacity(0.25)
-                          : AppTheme.borderLight,
+                          ? const Color(0xFF10B981).withValues(alpha: 0.3)
+                          : const Color(0xFFE2E8F0),
                     ),
                   ),
               ],
@@ -2379,121 +3776,55 @@ class _JourneyStepTile extends StatelessWidget {
           const SizedBox(width: 8),
           Expanded(
             child: Padding(
-              padding: EdgeInsets.only(
-                bottom: isLast ? 0 : 12,
-              ),
+              padding: EdgeInsets.only(bottom: isLast ? 0 : 10),
               child: Material(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(18),
+                borderRadius: BorderRadius.circular(16),
                 child: InkWell(
                   onTap: onTap,
-                  borderRadius: BorderRadius.circular(18),
+                  borderRadius: BorderRadius.circular(16),
                   child: Container(
-                    padding: const EdgeInsets.all(14),
+                    padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      borderRadius:
-                          BorderRadius.circular(18),
+                      borderRadius: BorderRadius.circular(16),
                       border: Border.all(
                         color: isCurrent
-                            ? AppTheme.primaryTeal
-                            : AppTheme.borderLight,
-                        width: isCurrent ? 1.4 : 1,
+                            ? const Color(0xFF0F5A47)
+                            : const Color(0xFFE2E8F0),
+                        width: isCurrent ? 1.4 : 1.0,
                       ),
-                      boxShadow: isCurrent
-                          ? [
-                              BoxShadow(
-                                color: AppTheme.primaryTeal
-                                    .withOpacity(0.08),
-                                blurRadius: 16,
-                                offset:
-                                    const Offset(0, 7),
-                              ),
-                            ]
-                          : null,
                     ),
                     child: Row(
                       children: [
-                        Container(
-                          width: 42,
-                          height: 42,
-                          decoration: BoxDecoration(
-                            color: statusBackground,
-                            borderRadius:
-                                BorderRadius.circular(13),
-                          ),
-                          child: Icon(
-                            step.icon,
-                            color: statusColor,
-                            size: 21,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
+                        Icon(step.icon, color: statusColor, size: 20),
+                        const SizedBox(width: 10),
                         Expanded(
                           child: Column(
-                            crossAxisAlignment:
-                                CrossAxisAlignment.start,
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      step.title,
-                                      style: const TextStyle(
-                                        color: AppTheme
-                                            .textDarkPrimary,
-                                        fontSize: 13,
-                                        fontWeight:
-                                            FontWeight.w700,
-                                      ),
-                                    ),
-                                  ),
-                                  if (isCurrent)
-                                    Container(
-                                      padding:
-                                          const EdgeInsets
-                                              .symmetric(
-                                        horizontal: 7,
-                                        vertical: 4,
-                                      ),
-                                      decoration:
-                                          BoxDecoration(
-                                        color: AppTheme
-                                            .primaryLightTeal,
-                                        borderRadius:
-                                            BorderRadius
-                                                .circular(20),
-                                      ),
-                                      child: const Text(
-                                        'NEXT',
-                                        style: TextStyle(
-                                          color: AppTheme
-                                              .primaryTeal,
-                                          fontSize: 8.5,
-                                          fontWeight:
-                                              FontWeight.w800,
-                                        ),
-                                      ),
-                                    ),
-                                ],
+                              Text(
+                                step.title,
+                                style: const TextStyle(
+                                  color: Color(0xFF0F172A),
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w700,
+                                ),
                               ),
-                              const SizedBox(height: 4),
+                              const SizedBox(height: 2),
                               Text(
                                 step.subtitle,
                                 style: const TextStyle(
-                                  color: AppTheme
-                                      .textDarkSecondary,
+                                  color: Color(0xFF64748B),
                                   fontSize: 10.5,
-                                  height: 1.4,
                                 ),
                               ),
                             ],
                           ),
                         ),
-                        const SizedBox(width: 6),
                         const Icon(
                           Icons.chevron_right_rounded,
-                          color: AppTheme.textMuted,
-                          size: 21,
+                          color: Color(0xFF94A3B8),
+                          size: 18,
                         ),
                       ],
                     ),
@@ -2504,146 +3835,6 @@ class _JourneyStepTile extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-class _VerificationStatusCard extends StatelessWidget {
-  final String label;
-  final bool isVerified;
-  final IconData icon;
-
-  const _VerificationStatusCard({
-    required this.label,
-    required this.isVerified,
-    required this.icon,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final color = isVerified
-        ? AppTheme.successGreen
-        : AppTheme.warningOrange;
-
-    final background = isVerified
-        ? AppTheme.successBg
-        : AppTheme.warningBg;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 8,
-        vertical: 11,
-      ),
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: color.withOpacity(0.14),
-        ),
-      ),
-      child: Column(
-        children: [
-          Icon(
-            icon,
-            color: color,
-            size: 19,
-          ),
-          const SizedBox(height: 6),
-          Text(
-            label,
-            style: const TextStyle(
-              color: AppTheme.textDarkPrimary,
-              fontSize: 10.5,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 3),
-          Text(
-            isVerified ? 'Verified' : 'Pending',
-            style: TextStyle(
-              color: color,
-              fontSize: 9,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ProfileDetailRow extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String value;
-  final bool showDivider;
-
-  const _ProfileDetailRow({
-    required this.icon,
-    required this.label,
-    required this.value,
-    this.showDivider = true,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(
-            vertical: 10,
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  color: AppTheme.primaryLightTeal,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  icon,
-                  color: AppTheme.primaryTeal,
-                  size: 19,
-                ),
-              ),
-              const SizedBox(width: 11),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment:
-                      CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      label,
-                      style: const TextStyle(
-                        color: AppTheme.textDarkSecondary,
-                        fontSize: 10.5,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      value,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: AppTheme.textDarkPrimary,
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-        if (showDivider)
-          const Divider(
-            height: 1,
-            color: AppTheme.borderLight,
-          ),
-      ],
     );
   }
 }
@@ -2680,179 +3871,82 @@ class _ApplicationStepTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = step.isCompleted
-        ? AppTheme.successGreen
+        ? const Color(0xFF10B981)
         : isCurrent
-            ? AppTheme.primaryTeal
-            : AppTheme.textMuted;
+            ? const Color(0xFF0F5A47)
+            : const Color(0xFF94A3B8);
 
     final background = step.isCompleted
-        ? AppTheme.successBg
+        ? const Color(0xFFECFDF5)
         : isCurrent
-            ? AppTheme.primaryLightTeal
-            : const Color(0xFFF4F7F7);
+            ? const Color(0xFFE6F4EA)
+            : const Color(0xFFF8FAFC);
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Material(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(16),
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(16),
           child: Container(
-            padding: const EdgeInsets.all(14),
+            padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(18),
+              borderRadius: BorderRadius.circular(16),
               border: Border.all(
                 color: isCurrent
-                    ? AppTheme.primaryTeal
-                    : AppTheme.borderLight,
+                    ? const Color(0xFF0F5A47)
+                    : const Color(0xFFE2E8F0),
                 width: isCurrent ? 1.4 : 1,
               ),
             ),
             child: Row(
               children: [
-                Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    Container(
-                      width: 46,
-                      height: 46,
-                      decoration: BoxDecoration(
-                        color: background,
-                        borderRadius:
-                            BorderRadius.circular(14),
-                      ),
-                      child: Icon(
-                        step.icon,
-                        color: color,
-                        size: 22,
-                      ),
-                    ),
-                    Positioned(
-                      right: -4,
-                      bottom: -4,
-                      child: Container(
-                        width: 20,
-                        height: 20,
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: color,
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: Colors.white,
-                            width: 2,
-                          ),
-                        ),
-                        child: step.isCompleted
-                            ? const Icon(
-                                Icons.check_rounded,
-                                color: Colors.white,
-                                size: 11,
-                              )
-                            : Text(
-                                '${step.number}',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 8,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                      ),
-                    ),
-                  ],
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: background,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(step.icon, color: color, size: 20),
                 ),
-                const SizedBox(width: 14),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Column(
-                    crossAxisAlignment:
-                        CrossAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              step.title,
-                              style: const TextStyle(
-                                color:
-                                    AppTheme.textDarkPrimary,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
-                          if (isCurrent)
-                            Container(
-                              padding:
-                                  const EdgeInsets.symmetric(
-                                horizontal: 7,
-                                vertical: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                color: AppTheme
-                                    .primaryLightTeal,
-                                borderRadius:
-                                    BorderRadius.circular(20),
-                              ),
-                              child: const Text(
-                                'CONTINUE',
-                                style: TextStyle(
-                                  color:
-                                      AppTheme.primaryTeal,
-                                  fontSize: 8,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                            ),
-                        ],
+                      Text(
+                        step.title,
+                        style: const TextStyle(
+                          color: Color(0xFF0F172A),
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 2),
                       Text(
                         step.subtitle,
                         style: const TextStyle(
-                          color:
-                              AppTheme.textDarkSecondary,
+                          color: Color(0xFF64748B),
                           fontSize: 10.5,
-                          height: 1.4,
                         ),
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(width: 7),
                 Icon(
                   step.isCompleted
                       ? Icons.check_circle_rounded
                       : Icons.chevron_right_rounded,
                   color: color,
-                  size: 21,
+                  size: 20,
                 ),
               ],
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _BackgroundCircle extends StatelessWidget {
-  final double size;
-  final Color color;
-
-  const _BackgroundCircle({
-    required this.size,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        color: color,
-        shape: BoxShape.circle,
       ),
     );
   }

@@ -14,6 +14,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../../../core/api/api_exception.dart';
 import '../../../../app/env.dart';
 import '../../../../app/theme.dart';
+import '../../../../core/providers/locale_provider.dart';
 import '../../../../core/providers/providers.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_loader.dart';
@@ -209,7 +210,7 @@ class _LivePhotoScreenState extends ConsumerState<LivePhotoScreen> {
     
     final rectHeight = textPainter.height + 12.0;
     final paint = Paint()
-      ..color = Colors.black.withOpacity(0.5)
+      ..color = Colors.black.withValues(alpha: 0.5)
       ..style = PaintingStyle.fill;
     
     canvas.drawRect(
@@ -410,9 +411,11 @@ class _LivePhotoScreenState extends ConsumerState<LivePhotoScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final tr = ref.watch(appLocalizationsProvider);
+
     return Scaffold(
-      appBar: const AppHeader(
-        title: 'Live Photograph',
+      appBar: AppHeader(
+        title: tr.tr('live_photo_title'),
         fallbackRoute: '/onboarding/profile',
       ),
       body: SafeArea(

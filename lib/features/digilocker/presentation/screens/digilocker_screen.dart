@@ -5,12 +5,14 @@ import 'package:webview_flutter/webview_flutter.dart';
 import 'package:dio/dio.dart';
 import '../../../../core/api/api_exception.dart';
 import '../../../../app/theme.dart';
+import '../../../../core/providers/locale_provider.dart';
 import '../../../../core/providers/providers.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_loader.dart';
 import '../../../../core/widgets/app_status_badge.dart';
 import '../../../../core/widgets/app_header.dart';
 import '../../../../core/widgets/app_stepper.dart';
+import '../../../../core/services/push_notification_service.dart';
 import '../../../dashboard/presentation/journey_controller.dart';
 
 class DigilockerScreen extends ConsumerStatefulWidget {
@@ -29,6 +31,15 @@ class _DigilockerScreenState extends ConsumerState<DigilockerScreen> {
   String? _errorMessage;
   String? _verificationUrl;
   WebViewController? _webViewController;
+
+  @override
+  void initState() {
+    super.initState();
+    PushNotificationService().scheduleDropoffRecovery(
+      lan: widget.lan ?? '',
+      step: 'digilocker',
+    );
+  }
 
   void _initiateDigilocker() async {
     final customer = ref.read(journeyControllerProvider).customer;
@@ -141,6 +152,8 @@ class _DigilockerScreenState extends ConsumerState<DigilockerScreen> {
                           data['status'] == 'VERIFIED';
 
         if (isKycDone && mounted) {
+          PushNotificationService().cancelDropoffRecovery('digilocker');
+          PushNotificationService().sendKycSuccessNotification();
           setState(() {
             _isVerified = true;
             _verificationUrl = null;
@@ -220,7 +233,7 @@ class _DigilockerScreenState extends ConsumerState<DigilockerScreen> {
     if (_verificationUrl != null && !isVerified) {
       return Scaffold(
         appBar: AppHeader(
-          title: 'DigiLocker Verification',
+          title: ref.watch(appLocalizationsProvider).tr('digilocker_title'),
           onBackPressed: () {
             setState(() {
               _verificationUrl = null;

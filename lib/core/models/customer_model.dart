@@ -51,8 +51,10 @@ class CustomerModel {
   final String? aaStatus;
   final String? accountAggregatorStatus;
   final List<String> updateReadinessReasons;
+  final Map<String, dynamic>? consentTexts;
   final String? nextPermittedStep;
   final String? platformLan;
+  final int completedLoansCount;
 
   const CustomerModel({
     required this.id,
@@ -107,8 +109,10 @@ class CustomerModel {
     this.aaStatus,
     this.accountAggregatorStatus,
     this.updateReadinessReasons = const [],
+    this.consentTexts,
     this.nextPermittedStep,
     this.platformLan,
+    this.completedLoansCount = 0,
   });
 
   CustomerModel copyWith({
@@ -164,8 +168,10 @@ class CustomerModel {
     String? aaStatus,
     String? accountAggregatorStatus,
     List<String>? updateReadinessReasons,
+    Map<String, dynamic>? consentTexts,
     String? nextPermittedStep,
     String? platformLan,
+    int? completedLoansCount,
   }) {
     return CustomerModel(
       id: id ?? this.id,
@@ -220,8 +226,10 @@ class CustomerModel {
       aaStatus: aaStatus ?? this.aaStatus,
       accountAggregatorStatus: accountAggregatorStatus ?? this.accountAggregatorStatus,
       updateReadinessReasons: updateReadinessReasons ?? this.updateReadinessReasons,
+      consentTexts: consentTexts ?? this.consentTexts,
       nextPermittedStep: nextPermittedStep ?? this.nextPermittedStep,
       platformLan: platformLan ?? this.platformLan,
+      completedLoansCount: completedLoansCount ?? this.completedLoansCount,
     );
   }
 
@@ -243,6 +251,25 @@ class CustomerModel {
         json['journey']?['bankStatementVerified'] == true ||
         ['SUCCESS', 'COMPLETED', 'VERIFIED'].contains(json['journey']?['accountAggregatorStatus']?.toString().toUpperCase()) ||
         ['SUCCESS', 'COMPLETED', 'VERIFIED'].contains(json['journey']?['aaStatus']?.toString().toUpperCase());
+
+    int parsedCompletedLoans = 0;
+    if (json['completedLoansCount'] != null) {
+      parsedCompletedLoans = int.tryParse(json['completedLoansCount'].toString()) ?? 0;
+    } else if (json['completedLoans'] != null) {
+      parsedCompletedLoans = int.tryParse(json['completedLoans'].toString()) ?? 0;
+    } else if (json['minimumCompletedLoans'] != null) {
+      parsedCompletedLoans = int.tryParse(json['minimumCompletedLoans'].toString()) ?? 0;
+    } else if ((json['latestLoanStatus'] ?? '').toString().toUpperCase() == 'FULLY_PAID' ||
+               (json['latestLoanStatus'] ?? '').toString().toUpperCase() == 'CLOSED') {
+      parsedCompletedLoans = 1;
+    }
+
+    Map<String, dynamic>? parsedConsentTexts;
+    if (json['consentTexts'] is Map<String, dynamic>) {
+      parsedConsentTexts = json['consentTexts'] as Map<String, dynamic>;
+    } else if (json['journey']?['consentTexts'] is Map<String, dynamic>) {
+      parsedConsentTexts = json['journey']['consentTexts'] as Map<String, dynamic>;
+    }
 
     return CustomerModel(
       id: json['id']?.toString() ?? '',
@@ -302,8 +329,10 @@ class CustomerModel {
       updateReadinessReasons: (json['journey']?['updateReadiness']?['reasons'] is List)
           ? List<String>.from(json['journey']['updateReadiness']['reasons'])
           : [],
+      consentTexts: parsedConsentTexts,
       nextPermittedStep: json['journey']?['nextPermittedStep'] as String?,
       platformLan: json['journey']?['platformLan'] as String? ?? json['latestLan'] as String?,
+      completedLoansCount: parsedCompletedLoans,
     );
   }
 }

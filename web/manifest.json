@@ -1,6 +1,6 @@
 {
-    "name": "pl_customer_app",
-    "short_name": "pl_customer_app",
+    "name": "Fin-Tree",
+    "short_name": "Fin-Tree",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

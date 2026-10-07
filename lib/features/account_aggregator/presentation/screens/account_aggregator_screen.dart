@@ -90,7 +90,7 @@ class _AccountAggregatorScreenState extends ConsumerState<AccountAggregatorScree
 
       if (!mounted) return;
 
-      final dataMap = (res is Map<String, dynamic> && res['data'] is Map<String, dynamic>)
+      final dataMap = (res['data'] is Map<String, dynamic>)
           ? res['data'] as Map<String, dynamic>
           : res;
 
@@ -480,7 +480,7 @@ class _AccountAggregatorScreenState extends ConsumerState<AccountAggregatorScree
                         children: [
                           Container(
                             padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(
+                            decoration: const BoxDecoration(
                               color: AppTheme.successBg,
                               shape: BoxShape.circle,
                             ),
@@ -491,11 +491,11 @@ class _AccountAggregatorScreenState extends ConsumerState<AccountAggregatorScree
                             ),
                           ),
                           const SizedBox(width: 14),
-                          Expanded(
+                          const Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Text(
+                                Text(
                                   'Bank Account Statement Verified',
                                   style: TextStyle(
                                     fontSize: 16,
@@ -503,8 +503,8 @@ class _AccountAggregatorScreenState extends ConsumerState<AccountAggregatorScree
                                     color: AppTheme.textDarkPrimary,
                                   ),
                                 ),
-                                const SizedBox(height: 2),
-                                const Text(
+                                SizedBox(height: 2),
+                                Text(
                                   'Bank statement data fetched successfully.',
                                   style: TextStyle(
                                     fontSize: 12,

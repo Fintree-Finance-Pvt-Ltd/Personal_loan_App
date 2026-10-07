@@ -11,6 +11,7 @@ import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_loader.dart';
 import '../../../../core/widgets/app_status_badge.dart';
 import '../../../../core/widgets/app_header.dart';
+import '../../../../core/services/push_notification_service.dart';
 import '../../../dashboard/presentation/journey_controller.dart';
 
 class RepaymentScreen extends ConsumerStatefulWidget {
@@ -79,16 +80,21 @@ class _RepaymentScreenState extends ConsumerState<RepaymentScreen> {
           }
         }
 
-        if (defaultAmt == 0.0 && rpsList.isNotEmpty) {
-          final firstMap = rpsList.first as Map<String, dynamic>;
-          defaultAmt = ((firstMap['emi'] ?? 0) as num).toDouble();
+        if (defaultAmt == 0.0) {
+          final summary = detailsMap?['summary'] as Map<String, dynamic>?;
+          final loan = detailsMap?['loan'] as Map<String, dynamic>?;
+          final num? summaryNextEmi = summary?['nextEmiAmount'] ?? summary?['totalOutstanding'] ?? loan?['approvedAmount'] ?? loan?['disbursalAmount'];
+
+          defaultAmt = (summaryNextEmi != null && summaryNextEmi.toDouble() > 0)
+              ? summaryNextEmi.toDouble()
+              : 0.0;
         }
 
         setState(() {
           _loanDetails = detailsMap;
           _selectedInstallmentNumber = defaultInst;
           _paymentAmount = defaultAmt;
-          _customAmountController.text = defaultAmt > 0 ? defaultAmt.toStringAsFixed(0) : '';
+          _customAmountController.text = defaultAmt.toStringAsFixed(0);
         });
       }
     } catch (e) {
@@ -157,6 +163,14 @@ class _RepaymentScreenState extends ConsumerState<RepaymentScreen> {
       await _fetchDetails();
 
       if (mounted) {
+        final paidAmount = _paymentAmount > 0
+            ? _paymentAmount
+            : (double.tryParse(_customAmountController.text.trim()) ?? 0.0);
+        PushNotificationService().sendRepaymentSuccessNotification(
+          amount: paidAmount,
+          lan: widget.lan,
+        );
+
         setState(() {
           _paymentUrl = null;
           _webViewController = null;
@@ -289,9 +303,21 @@ class _RepaymentScreenState extends ConsumerState<RepaymentScreen> {
     final rpsList = (_loanDetails?['repaymentSchedule'] as List<dynamic>?) ?? [];
     final apiLoan = _loanDetails?['loan'] as Map<String, dynamic>?;
 
-    final totalOutstanding = (summary?['totalOutstanding'] ?? apiLoan?['approvedAmount'] ?? 0).toDouble();
-    final nextEmiAmount = (summary?['nextEmiAmount'] ?? 0).toDouble();
-    final overdueAmount = (summary?['overdueAmount'] ?? 0).toDouble();
+    final num? rawTotalOutstanding = summary?['totalOutstanding'] ?? apiLoan?['approvedAmount'] ?? apiLoan?['disbursalAmount'];
+    final double totalOutstanding = (rawTotalOutstanding != null && rawTotalOutstanding.toDouble() > 0)
+        ? rawTotalOutstanding.toDouble()
+        : 0.0;
+
+    final num? rawNextEmi = summary?['nextEmiAmount'];
+    final double nextEmiAmount = (rawNextEmi != null && rawNextEmi.toDouble() > 0)
+        ? rawNextEmi.toDouble()
+        : 0.0;
+
+    final num? rawOverdue = summary?['overdueAmount'];
+    final double overdueAmount = (rawOverdue != null && rawOverdue.toDouble() > 0)
+        ? rawOverdue.toDouble()
+        : 0.0;
+
     final nextDueDate = summary?['nextDueDate']?.toString();
 
     return Scaffold(
@@ -324,7 +350,7 @@ class _RepaymentScreenState extends ConsumerState<RepaymentScreen> {
                         ),
                         borderRadius: BorderRadius.circular(20),
                         boxShadow: [
-                          BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 12, offset: const Offset(0, 4)),
+                          BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 12, offset: const Offset(0, 4)),
                         ],
                       ),
                       child: Column(
@@ -342,7 +368,7 @@ class _RepaymentScreenState extends ConsumerState<RepaymentScreen> {
                           ),
                           const SizedBox(height: 10),
                           Text(
-                            CurrencyUtils.formatAmount(totalOutstanding),
+                            totalOutstanding > 0 ? CurrencyUtils.formatAmount(totalOutstanding) : 'N/A',
                             style: const TextStyle(color: Colors.white, fontSize: 30, fontWeight: FontWeight.w800),
                           ),
                           const Text('Total Loan Outstanding', style: TextStyle(color: Colors.white70, fontSize: 12)),
@@ -350,7 +376,7 @@ class _RepaymentScreenState extends ConsumerState<RepaymentScreen> {
                           Container(
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.12),
+                              color: Colors.white.withValues(alpha: 0.12),
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Row(
@@ -361,7 +387,7 @@ class _RepaymentScreenState extends ConsumerState<RepaymentScreen> {
                                   children: [
                                     const Text('Next Due EMI', style: TextStyle(color: Colors.white70, fontSize: 11)),
                                     Text(
-                                      nextEmiAmount > 0 ? CurrencyUtils.formatAmount(nextEmiAmount) : '—',
+                                      nextEmiAmount > 0 ? CurrencyUtils.formatAmount(nextEmiAmount) : 'N/A',
                                       style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
                                     ),
                                   ],
@@ -521,7 +547,7 @@ class _RepaymentScreenState extends ConsumerState<RepaymentScreen> {
                                       Icon(Icons.check_circle_rounded, size: 12, color: AppTheme.primaryTeal),
                                       SizedBox(width: 4),
                                       Text(
-                                        'Bullet EMI Auto-filled',
+                                        'EMI Auto-filled',
                                         style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppTheme.primaryTeal),
                                       ),
                                     ],
@@ -530,37 +556,40 @@ class _RepaymentScreenState extends ConsumerState<RepaymentScreen> {
                               ],
                             ),
                             const SizedBox(height: 8),
-                            TextField(
-                              controller: _customAmountController,
-                              keyboardType: TextInputType.number,
-                              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppTheme.primaryTeal),
-                              decoration: InputDecoration(
-                                prefixIcon: const Icon(Icons.currency_rupee_rounded, size: 22, color: AppTheme.primaryTeal),
-                                hintText: 'Enter amount',
-                                suffixIcon: IconButton(
-                                  icon: const Icon(Icons.refresh_rounded, size: 20),
-                                  tooltip: 'Reset to Bullet EMI amount',
-                                  onPressed: () {
-                                    setState(() {
-                                      _customAmountController.text = _paymentAmount.toStringAsFixed(0);
-                                    });
-                                  },
-                                ),
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: const BorderSide(color: AppTheme.primaryTeal, width: 1.5),
-                                ),
-                                focusedBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: const BorderSide(color: AppTheme.primaryTeal, width: 2),
-                                ),
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF0FDF4),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: AppTheme.primaryTeal, width: 1.5),
                               ),
-                              onChanged: (val) {
-                                final parsed = double.tryParse(val.trim());
-                                if (parsed != null) {
-                                  _paymentAmount = parsed;
-                                }
-                              },
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Row(
+                                    children: [
+                                      const Icon(Icons.currency_rupee_rounded, size: 22, color: AppTheme.primaryTeal),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        _paymentAmount > 0 ? CurrencyUtils.formatAmount(_paymentAmount).replaceAll('₹', '').trim() : 'N/A',
+                                        style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: AppTheme.primaryTeal),
+                                      ),
+                                    ],
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: AppTheme.primaryTeal,
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: const Text(
+                                      'FIXED EMI',
+                                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white),
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                             const SizedBox(height: 20),
 
@@ -607,7 +636,7 @@ class _RepaymentScreenState extends ConsumerState<RepaymentScreen> {
   }
 
   String _formatDate(String? iso) {
-    if (iso == null || iso.isEmpty) return '—';
+    if (iso == null || iso.trim().isEmpty || iso == 'N/A') return 'N/A';
     try {
       final dt = DateTime.parse(iso).toLocal();
       const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];

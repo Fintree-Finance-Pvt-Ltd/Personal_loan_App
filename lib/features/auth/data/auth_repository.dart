@@ -29,16 +29,22 @@ class AuthRepository {
   Future<CustomerModel> verifyMobileOtp({
     required String mobileNumber,
     required String otp,
+    String? referralCode,
   }) async {
     final cleanMobile = mobileNumber.trim();
     final cleanOtp = otp.trim();
 
+    final payload = <String, dynamic>{
+      'mobileNumber': cleanMobile,
+      'otp': cleanOtp,
+    };
+    if (referralCode != null && referralCode.trim().isNotEmpty) {
+      payload['referralCode'] = referralCode.trim().toUpperCase();
+    }
+
     final response = await _apiClient.post(
       ApiEndpoints.verifyMobileOtp,
-      data: {
-        'mobileNumber': cleanMobile,
-        'otp': cleanOtp,
-      },
+      data: payload,
     );
 
     return _processCustomerResponse(response, cleanMobile);
