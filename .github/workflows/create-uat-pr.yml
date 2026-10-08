@@ -17,7 +17,7 @@ jobs:
     steps:
       - name: Create Pull Request
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.UAT_AUTOMATION_TOKEN }}
         run: |
           EXISTING_PR=$(gh pr list \
             --repo "${{ github.repository }}" \
@@ -45,4 +45,16 @@ jobs:
 
           else
             echo "An open develop to uat PR already exists."
+
+            PR_URL=$(gh pr list \
+              --repo "${{ github.repository }}" \
+              --head develop \
+              --base uat \
+              --state open \
+              --json url \
+              --jq '.[0].url')
+
+            gh pr merge "$PR_URL" \
+              --auto \
+              --squash
           fi
