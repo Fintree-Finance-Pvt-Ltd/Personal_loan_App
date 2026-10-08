@@ -33,13 +33,9 @@ jobs:
               --repo "${{ github.repository }}" \
               --base uat \
               --head develop \
-              --title "Develop → UAT" \
+              --title "Develop to UAT" \
               --reviewer Vishal-0401 \
-              --body "Automated Pull Request from develop to uat.
-
-Please review and approve the changes.
-
-This PR will automatically merge after the required approval and successful CI checks.")
+              --body "Automated Pull Request from develop to uat. Please review and approve the changes. This PR will automatically merge after the required approval and successful CI checks.")
 
             echo "Created PR: $PR_URL"
 
@@ -48,5 +44,5 @@ This PR will automatically merge after the required approval and successful CI c
               --squash
 
           else
-            echo "An open develop → uat PR already exists."
+            echo "An open develop to uat PR already exists."
           fi
