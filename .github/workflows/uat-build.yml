@@ -46,8 +46,14 @@ jobs:
           storeFile=fintree-release-key.jks
           EOF
 
+      - name: Generate Android Build Number
+        run: |
+          BUILD_NUMBER=$((8 + GITHUB_RUN_NUMBER))
+          echo "Android Build Number: $BUILD_NUMBER"
+          echo "BUILD_NUMBER=$BUILD_NUMBER" >> "$GITHUB_ENV"
+
       - name: Build Android AAB
-        run: flutter build appbundle --release
+        run: flutter build appbundle --release --build-number "$BUILD_NUMBER"
 
       - name: Upload AAB artifact
         uses: actions/upload-artifact@v4
