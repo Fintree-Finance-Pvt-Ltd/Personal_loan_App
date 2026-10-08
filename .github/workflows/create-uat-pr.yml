@@ -44,5 +44,5 @@ jobs:
               --squash
 
           else
-            echo "An open develop too uat PR already exists."
+            echo "An open develop to uat PR already exists."
           fi
