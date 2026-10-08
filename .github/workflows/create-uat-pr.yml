@@ -1,0 +1,52 @@
+name: Create UAT Pull Request
+
+on:
+  push:
+    branches:
+      - develop
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  create-pr:
+    name: Create Develop to UAT PR
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Create Pull Request
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          EXISTING_PR=$(gh pr list \
+            --repo "${{ github.repository }}" \
+            --head develop \
+            --base uat \
+            --state open \
+            --json number \
+            --jq 'length')
+
+          if [ "$EXISTING_PR" -eq 0 ]; then
+
+            PR_URL=$(gh pr create \
+              --repo "${{ github.repository }}" \
+              --base uat \
+              --head develop \
+              --title "Develop → UAT" \
+              --reviewer Vishal-0401 \
+              --body "Automated Pull Request from develop to uat.
+
+Please review and approve the changes.
+
+This PR will automatically merge after the required approval and successful CI checks.")
+
+            echo "Created PR: $PR_URL"
+
+            gh pr merge "$PR_URL" \
+              --auto \
+              --squash
+
+          else
+            echo "An open develop → uat PR already exists."
+          fi
