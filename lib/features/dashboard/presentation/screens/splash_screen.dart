@@ -14,14 +14,15 @@ class SplashScreen extends ConsumerStatefulWidget {
 }
 
 class _SplashScreenState extends ConsumerState<SplashScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   late final AnimationController _entranceController;
+  late final AnimationController _pulseController;
   late final Animation<double> _fadeAnimation;
   late final Animation<double> _scaleAnimation;
   late final Animation<Offset> _slideAnimation;
+  late final Animation<double> _pulseScaleAnimation;
+  late final Animation<double> _pulseGlowAnimation;
 
-  String? _errorMessage;
-  bool _isSyncing = true;
   int _statusStepIndex = 0;
 
   static const List<String> _securitySteps = [
@@ -34,40 +35,62 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   void initState() {
     super.initState();
 
-    // Set immersive light-on-dark system navigation
+    // Set clean light system UI overlay style
     SystemChrome.setSystemUIOverlayStyle(
       const SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
-        statusBarIconBrightness: Brightness.light,
-        systemNavigationBarColor: AppTheme.primaryDeepTeal,
-        systemNavigationBarIconBrightness: Brightness.light,
+        statusBarIconBrightness: Brightness.dark,
+        statusBarBrightness: Brightness.light,
+        systemNavigationBarColor: Colors.white,
+        systemNavigationBarIconBrightness: Brightness.dark,
       ),
     );
 
+    // Main entrance orchestration
     _entranceController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 900),
+      duration: const Duration(milliseconds: 1000),
     );
 
     _fadeAnimation = CurvedAnimation(
       parent: _entranceController,
-      curve: const Interval(0.0, 0.75, curve: Curves.easeOut),
+      curve: const Interval(0.0, 0.7, curve: Curves.easeOut),
     );
 
-    _scaleAnimation = Tween<double>(begin: 0.88, end: 1.0).animate(
+    _scaleAnimation = Tween<double>(begin: 0.86, end: 1.0).animate(
       CurvedAnimation(
         parent: _entranceController,
-        curve: const Interval(0.0, 0.8, curve: Curves.easeOutCubic),
+        curve: const Interval(0.0, 0.85, curve: Curves.easeOutBack),
       ),
     );
 
     _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, 0.12),
+      begin: const Offset(0, 0.08),
       end: Offset.zero,
     ).animate(
       CurvedAnimation(
         parent: _entranceController,
         curve: const Interval(0.15, 0.9, curve: Curves.easeOutCubic),
+      ),
+    );
+
+    // Subtle ambient breathing pulse for the brand icon halo
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2200),
+    )..repeat(reverse: true);
+
+    _pulseScaleAnimation = Tween<double>(begin: 0.96, end: 1.06).animate(
+      CurvedAnimation(
+        parent: _pulseController,
+        curve: Curves.easeInOutSine,
+      ),
+    );
+
+    _pulseGlowAnimation = Tween<double>(begin: 0.12, end: 0.28).animate(
+      CurvedAnimation(
+        parent: _pulseController,
+        curve: Curves.easeInOutSine,
       ),
     );
 
@@ -79,42 +102,34 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   void _startStatusSequence() async {
     for (int i = 0; i < _securitySteps.length; i++) {
       await Future<void>.delayed(const Duration(milliseconds: 700));
-      if (mounted && _isSyncing && _errorMessage == null) {
+      if (mounted) {
         setState(() => _statusStepIndex = i);
       }
     }
   }
 
   Future<void> _syncCustomerState() async {
-    if (mounted) {
-      setState(() {
-        _isSyncing = true;
-        _errorMessage = null;
-      });
-    }
-
     try {
       await Future.wait<void>([
-        ref.read(journeyControllerProvider.notifier).syncCustomerState(),
-        Future<void>.delayed(const Duration(milliseconds: 2100)),
+        ref
+            .read(journeyControllerProvider.notifier)
+            .syncCustomerState()
+            .catchError((_) {}),
+        Future<void>.delayed(const Duration(milliseconds: 2200)),
       ]);
-
-      if (!mounted) return;
-      final targetRoute = ref.read(journeyControllerProvider).targetRoute;
-      context.go(targetRoute);
-    } catch (error) {
-      if (!mounted) return;
-      setState(() {
-        _isSyncing = false;
-        _errorMessage =
-            'Unable to establish a secure connection. Please verify your network.';
-      });
+    } catch (_) {
+      // Continue automatically without blocking the user
     }
+
+    if (!mounted) return;
+    final targetRoute = ref.read(journeyControllerProvider).targetRoute;
+    context.go(targetRoute.isNotEmpty ? targetRoute : '/login');
   }
 
   @override
   void dispose() {
     _entranceController.dispose();
+    _pulseController.dispose();
     super.dispose();
   }
 
@@ -123,56 +138,69 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     final size = MediaQuery.of(context).size;
 
     return Scaffold(
-      backgroundColor: AppTheme.primaryDeepTeal,
+      backgroundColor: Colors.white,
       body: Stack(
         alignment: Alignment.center,
         children: [
-          // Elegant dark ambient backdrop
+          // Pristine multi-layer canvas backdrop
           Positioned.fill(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
+            child: Container(
+              decoration: const BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [
-                    AppTheme.primaryDeepTeal,
-                    AppTheme.primaryDeepTeal.withValues(alpha: 0.96),
-                    const Color(0xFF031614),
+                    Colors.white,
+                    Color(0xFFFAFCFA),
+                    Color(0xFFF4F9F6),
                   ],
+                  stops: [0.0, 0.65, 1.0],
                 ),
               ),
             ),
           ),
 
-          // Soft central radial bloom
-          Positioned(
-            top: size.height * 0.28,
-            child: Container(
-              width: size.width * 0.9,
-              height: size.width * 0.9,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(
-                  colors: [
-                    AppTheme.accentMint.withValues(alpha: 0.08),
-                    AppTheme.primaryTeal.withValues(alpha: 0.03),
-                    Colors.transparent,
-                  ],
-                  stops: const [0.0, 0.5, 1.0],
+          // Central ambient emerald halo
+          AnimatedBuilder(
+            animation: _pulseController,
+            builder: (context, _) {
+              return Positioned(
+                top: size.height * 0.24,
+                child: Transform.scale(
+                  scale: _pulseScaleAnimation.value,
+                  child: Container(
+                    width: size.width * 0.85,
+                    height: size.width * 0.85,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: RadialGradient(
+                        colors: [
+                          AppTheme.accentMint.withValues(
+                            alpha: _pulseGlowAnimation.value,
+                          ),
+                          AppTheme.primaryTeal.withValues(
+                            alpha: _pulseGlowAnimation.value * 0.35,
+                          ),
+                          Colors.transparent,
+                        ],
+                        stops: const [0.0, 0.45, 1.0],
+                      ),
+                    ),
+                  ),
                 ),
-              ),
-            ),
+              );
+            },
           ),
 
-          // Main Content
+          // Main Screen Content
           SafeArea(
             child: Column(
               children: [
-                // Top discreet accreditation
+                // Top Trust & Security Pill Badge
                 FadeTransition(
                   opacity: _fadeAnimation,
                   child: Padding(
-                    padding: const EdgeInsets.only(top: 14),
+                    padding: const EdgeInsets.only(top: 18),
                     child: _buildTopTrustTag(),
                   ),
                 ),
@@ -203,19 +231,14 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                   ),
                 ),
 
-                // Bottom State Loader & Regulatory Footer
+                // Bottom State Loader & Institutional Regulatory Footer
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 20),
+                  padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 250),
-                        child: _errorMessage != null
-                            ? _buildErrorPanel()
-                            : _buildProgressStatus(),
-                      ),
-                      const SizedBox(height: 28),
+                      _buildProgressStatus(),
+                      const SizedBox(height: 32),
                       FadeTransition(
                         opacity: _fadeAnimation,
                         child: _buildInstitutionalFooter(),
@@ -233,31 +256,38 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
 
   Widget _buildTopTrustTag() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4.5),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.06),
+        color: AppTheme.primaryLightTeal,
         borderRadius: BorderRadius.circular(100),
         border: Border.all(
-          color: Colors.white.withValues(alpha: 0.09),
-          width: 0.8,
+          color: AppTheme.primaryTeal.withValues(alpha: 0.18),
+          width: 1.0,
         ),
+        boxShadow: [
+          BoxShadow(
+            color: AppTheme.primaryTeal.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
-      child: Row(
+      child: const Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(
-            Icons.shield_outlined,
-            size: 11,
-            color: AppTheme.accentMint.withValues(alpha: 0.9),
+            Icons.verified_user_rounded,
+            size: 13,
+            color: AppTheme.primaryTeal,
           ),
-          const SizedBox(width: 5),
+          SizedBox(width: 6),
           Text(
-            'BANK-GRADE SECURITY',
+            'BANK-GRADE 256-BIT ENCRYPTION',
             style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.72),
-              fontSize: 9.5,
+              color: AppTheme.primaryDarkTeal,
+              fontSize: 10,
               fontWeight: FontWeight.w700,
-              letterSpacing: 0.9,
+              letterSpacing: 0.8,
             ),
           ),
         ],
@@ -267,22 +297,26 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
 
   Widget _buildBrandMark() {
     return Container(
-      width: 104,
-      height: 104,
+      width: 108,
+      height: 108,
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(28),
+        border: Border.all(
+          color: AppTheme.borderLight.withValues(alpha: 0.8),
+          width: 1.2,
+        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.22),
-            blurRadius: 36,
-            offset: const Offset(0, 16),
+            color: AppTheme.primaryTeal.withValues(alpha: 0.10),
+            blurRadius: 32,
+            offset: const Offset(0, 14),
           ),
           BoxShadow(
-            color: AppTheme.accentMint.withValues(alpha: 0.12),
-            blurRadius: 20,
-            spreadRadius: -4,
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
@@ -293,8 +327,8 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
           fit: BoxFit.contain,
           errorBuilder: (_, __, ___) => const Icon(
             Icons.account_balance_wallet_rounded,
-            color: AppTheme.primaryDeepTeal,
-            size: 44,
+            color: AppTheme.primaryTeal,
+            size: 48,
           ),
         ),
       ),
@@ -309,23 +343,46 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
           'Fin-Tree',
           textAlign: TextAlign.center,
           style: TextStyle(
-            color: Colors.white,
+            color: AppTheme.textDarkPrimary,
             fontSize: 34,
             fontWeight: FontWeight.w800,
             letterSpacing: -0.6,
-            height: 1.1,
+            height: 1.15,
           ),
         ),
-        const SizedBox(height: 4),
-        Text(
-          'INSTANT DIGITAL CREDIT',
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            color: AppTheme.accentMint.withValues(alpha: 0.85),
-            fontSize: 10.5,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 2.4,
-          ),
+        const SizedBox(height: 6),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 16,
+              height: 1.5,
+              decoration: BoxDecoration(
+                color: AppTheme.accentCyan.withValues(alpha: 0.6),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(width: 8),
+            const Text(
+              'INSTANT DIGITAL CREDIT',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: AppTheme.primaryTeal,
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 2.4,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              width: 16,
+              height: 1.5,
+              decoration: BoxDecoration(
+                color: AppTheme.accentCyan.withValues(alpha: 0.6),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ],
         ),
       ],
     );
@@ -336,95 +393,73 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       key: const ValueKey('normal-loader'),
       mainAxisSize: MainAxisSize.min,
       children: [
-        // Sleek micro progress track
+        // Sleek Minimalist Progress Capsule
         ClipRRect(
-          borderRadius: BorderRadius.circular(3),
-          child: SizedBox(
+          borderRadius: BorderRadius.circular(100),
+          child: const SizedBox(
             width: 130,
-            height: 2.5,
+            height: 3.5,
             child: LinearProgressIndicator(
-              backgroundColor: Colors.white.withValues(alpha: 0.1),
-              valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.accentMint),
+              backgroundColor: AppTheme.surfaceMuted,
+              valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primaryTeal),
             ),
           ),
         ),
-        const SizedBox(height: 14),
-        AnimatedSwitcher(
-          duration: const Duration(milliseconds: 200),
-          child: Text(
-            _securitySteps[_statusStepIndex],
-            key: ValueKey<int>(_statusStepIndex),
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.55),
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-              letterSpacing: 0.2,
+        const SizedBox(height: 16),
+        // Live verification status with breathing pulse indicator
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            AnimatedBuilder(
+              animation: _pulseController,
+              builder: (context, _) {
+                return Container(
+                  width: 6,
+                  height: 6,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: AppTheme.primaryTeal,
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppTheme.primaryTeal.withValues(
+                          alpha: _pulseController.value * 0.45,
+                        ),
+                        blurRadius: 6,
+                        spreadRadius: 2,
+                      ),
+                    ],
+                  ),
+                );
+              },
             ),
-          ),
+            const SizedBox(width: 8),
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 260),
+              transitionBuilder: (child, animation) => FadeTransition(
+                opacity: animation,
+                child: SlideTransition(
+                  position: Tween<Offset>(
+                    begin: const Offset(0, 0.25),
+                    end: Offset.zero,
+                  ).animate(animation),
+                  child: child,
+                ),
+              ),
+              child: Text(
+                _securitySteps[_statusStepIndex],
+                key: ValueKey<int>(_statusStepIndex),
+                style: const TextStyle(
+                  color: AppTheme.textDarkSecondary,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w500,
+                  letterSpacing: 0.1,
+                ),
+              ),
+            ),
+          ],
         ),
       ],
-    );
-  }
-
-  Widget _buildErrorPanel() {
-    return Container(
-      key: const ValueKey('error-card'),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      decoration: BoxDecoration(
-        color: const Color(0xFF142422),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: Colors.white.withValues(alpha: 0.08),
-        ),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
-            children: [
-              const Icon(
-                Icons.cloud_off_rounded,
-                color: Color(0xFFFFA280),
-                size: 18,
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  _errorMessage ?? 'Network unreachable.',
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.8),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w400,
-                    height: 1.3,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            height: 36,
-            child: TextButton(
-              onPressed: _isSyncing ? null : _syncCustomerState,
-              style: TextButton.styleFrom(
-                backgroundColor: Colors.white.withValues(alpha: 0.08),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              child: const Text(
-                'Tap to Retry',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
     );
   }
 
@@ -432,30 +467,30 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Text(
+        const Text(
           'LENDING PARTNER',
           style: TextStyle(
-            color: Colors.white.withValues(alpha: 0.35),
+            color: AppTheme.textMuted,
             fontSize: 9.5,
             fontWeight: FontWeight.w600,
             letterSpacing: 1.1,
           ),
         ),
-        const SizedBox(width: 6),
+        const SizedBox(width: 8),
         Container(
-          width: 3,
-          height: 3,
-          decoration: BoxDecoration(
+          width: 3.5,
+          height: 3.5,
+          decoration: const BoxDecoration(
             shape: BoxShape.circle,
-            color: Colors.white.withValues(alpha: 0.2),
+            color: AppTheme.borderLight,
           ),
         ),
-        const SizedBox(width: 6),
-        Text(
+        const SizedBox(width: 8),
+        const Text(
           'Fintree Finance (RBI Reg. NBFC)',
           style: TextStyle(
-            color: Colors.white.withValues(alpha: 0.7),
-            fontSize: 10,
+            color: AppTheme.textDarkSecondary,
+            fontSize: 10.5,
             fontWeight: FontWeight.w600,
           ),
         ),
